@@ -1297,83 +1297,99 @@ function doLogin() {
 }
 
 // ── Load all app data from Supabase after login ───────────────────────────
+function safeFetch(path, transform) {
+  return supa(path)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if(Array.isArray(d)) transform(d);
+      else console.warn('Supabase error for', path, d);
+    })
+    .catch(function(e) { console.warn('Fetch failed:', path, e); });
+}
+
 function loadAppData() {
-  return Promise.all([
-    supa('members?select=*&order=name').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) MEMBERS = d.map(dbMember);
+  var queries = [
+    safeFetch('members?select=*&order=name', function(d) {
+      MEMBERS = d.map(dbMember);
     }),
-    supa('calendar_events?select=*&order=date').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) CALENDAR_EVENTS = d;
+    safeFetch('calendar_events?select=*&order=date', function(d) {
+      CALENDAR_EVENTS = d;
     }),
-    supa('notices?select=*&order=created_at.desc').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) NOTICES = d.map(function(n) {
-        return {id:n.id,type:n.type,title:n.title,body:n.body,
-                 to:n.to_all?['all']:n.to_ids,date:n.created_at.split('T')[0],read:false};
+    safeFetch('notices?select=*&order=created_at.desc', function(d) {
+      NOTICES = d.map(function(n) {
+        return {id:n.id, type:n.type, title:n.title, body:n.body,
+                to:n.to_all?['all']:n.to_ids,
+                date:n.created_at.split('T')[0], read:false};
       });
     }),
-    supa('polls?select=*,poll_votes(*)&order=created_at.desc').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) POLLS = d.map(function(p) {
+    safeFetch('polls?select=*,poll_votes(*)&order=created_at.desc', function(d) {
+      POLLS = d.map(function(p) {
         var votes = {};
         (p.poll_votes||[]).forEach(function(v) { votes[v.member_id] = v.answers; });
-        return {id:p.id,type:p.type,label:p.label,dayLabel:p.day_label,
-                 date:p.date,active:p.active,fields:p.fields,votes:votes,showNames:false};
+        return {id:p.id, type:p.type, label:p.label, dayLabel:p.day_label,
+                date:p.date, active:p.active, fields:p.fields,
+                votes:votes, showNames:false};
       });
     }),
-    supa('sub_payments?select=*').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) SUB_PAYMENTS = d.map(function(p) {
-        return {id:p.id,memberId:p.member_id,year:p.year,amount:p.amount,
-                 date:p.date,method:p.method,reference:p.reference,
-                 recordedBy:p.recorded_by,notes:p.notes};
+    safeFetch('sub_payments?select=*', function(d) {
+      SUB_PAYMENTS = d.map(function(p) {
+        return {id:p.id, memberId:p.member_id, year:p.year, amount:p.amount,
+                date:p.date, method:p.method, reference:p.reference,
+                recordedBy:p.recorded_by, notes:p.notes};
       });
     }),
-    supa('steward_payments?select=*').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) STEWARD_PAYMENTS = d.map(function(p) {
-        return {id:p.id,memberId:p.member_id,pollId:p.poll_id,type:p.type,
-                 amount:p.amount,date:p.date,method:p.method,reference:p.reference,
-                 remittedBy:p.remitted_by,guestExempt:p.guest_exempt,notes:p.notes};
+    safeFetch('steward_payments?select=*', function(d) {
+      STEWARD_PAYMENTS = d.map(function(p) {
+        return {id:p.id, memberId:p.member_id, pollId:p.poll_id, type:p.type,
+                amount:p.amount, date:p.date, method:p.method,
+                reference:p.reference, remittedBy:p.remitted_by,
+                guestExempt:p.guest_exempt, notes:p.notes};
       });
     }),
-    supa('welfare?select=*,welfare_contacts(*)').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) WELFARE = d.map(function(w) {
-        return {id:w.id,memberId:w.member_id,status:w.status,
-                 lastContact:w.last_contact,notes:w.notes,contacts:w.welfare_contacts||[]};
+    safeFetch('welfare?select=*,welfare_contacts(*)', function(d) {
+      WELFARE = d.map(function(w) {
+        return {id:w.id, memberId:w.member_id, status:w.status,
+                lastContact:w.last_contact, notes:w.notes,
+                contacts:w.welfare_contacts||[]};
       });
     }),
-    supa('mentoring_pairs?select=*,mentoring_sessions(*)').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) MENTORING_PAIRS = d.map(function(p) {
-        return {id:p.id,mentee:p.mentee_id,personalMentor:p.personal_mentor,
-                 assignedBy:p.assigned_by,assignedDate:p.assigned_date,
-                 milestones:p.milestones||{},notes:p.notes,lodgeNotes:p.lodge_notes,
-                 sessions:(p.mentoring_sessions||[]).map(function(s) {
-                   return {date:s.date,topic:s.topic,duration:s.duration,notes:s.notes,by:s.logged_by};
-                 })};
+    safeFetch('mentoring_pairs?select=*,mentoring_sessions(*)', function(d) {
+      MENTORING_PAIRS = d.map(function(p) {
+        return {id:p.id, mentee:p.mentee_id, personalMentor:p.personal_mentor,
+                assignedBy:p.assigned_by, assignedDate:p.assigned_date,
+                milestones:p.milestones||{}, notes:p.notes, lodgeNotes:p.lodge_notes,
+                sessions:(p.mentoring_sessions||[]).map(function(s) {
+                  return {date:s.date, topic:s.topic, duration:s.duration,
+                          notes:s.notes, by:s.logged_by};
+                })};
       });
     }),
-    supa('library?select=*').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) LIBRARY = d;
-    }),
-    supa('charge_assignments?select=*').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) CHARGE_ASSIGNMENTS = d.map(function(a) {
-        return {id:a.id,pid:a.passage_id,ptitle:'',mdate:a.meeting_date,
-                 prim:a.primary_id,back:a.backup_id,by:a.assigned_by,
-                 status:a.status,dby:a.delivered_by};
+    safeFetch('library?select=*', function(d) { LIBRARY = d; }),
+    safeFetch('charge_assignments?select=*', function(d) {
+      CHARGE_ASSIGNMENTS = d.map(function(a) {
+        return {id:a.id, pid:a.passage_id, ptitle:'', mdate:a.meeting_date,
+                prim:a.primary_id, back:a.backup_id, by:a.assigned_by,
+                status:a.status, dby:a.delivered_by};
       });
     }),
-    supa('agenda_items?select=*&order=sort_order').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) AGENDA_ITEMS = d.map(function(a) {
-        return {id:a.id,order:a.sort_order,title:a.title,type:a.type,
-                 duration:a.duration,presenter:a.presenter_id,
-                 fixed:a.is_fixed,ceremony:a.is_ceremony,cand:a.candidate,notes:a.notes};
+    safeFetch('agenda_items?select=*&order=sort_order', function(d) {
+      AGENDA_ITEMS = d.map(function(a) {
+        return {id:a.id, order:a.sort_order, title:a.title, type:a.type,
+                duration:a.duration, presenter:a.presenter_id,
+                fixed:a.is_fixed, ceremony:a.is_ceremony,
+                cand:a.candidate, notes:a.notes};
       });
     }),
-    supa('summons_docs?select=*&order=created_at.desc').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) SUMMONS_DOCS = d;
+    safeFetch('summons_docs?select=*&order=created_at.desc', function(d) {
+      SUMMONS_DOCS = d;
     }),
-    supa('committee_minutes?select=*&order=created_at.desc').then(function(r) { return r.json(); }).then(function(d) {
-      if(Array.isArray(d)) COMMITTEE_MINUTES = d;
+    safeFetch('committee_minutes?select=*&order=created_at.desc', function(d) {
+      COMMITTEE_MINUTES = d;
     })
-  ]);
+  ];
+  return Promise.all(queries);
 }
+
 
 // ── Map DB member row to in-app shape ─────────────────────────────────────
 function dbMember(m) {
