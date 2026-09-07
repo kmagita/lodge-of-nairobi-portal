@@ -1419,6 +1419,7 @@ function changePassword() {
   if(!nw || nw.value.length < 6) { alert('New password must be at least 6 characters.'); return; }
   if(nw.value !== conf.value) { alert('Passwords do not match.'); return; }
   // Supabase: PUT /auth/v1/user with Bearer token to update password
+  if(!SUPA_TOKEN) { alert('Session expired — please log out and log in again.'); return; }
   fetch(SUPA_URL + '/auth/v1/user', {
     method: 'PUT',
     headers: {
@@ -1430,8 +1431,9 @@ function changePassword() {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    if(data.error || data.msg) {
-      alert('Error: ' + (data.error_description || data.msg || data.error));
+    // Surface any error Supabase returns
+    if(data.error || data.error_code || data.message) {
+      alert('Password update failed: ' + (data.error_description || data.message || data.error || JSON.stringify(data)));
       return;
     }
     // Mark first_login false in members table
@@ -1454,22 +1456,10 @@ var SUB_AMOUNT = 300;
 var MEAL_COSTS = {rehearsal:15, guest_surcharge:25};
 
 // ── Subscription payment history ─────────────────────────────────────────
-var SUB_PAYMENTS = [
-  {id:'sp1',memberId:'m0',year:'2025–2026',amount:300,date:'2026-01-10',method:'Bank transfer',reference:'KIBO-001',recordedBy:'m8',notes:'Annual sub paid in full'},
-  {id:'sp2',memberId:'m1',year:'2025–2026',amount:300,date:'2026-01-05',method:'Bank transfer',reference:'KIBO-002',recordedBy:'m8',notes:''},
-  {id:'sp3',memberId:'m2',year:'2025–2026',amount:300,date:'2026-02-14',method:'Cash',reference:'',recordedBy:'m8',notes:'Paid at lodge'},
-  {id:'sp4',memberId:'m3',year:'2025–2026',amount:300,date:'2026-01-20',method:'Cheque',reference:'CHQ-00814',recordedBy:'m8',notes:''},
-  {id:'sp5',memberId:'m4',year:'2025–2026',amount:300,date:'2026-03-01',method:'Bank transfer',reference:'KIBO-004',recordedBy:'m8',notes:''},
-  {id:'sp6',memberId:'m5',year:'2025–2026',amount:300,date:'2026-01-30',method:'Bank transfer',reference:'KIBO-005',recordedBy:'m8',notes:''},
-  {id:'sp7',memberId:'m9',year:'2025–2026',amount:300,date:'2026-02-05',method:'Bank transfer',reference:'KIBO-009',recordedBy:'m8',notes:''}
-];
+var SUB_PAYMENTS=[];
 
 // ── Steward payment records ───────────────────────────────────────────────
-var STEWARD_PAYMENTS = [
-  {id:'stp1',memberId:'m0',type:'rehearsal_meal',pollId:'poll-reh',amount:15,date:'2026-09-28',method:'Bank transfer',reference:'REH-001',remittedBy:'m0',notes:''},
-  {id:'stp2',memberId:'m1',type:'rehearsal_meal',pollId:'poll-reh',amount:15,date:'2026-09-27',method:'M-Pesa',reference:'QJF7X2K9',remittedBy:'m1',notes:''},
-  {id:'stp3',memberId:'m0',type:'guest_surcharge',pollId:'poll-mtg',amount:25,date:'2026-09-30',method:'Cash',reference:'',remittedBy:'m0',notes:'Guest: spouse',guestExempt:false}
-];
+var STEWARD_PAYMENTS=[];
 
 var noticeCounter=100;
 function pushNotice(type,title,body,toIds){
@@ -1503,22 +1493,11 @@ var SUB_AMOUNT = 300;
 var MEAL_COSTS = {rehearsal:15, guest_surcharge:25};
 
 // ── Subscription payment history ─────────────────────────────────────────
-var SUB_PAYMENTS = [
-  {id:'sp1',memberId:'m0',year:'2025–2026',amount:300,date:'2026-01-10',method:'Bank transfer',reference:'KIBO-001',recordedBy:'m8',notes:'Annual sub paid in full'},
-  {id:'sp2',memberId:'m1',year:'2025–2026',amount:300,date:'2026-01-05',method:'Bank transfer',reference:'KIBO-002',recordedBy:'m8',notes:''},
-  {id:'sp3',memberId:'m2',year:'2025–2026',amount:300,date:'2026-02-14',method:'Cash',reference:'',recordedBy:'m8',notes:'Paid at lodge'},
-  {id:'sp4',memberId:'m3',year:'2025–2026',amount:300,date:'2026-01-20',method:'Cheque',reference:'CHQ-00814',recordedBy:'m8',notes:''},
-  {id:'sp5',memberId:'m4',year:'2025–2026',amount:300,date:'2026-03-01',method:'Bank transfer',reference:'KIBO-004',recordedBy:'m8',notes:''},
-  {id:'sp6',memberId:'m5',year:'2025–2026',amount:300,date:'2026-01-30',method:'Bank transfer',reference:'KIBO-005',recordedBy:'m8',notes:''},
-  {id:'sp7',memberId:'m9',year:'2025–2026',amount:300,date:'2026-02-05',method:'Bank transfer',reference:'KIBO-009',recordedBy:'m8',notes:''}
-];
+var SUB_PAYMENTS=[];
 
 // ── Steward payment records ───────────────────────────────────────────────
-var STEWARD_PAYMENTS = [
-  {id:'stp1',memberId:'m0',type:'rehearsal_meal',pollId:'poll-reh',amount:15,date:'2026-09-28',method:'Bank transfer',reference:'REH-001',remittedBy:'m0',notes:''},
-  {id:'stp2',memberId:'m1',type:'rehearsal_meal',pollId:'poll-reh',amount:15,date:'2026-09-27',method:'M-Pesa',reference:'QJF7X2K9',remittedBy:'m1',notes:''},
-  {id:'stp3',memberId:'m0',type:'guest_surcharge',pollId:'poll-mtg',amount:25,date:'2026-09-30',method:'Cash',reference:'',remittedBy:'m0',notes:'Guest: spouse',guestExempt:false}
-];
+var STEWARD_PAYMENTS=[];
+
 
 var MEMBERS=[];
 
