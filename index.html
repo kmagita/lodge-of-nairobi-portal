@@ -1876,28 +1876,40 @@ function uploadSummonsPDF(){
   var date=dateEl?dateEl.value.trim():'';
   if(!meeting){alert('Enter the meeting number before uploading.');return;}
   if(!date){alert('Enter the meeting date before uploading.');return;}
-  readPDF('summons-pdf',function(data,name){
-    var today=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
-    var newDoc={
-      id:'sum'+Date.now(),
-      meeting:meeting, date:date, circulated:today,
-      pdfData:data, pdfName:name, uploadedBy:CU.id
-    };
-    SUMMONS_DOCS.push(newDoc);
-    pushNotice('summons','Summons circulated — '+meeting+' Meeting',
-      'The summons for the '+meeting+' Regular Meeting ('+date+') has been circulated. Tap Summons to view and download.',
-      ['all']
-    );
-    rSummons();
-  });
+  var fileEl=document.getElementById('summons-pdf');
+  if(!fileEl||!fileEl.files||!fileEl.files[0]){alert('Select a PDF file.');return;}
+  var file=fileEl.files[0];
+  if(file.type!=='application/pdf'){alert('Please select a PDF file.');return;}
+  var path='summons-'+meeting.replace(/\s+/g,'-')+'-'+Date.now()+'.pdf';
+  uploadToStorage('summons-pdfs', path, file)
+    .then(function(data){
+      if(data.error){alert('Upload failed: '+data.error.message);return;}
+      var rec={id:'s'+Date.now(),meetingRef:meeting,
+        meetingDate:date,pdfPath:path,uploadedBy:CU.id,
+        created:new Date().toISOString().split('T')[0]};
+      SUMMONS_DOCS.unshift(rec);
+      return supa('summons_docs',{method:'POST',
+        body:JSON.stringify({meeting_ref:meeting,meeting_date:date,
+          pdf_path:path,uploaded_by:CU.id})
+      });
+    }).then(function(){
+      var allIds=MEMBERS.map(function(m){return m.id;});
+      pushNotice('summons','Summons circulated — '+meeting,
+        'The summons for the '+meeting+' meeting has been uploaded.',allIds);
+      if(meetEl)meetEl.value=''; if(dateEl)dateEl.value='';
+      alert('Summons uploaded and brethren notified.');
+      rSummons();
+    }).catch(function(e){alert('Upload failed: '+e.message);});
 }
 function viewSummons(id){
-  var s=SUMMONS_DOCS.find(function(x){return x.id===id;});
-  if(s&&s.pdfData)openPDF(s.pdfData);
+  var doc=SUMMONS_DOCS.find(function(d){return d.id===id;});
+  if(!doc)return;
+  openPDF(doc.pdfPath||doc.pdfData,'summons-pdfs');
 }
 function downloadSummons(id){
-  var s=SUMMONS_DOCS.find(function(x){return x.id===id;});
-  if(s&&s.pdfData)downloadPDF(s.pdfData,s.pdfName);
+  var doc=SUMMONS_DOCS.find(function(d){return d.id===id;});
+  if(!doc)return;
+  downloadPDF(doc.pdfPath||doc.pdfData,'summons-'+doc.meetingRef+'.pdf','summons-pdfs');
 }
 function removeSummons(id){
   if(!confirm('Remove this summons?'))return;
@@ -2190,29 +2202,42 @@ function castVoteText(pid,fid,val){
 }
 
 function createPoll(){
-  var label=document.getElementById('pf-label');
-  var day=document.getElementById('pf-day');
-  var date=document.getElementById('pf-date');
-  if(!label||!label.value.trim()){alert('Please enter a poll title.');return;}
-  if(!date||!date.value){alert('Please select the event date.');return;}
-  if(!newPollDraft.fields.length){alert('Please add at least one question.');return;}
-  POLLS.push({
-    id:'poll-'+Date.now(),
-    type:'other',
-    label:label.value.trim(),
-    dayLabel:day?day.value.trim():label.value.trim(),
-    date:date.value,
-    active:true, showNames:false,
-    fields:JSON.parse(JSON.stringify(newPollDraft.fields)),
-    votes:{}
-  });
-  pollForm=false;
+  var label=document.getElementById('poll-label');
+  var date=document.getElementById('poll-date');
+  var type=document.getElementById('poll-type');
+  if(!label||!label.value.trim()){alert('Enter a poll label.');return;}
+  if(!date||!date.value){alert('Select a date.');return;}
+  var d=new Date(date.value+'T12:00:00');
+  var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var dayLabel=days[d.getDay()]+' '+d.getDate()+'th '+date.value.split('-')[1]+' '+date.value.split('-')[0];
+  var fields=[
+    {id:'f1',type:'yesno',label:'Attending?'},
+    {id:'f2',type:'choice',label:'Meal preference',options:['Chicken','Fish','Vegetarian'],showIf:{fid:'f1',val:true}},
+    {id:'f3',type:'yesno',label:'Bringing a guest?',showIf:{fid:'f1',val:true}},
+    {id:'f4',type:'text',label:'Guest name',showIf:{fid:'f3',val:true}}
+  ];
+  var poll={id:'poll'+Date.now(),type:type?type.value:'rehearsal',
+    label:label.value.trim(),dayLabel:dayLabel,date:date.value,
+    active:true,fields:fields,votes:{},showNames:false};
+  POLLS.unshift(poll);
+  supa('polls',{method:'POST',
+    body:JSON.stringify({type:poll.type,label:poll.label,day_label:dayLabel,
+      date:date.value,active:true,fields:fields,created_by:CU.id})
+  }).then(function(r){return r.json();})
+  .then(function(d){if(d&&d[0])poll.id=d[0].id;})
+  .catch(function(e){console.warn('Poll create failed:',e);});
+  pushNotice('poll','New poll: '+poll.label,
+    'Please respond to the poll for '+poll.label+'.',
+    MEMBERS.map(function(m){return m.id;}));
+  if(label)label.value=''; if(date)date.value='';
   rPolls();
 }
 
-function deletePoll(pid){
-  if(!confirm('Delete this poll and all responses? This cannot be undone.'))return;
-  POLLS=POLLS.filter(function(p){return p.id!==pid;});
+function deletePoll(id){
+  if(!confirm('Delete this poll and all its responses?'))return;
+  POLLS=POLLS.filter(function(p){return p.id!==id;});
+  supa('polls?id=eq.'+id,{method:'DELETE'})
+    .catch(function(e){console.warn('Poll delete failed:',e);});
   rPolls();
 }
 
@@ -2248,15 +2273,15 @@ function toggleNfOpts(t){
   if(w)w.style.display=(t==='choice')?'block':'none';
 }
 
-function togglePollActive(pollId){
-  var p=POLLS.find(function(x){return x.id===pollId;});
+function togglePollActive(id){
+  var p=POLLS.find(function(x){return x.id===id;});
   if(!p)return;
   p.active=!p.active;
+  supa('polls?id=eq.'+id,{method:'PATCH',
+    body:JSON.stringify({active:p.active})
+  }).catch(function(e){console.warn('Poll toggle failed:',e);});
   rPolls();
 }
-
-
-// ── Poll management (Chief Steward) ───────────────────────────────────────
 
 function togglePollNames(pollId){
   var p=POLLS.find(function(x){return x.id===pollId;});
@@ -2581,15 +2606,14 @@ function editLibContent(id){
   rLibrary();
 }
 function saveLibContent(id){
-  var item=LIBRARY.find(function(l){return l.id===id;});
-  if(!item)return;
-  var ct=document.getElementById('le-content-'+id);
-  var ty=document.getElementById('le-type-'+id);
-  var dg=document.getElementById('le-deg-'+id);
-  if(ct)item.content=ct.value;
-  if(ty)item.type=ty.value;
-  if(dg)item.degree=dg.value;
-  libContentId=null;
+  var el=document.getElementById('lib-text-'+id);
+  if(!el)return;
+  var lib=LIBRARY.find(function(l){return l.id===id;});
+  if(!lib)return;
+  lib.content=el.value;
+  supa('library?id=eq.'+id,{method:'PATCH',
+    body:JSON.stringify({content:lib.content})
+  }).catch(function(e){console.warn('Library save failed:',e);});
   rLibrary();
 }
 
@@ -2630,41 +2654,33 @@ function rAssignForm(){
 }
 
 function saveAssign(){
-  var libEl=document.getElementById('af-lib');
-  var primEl=document.getElementById('af-prim');
-  var backEl=document.getElementById('af-back');
-  var dateEl=document.getElementById('af-date');
-  if(!libEl||!libEl.value){alert('Please select a passage.');return;}
-  if(!primEl||!primEl.value){alert('Please select a primary brother.');return;}
-  if(!dateEl||!dateEl.value){alert('Please select a meeting date.');return;}
-  var lib=LIBRARY.find(function(l){return l.id===libEl.value;});
-  if(!lib)return;
-  var newId='ca'+Date.now();
-  CHARGE_ASSIGNMENTS.push({
-    id:newId, pid:lib.id, ptitle:lib.title,
-    mdate:dateEl.value,
-    prim:primEl.value, back:backEl.value||null,
-    by:CU.id, status:'Assigned', dby:null
-  });
-  lib.assignedPrimary=primEl.value;
-  if(backEl.value)lib.assignedStandby=backEl.value;
-  // Auto-notify assigned brothers
-  var primM=gm(primEl.value), backM=backEl.value?gm(backEl.value):null;
-  var meet=dateEl.value;
-  if(primM) pushNotice('assignment',
-    'Duty assigned — '+lib.title,
-    'You have been assigned <strong>'+lib.title+'</strong> as primary for the meeting on '+meet+'.'+(backM?' Your standby is '+backM.name+'.':''),
-    [primEl.value]
-  );
-  if(backM) pushNotice('assignment',
-    'Standby duty — '+lib.title,
-    'You are the standby for <strong>'+lib.title+'</strong> at the meeting on '+meet+'. Primary: '+primM.name+'.',
-    [backEl.value]
-  );
-  goTo('duties');
+  var pid=document.getElementById('asgn-passage');
+  var prim=document.getElementById('asgn-primary');
+  var back=document.getElementById('asgn-backup');
+  var mdate=document.getElementById('asgn-date');
+  if(!pid||!pid.value){alert('Select a passage.');return;}
+  if(!prim||!prim.value){alert('Select a primary speaker.');return;}
+  if(!mdate||!mdate.value){alert('Select a meeting date.');return;}
+  var lib=LIBRARY.find(function(l){return l.id===pid.value;});
+  var asgn={id:'ca'+Date.now(),pid:pid.value,
+    ptitle:lib?lib.title:'',mdate:mdate.value,
+    prim:prim.value,back:back?back.value:'',
+    by:CU.id,status:'Assigned',dby:null};
+  CHARGE_ASSIGNMENTS.push(asgn);
+  supa('charge_assignments',{method:'POST',
+    body:JSON.stringify({passage_id:pid.value,meeting_date:mdate.value,
+      primary_id:prim.value,backup_id:back&&back.value?back.value:null,
+      assigned_by:CU.id,status:'Assigned'})
+  }).then(function(r){return r.json();})
+  .then(function(d){if(d&&d[0])asgn.id=d[0].id;})
+  .catch(function(e){console.warn('Assignment save failed:',e);});
+  // Notify primary (and backup)
+  var toNotify=[prim.value];
+  if(back&&back.value)toNotify.push(back.value);
+  pushNotice('charge','Charge assigned — '+(lib?lib.title:''),
+    'You have been assigned a charge for the meeting on '+mdate.value+'.',toNotify);
+  rAssignForm();
 }
-
-
 function rReports(){
   if(CU.role==='brother'){
     document.getElementById('pane-reports').innerHTML='<div style="text-align:center;padding:40px;color:var(--t3)">Reports are for lodge officers only.</div>';
@@ -3168,38 +3184,32 @@ function saveLodgeMentorData(pid){
 }
 
 function addMentoringPair(){
-  var mentee=document.getElementById('np-mentee');
-  var mentor=document.getElementById('np-mentor');
-  if(!mentee||!mentee.value){alert('Please select a mentee.');return;}
-  if(!mentor||!mentor.value){alert('Please select a personal mentor.');return;}
-  MENTORING_PAIRS.push({
-    id:'mp'+Date.now(),
-    personalMentor:mentor.value,
-    mentee:mentee.value,
-    assignedBy:CU.id,
-    assignedDate:new Date().toISOString().split('T')[0],
-    sessions:[],
-    milestones:{initiated:null,passed:null,raised:null},
-    notes:'',lodgeNotes:''
-  });
-  pushNotice('assignment',
-    'Mentoring assignment',
-    'You have been assigned as personal mentor to '+gn(gm(mentee.value))+'. Please make contact to arrange your first session.',
-    [mentor.value]
-  );
-  mentorOpen=null;
+  var mentee=document.getElementById('mp-mentee');
+  var mentor=document.getElementById('mp-mentor');
+  if(!mentee||!mentee.value){alert('Select a mentee.');return;}
+  var pair={id:'mp'+Date.now(),mentee:mentee.value,
+    personalMentor:mentor?mentor.value:'',
+    assignedBy:CU.id,assignedDate:new Date().toISOString().split('T')[0],
+    milestones:{},notes:'',lodgeNotes:'',sessions:[]};
+  MENTORING_PAIRS.push(pair);
+  supa('mentoring_pairs',{method:'POST',
+    body:JSON.stringify({mentee_id:mentee.value,
+      personal_mentor:mentor&&mentor.value?mentor.value:null,
+      assigned_by:CU.id,assigned_date:pair.assignedDate})
+  }).then(function(r){return r.json();})
+  .then(function(d){if(d&&d[0])pair.id=d[0].id;})
+  .catch(function(e){console.warn('Pair create failed:',e);});
   rMentor();
 }
 
 function removeMentoringPair(id){
   if(!confirm('Remove this mentoring pair?'))return;
-  var idx=MENTORING_PAIRS.findIndex(function(p){return p.id===id;});
-  if(idx>-1)MENTORING_PAIRS.splice(idx,1);
-  mentorOpen=null;
+  MENTORING_PAIRS=MENTORING_PAIRS.filter(function(p){return p.id!==id;});
+  supa('mentoring_pairs?id=eq.'+id,{method:'DELETE'})
+    .catch(function(e){console.warn('Pair delete failed:',e);});
   rMentor();
 }
 
-// Personal mentor session log (called from home screen)
 function logPersonalMentorSession(pid){
   var pair=MENTORING_PAIRS.find(function(p){return p.id===pid;});
   if(!pair)return;
@@ -3385,14 +3395,32 @@ function moveAgendaItem(idx,dir){
   rAgenda();
 }
 function uploadMinutesPDF(){
-  readPDF('minutes-pdf',function(data,name){
-    MINUTES.pdfData=data; MINUTES.pdfName=name;
-    MINUTES.recorded=true; MINUTES.recordedBy=CU.id;
-    MINUTES.text='';
-    pushNotice('general','Minutes published — '+NEXT_MEETING.num+' Meeting',
-      'The minutes of the '+NEXT_MEETING.num+' Regular Meeting are now available. Tap to view.',['all']);
-    rAgenda();
-  });
+  var refEl=document.getElementById('min-ref');
+  var fileEl=document.getElementById('minutes-pdf');
+  if(!refEl||!refEl.value.trim()){alert('Enter the meeting reference.');return;}
+  if(!fileEl||!fileEl.files||!fileEl.files[0]){alert('Select a PDF file.');return;}
+  var file=fileEl.files[0];
+  var ref=refEl.value.trim();
+  var path='minutes-'+ref.replace(/\s+/g,'-')+'-'+Date.now()+'.pdf';
+  uploadToStorage('minutes-pdfs', path, file)
+    .then(function(data){
+      if(data.error){alert('Upload failed: '+data.error.message);return;}
+      MINUTES.pdfPath=path; MINUTES.meeting=ref;
+      MINUTES.recordedBy=CU.id; MINUTES.text='';
+      return supa('minutes',{method:'POST',
+        headers:{'Prefer':'resolution=merge-duplicates'},
+        body:JSON.stringify({meeting_ref:ref,
+          meeting_date:new Date().toISOString().split('T')[0],
+          pdf_path:path,recorded_by:CU.id,
+          published_at:new Date().toISOString()})
+      });
+    }).then(function(){
+      var allIds=MEMBERS.map(function(m){return m.id;});
+      pushNotice('minutes','Minutes published — '+ref,
+        'The minutes of the '+ref+' meeting have been published.',allIds);
+      alert('Minutes uploaded and brethren notified.');
+      rAgenda();
+    }).catch(function(e){alert('Upload failed: '+e.message);});
 }
 function saveMinutes(){
   var ref=document.getElementById('min-ref');
@@ -3918,26 +3946,18 @@ function recordDelivery(id){
   confirmingDeliveryId=(confirmingDeliveryId===id?null:id);
   rDuties();
 }
-function confirmDelivery(caid,deliveredBy){
-  var a=CHARGE_ASSIGNMENTS.find(function(x){return x.id===caid;});
+function confirmDelivery(id){
+  var a=CHARGE_ASSIGNMENTS.find(function(x){return x.id===id;});
   if(!a)return;
-  var notesEl=document.getElementById('del-notes-'+caid);
-  var notes=notesEl?notesEl.value.trim():'';
-  a.status='Delivered'; a.dby=deliveredBy;
-  DELIVERY_LOG.push({
-    id:'dl'+Date.now(), pid:a.pid, ptitle:a.ptitle, mdate:a.mdate,
-    assignedPrim:a.prim, assignedBack:a.back,
-    deliveredBy:deliveredBy, asAssigned:(deliveredBy===a.prim),
-    confirmedBy:CU.id, confirmedDate:new Date().toISOString().split('T')[0],
-    notes:notes
-  });
-  confirmingDeliveryId=null;
+  a.status='Delivered'; a.dby=CU.id;
+  supa('charge_assignments?id=eq.'+id,{method:'PATCH',
+    body:JSON.stringify({status:'Delivered',delivered_by:CU.id})
+  }).catch(function(e){console.warn('Delivery confirm failed:',e);});
+  supa('delivery_log',{method:'POST',
+    body:JSON.stringify({assignment_id:id,member_id:CU.id})
+  }).catch(function(e){console.warn('Delivery log failed:',e);});
   rDuties();
 }
-
-// ── Library assignment ────────────────────────────────────────────────────
-var libEditId=null;
-var libContentId=null;
 function editLibAssign(id){
   libEditId=(libEditId===id||id==='null')?null:id;
   libContentId=null;
@@ -3959,25 +3979,26 @@ function editLibContent(id){
   rLibrary();
 }
 function addLibItem(){
-  var title=document.getElementById('lib-title');
-  var type=document.getElementById('lib-type');
-  var deg=document.getElementById('lib-deg');
-  if(!title||!title.value.trim())return;
-  LIBRARY.push({
-    id:'lib'+Date.now(),
-    title:title.value.trim(),
-    type:type?type.value:'charge',
-    degree:deg?deg.value:'MM',
-    assignedPrimary:'',assignedStandby:'',content:''
-  });
-  rLibrary();
+  var t=document.getElementById('lib-new-title');
+  if(!t||!t.value.trim()){alert('Enter a passage title.');return;}
+  var item={id:'lib'+Date.now(),title:t.value.trim(),content:'',qa:[]};
+  LIBRARY.push(item);
+  supa('library',{method:'POST',
+    body:JSON.stringify({title:item.title,content:'',qa:[]})
+  }).then(function(r){return r.json();})
+  .then(function(d){if(d&&d[0])item.id=d[0].id;})
+  .catch(function(e){console.warn('Library add failed:',e);});
+  t.value=''; rLibrary();
 }
-function removeLibItem(lid){
-  LIBRARY=LIBRARY.filter(function(l){return l.id!==lid;});
+
+function removeLibItem(id){
+  if(!confirm('Remove this passage?'))return;
+  LIBRARY=LIBRARY.filter(function(l){return l.id!==id;});
+  supa('library?id=eq.'+id,{method:'DELETE'})
+    .catch(function(e){console.warn('Library delete failed:',e);});
   rLibrary();
 }
 
-// ── Almoner ───────────────────────────────────────────────────────────────
 function publishAlmonerReport(asNotice){
   alert(asNotice?'Notice sent to all brethren.':'Report published to officers.');
 }
@@ -4283,11 +4304,45 @@ function readPDF(inputId, callback){
   if(!el||!el.files||!el.files[0])return;
   var file=el.files[0];
   if(file.type!=='application/pdf'){alert('Please select a PDF file.');return;}
-  if(file.size>10*1024*1024){alert('File too large. Please keep PDFs under 10 MB.');return;}
-  var reader=new FileReader();
-  reader.onload=function(e){callback(e.target.result,file.name);};
-  reader.readAsDataURL(file);
+  if(file.size>10*1024*1024){alert('File too large. Maximum 10MB.');return;}
+  callback(file, file.name);
 }
+
+function uploadToStorage(bucket, path, file){
+  return fetch(SUPA_URL+'/storage/v1/object/'+bucket+'/'+path,{
+    method:'POST',
+    headers:{
+      'apikey':        SUPA_KEY,
+      'Authorization': 'Bearer '+SUPA_TOKEN,
+      'Content-Type':  'application/pdf',
+      'x-upsert':      'true'
+    },
+    body: file
+  }).then(function(r){ return r.json(); });
+}
+
+function getStorageUrl(bucket, path){
+  return SUPA_URL+'/storage/v1/object/authenticated/'+bucket+'/'+path+
+    '?token='+SUPA_TOKEN;
+}
+
+function openPDF(storagePath, bucket){
+  // storagePath can be a full URL or a storage path
+  var url = storagePath.startsWith('http')
+    ? storagePath
+    : getStorageUrl(bucket||'summons-pdfs', storagePath);
+  window.open(url, '_blank');
+}
+
+function downloadPDF(storagePath, filename, bucket){
+  var url = storagePath.startsWith('http')
+    ? storagePath
+    : getStorageUrl(bucket||'summons-pdfs', storagePath);
+  var a=document.createElement('a');
+  a.href=url; a.download=filename||'document.pdf'; a.target='_blank'; a.click();
+}
+
+
 function openPDF(dataUrl){
   var w=window.open('');
   if(w)w.document.write('<html><body style="margin:0"><iframe src="'+dataUrl+'" style="width:100%;height:100vh;border:none"></iframe></body></html>');
@@ -4663,38 +4718,45 @@ function openSummonsBuilder(){
 
 
 function uploadCommitteeMinutesPDF(){
-  var title=document.getElementById('cm-title');
-  var date=document.getElementById('cm-date');
-  if(!title||!title.value.trim()){alert('Enter a title for the minutes.');return;}
-  readPDF('committee-minutes-pdf',function(data,name){
-    var rec={
-      id:'cm'+(Date.now()),
-      title:title.value.trim(),
-      date:date?date.value.trim():new Date().toISOString().split('T')[0],
-      uploaded:new Date().toISOString().split('T')[0],
-      uploadedBy:CU.id,
-      pdfData:data,
-      pdfName:name
-    };
-    COMMITTEE_MINUTES.unshift(rec);
-    var allIds=MEMBERS.map(function(m){return m.id;});
-    pushNotice('minutes','Committee Minutes — '+rec.title,
-      'Minutes of the '+rec.title+' have been uploaded.',allIds);
-    title.value='';
-    if(date)date.value='';
-    rSummons();
-    alert('Committee minutes uploaded and brethren notified.');
-  });
+  var titleEl=document.getElementById('cm-title');
+  var dateEl=document.getElementById('cm-date');
+  if(!titleEl||!titleEl.value.trim()){alert('Enter a title for the minutes.');return;}
+  var fileEl=document.getElementById('committee-minutes-pdf');
+  if(!fileEl||!fileEl.files||!fileEl.files[0]){alert('Select a PDF file.');return;}
+  var file=fileEl.files[0];
+  var title=titleEl.value.trim();
+  var date=dateEl?dateEl.value.trim():new Date().toISOString().split('T')[0];
+  var path='committee-'+title.replace(/\s+/g,'-')+'-'+Date.now()+'.pdf';
+  uploadToStorage('committee-minutes-pdfs', path, file)
+    .then(function(data){
+      if(data.error){alert('Upload failed: '+data.error.message);return;}
+      var rec={id:'cm'+Date.now(),title:title,date:date,
+        pdfPath:path,uploadedBy:CU.id,
+        uploaded:new Date().toISOString().split('T')[0]};
+      COMMITTEE_MINUTES.unshift(rec);
+      return supa('committee_minutes',{method:'POST',
+        body:JSON.stringify({title:title,meeting_date:date,
+          pdf_path:path,uploaded_by:CU.id})
+      });
+    }).then(function(){
+      var allIds=MEMBERS.map(function(m){return m.id;});
+      pushNotice('minutes','Committee Minutes — '+title,
+        'Minutes of the '+title+' have been uploaded.',allIds);
+      if(titleEl)titleEl.value=''; if(dateEl)dateEl.value='';
+      alert('Committee minutes uploaded and brethren notified.');
+      rSummons();
+    }).catch(function(e){alert('Upload failed: '+e.message);});
 }
-
 function viewCommitteeMinutes(id){
   var rec=COMMITTEE_MINUTES.find(function(r){return r.id===id;});
-  if(rec&&rec.pdfData)openPDF(rec.pdfData);
+  if(!rec)return;
+  openPDF(rec.pdfPath||rec.pdfData,'committee-minutes-pdfs');
 }
 
 function downloadCommitteeMinutes(id){
   var rec=COMMITTEE_MINUTES.find(function(r){return r.id===id;});
-  if(rec&&rec.pdfData)downloadPDF(rec.pdfData,rec.pdfName||'committee-minutes.pdf');
+  if(!rec)return;
+  downloadPDF(rec.pdfPath||rec.pdfData,rec.pdfName||'committee-minutes.pdf','committee-minutes-pdfs');
 }
 
 function removeCommitteeMinutes(id){
