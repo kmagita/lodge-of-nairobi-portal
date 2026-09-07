@@ -1463,28 +1463,28 @@ var STEWARD_PAYMENTS=[];
 
 var noticeCounter=100;
 function pushNotice(type,title,body,toIds){
-  NOTICES.unshift({id:'n'+(++noticeCounter),type:type,title:title,body:body,to:toIds,date:new Date().toISOString().split('T')[0],read:false});
+  var toAll=toIds.indexOf('all')>-1;
+  var payload={type:type,title:title,body:body,
+    to_all:toAll,to_ids:toAll?[]:toIds,created_by:CU.id};
+  supa('notices',{method:'POST',body:JSON.stringify(payload)})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      var row=Array.isArray(data)?data[0]:data;
+      if(row&&row.id){
+        NOTICES.unshift({id:row.id,type:type,title:title,body:body,
+          to:toIds,date:new Date().toISOString().split('T')[0],read:false});
+        buildNav();
+      }
+    }).catch(function(e){
+      // fallback: add in-memory even if DB write fails
+      NOTICES.unshift({id:'n'+(++noticeCounter),type:type,title:title,body:body,
+        to:toIds,date:new Date().toISOString().split('T')[0],read:false});
+      buildNav();
+    });
 }
 
 
-var POLLS = [
-  {id:'poll-reh',type:'rehearsal',label:'Thursday Rehearsal — 1 Oct 2026',dayLabel:'Thursday 1st October',date:'2026-10-01',active:true,showNames:false,
-   fields:[
-     {id:'f1',type:'yesno',label:'Attending rehearsal?'},
-     {id:'f2',type:'choice',label:'Meal preference',options:['Chicken','Fish','Vegetarian'],showIf:{fid:'f1',val:true}},
-     {id:'f3',type:'yesno',label:'Bringing a guest?',showIf:{fid:'f1',val:true}},
-     {id:'f4',type:'text',label:'Guest name',showIf:{fid:'f3',val:true}}
-   ],
-   votes:{
-     'm0':{f1:true,f2:'Chicken',f3:true,f4:'Mrs Kamau'},
-     'm1':{f1:true,f2:'Fish',f3:false},
-     'm2':{f1:true,f2:'Chicken',f3:false},
-     'm3':{f1:true,f2:'Vegetarian',f3:false},
-     'm4':{f1:false},
-     'm5':{f1:true,f2:'Chicken',f3:false}
-   }
-  }
-];
+var POLLS=[];
 
 
 // ── Subscription config ───────────────────────────────────────────────────
@@ -1669,7 +1669,37 @@ function sc(s){return s==='Paid'?'var(--ok)':s==='Arrears'?'var(--bad)':s==='Hon
 function db(d){var m={EA:{bg:'#e8f0fb',c:'#1a5080'},FC:{bg:'#e8f5ee',c:'#1a7a40'},MM:{bg:'#f3eafc',c:'#5a2080'}};var t=m[d]||{bg:'#eee',c:'#555'};return '<span class="badge" style="background:'+t.bg+';color:'+t.c+'">'+d+'</span>';}
 function rb(r){return '';}
 function ob(o){return o?'<span class="badge" style="background:var(--goldbg);color:var(--gold);border:1px solid var(--gb)">'+o+'</span>':'';}
-function nm(){var now=new Date();for(var i=0;i<12;i++){var d=new Date(now.getFullYear(),now.getMonth()+i,1);if([2,3,5,6,7,9,10,11,12].indexOf(d.getMonth()+1)>-1){var t=(4-d.getDay()+7)%7;var mt=new Date(d.getFullYear(),d.getMonth(),1+t);if(mt>now)return mt;}}return null;}
+function nm(){
+  // Returns next lodge meeting date (first Thursday, skip Jan/Apr/Aug)
+  var SKIP=[1,4,8];
+  var now=new Date();
+  for(var i=0;i<24;i++){
+    var d=new Date(now.getFullYear(),now.getMonth()+i,1);
+    var mon=d.getMonth()+1;
+    if(SKIP.indexOf(mon)>-1)continue;
+    var dow=d.getDay(); // 0=Sun,4=Thu
+    var offset=(4-dow+7)%7;
+    var firstThu=new Date(d.getFullYear(),d.getMonth(),1+offset);
+    if(firstThu>now)return firstThu;
+  }
+  return null;
+}
+
+function nw(){
+  // Returns the rehearsal/committee date for a given lodge meeting date
+  // If Thursday falls on 1st, move to last Wednesday of previous month
+  var thu=nm();
+  if(!thu)return null;
+  if(thu.getDate()===1){
+    var prev=new Date(thu); prev.setDate(0); // last day of prev month
+    while(prev.getDay()!==3)prev.setDate(prev.getDate()-1); // back to Wednesday
+    return prev;
+  }
+  // Otherwise first Wednesday of same month
+  var d=new Date(thu.getFullYear(),thu.getMonth(),1);
+  var offset=(3-d.getDay()+7)%7;
+  return new Date(thu.getFullYear(),thu.getMonth(),1+offset);
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 (function(){
@@ -2121,25 +2151,21 @@ function rPolls(){
 }
 
 
-function castVote(btn){
-  var pid=btn.dataset.pid,fid=btn.dataset.f,v=btn.dataset.v;
+function castVote(pid,fid,val){
   var p=POLLS.find(function(x){return x.id===pid;});
   if(!p)return;
   if(!p.votes[CU.id])p.votes[CU.id]={};
-  var field=p.fields.find(function(x){return x.id===fid;});
-  p.votes[CU.id][fid]=(field&&field.type==='yesno')?(v==='1'):v;
-  var pp=document.getElementById('pane-polls');
-  var pn=document.getElementById('pane-notices');
-  if(pp&&pp.classList.contains('on'))rPolls();
-  else if(pn&&pn.classList.contains('on'))rNotices();
-  else rHome();
+  p.votes[CU.id][fid]=val;
+  supaUpsertVote(pid,p.votes[CU.id]);
+  rPolls();
 }
 
-function castVoteText(el,pid,fid){
+function castVoteText(pid,fid,val){
   var p=POLLS.find(function(x){return x.id===pid;});
   if(!p)return;
   if(!p.votes[CU.id])p.votes[CU.id]={};
-  p.votes[CU.id][fid]=el.value;
+  p.votes[CU.id][fid]=val;
+  supaUpsertVote(pid,p.votes[CU.id]);
 }
 
 function createPoll(){
@@ -3453,6 +3479,18 @@ function addNewMember(){
   rAdmin();
 }
 
+
+// ── Supabase write helpers ─────────────────────────────────────────────────
+function supaUpsertVote(pollId, answers){
+  supa('poll_votes',{
+    method:'POST',
+    headers:{'Prefer':'resolution=merge-duplicates'},
+    body:JSON.stringify({poll_id:pollId,member_id:CU.id,
+      answers:answers,updated_at:new Date().toISOString()})
+  }).catch(function(e){console.warn('Vote save failed:',e);});
+}
+
+
 function rHome(){
   var meet=nm();
   var h='<div class="hero"><div style="font-size:11px;color:var(--t3);margin-bottom:6px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Welcome, Brother</div>';
@@ -4348,18 +4386,31 @@ function rCalendar(){
 
   function evCard(ev, isPast){
     var e=ec[ev.type]||ec.other;
+    var cancelled=ev.cancelled===true;
     var d=new Date(ev.date+'T12:00:00');
-    var h2='<div class="card" style="border-left:4px solid '+e.dot+';margin-bottom:8px;padding:10px 14px;display:flex;align-items:center;gap:14px'+(isPast?';opacity:.55':'')+'">';
+    var opacity=isPast||cancelled?'.55':'1';
+    var h2='<div class="card" style="border-left:4px solid '+(cancelled?'var(--t3)':e.dot)+';margin-bottom:8px;padding:10px 14px;display:flex;align-items:center;gap:14px;opacity:'+opacity+'">';
     h2+='<div style="text-align:center;min-width:42px">';
-    h2+='<div style="font-size:10px;font-weight:700;color:'+e.dot+'">'+dayNames[d.getDay()]+'</div>';
+    h2+='<div style="font-size:10px;font-weight:700;color:'+(cancelled?'var(--t3)':e.dot)+'">'+dayNames[d.getDay()]+'</div>';
     h2+='<div style="font-size:22px;font-weight:700;color:var(--navy);line-height:1">'+d.getDate()+'</div>';
     h2+='<div style="font-size:10px;color:var(--t3)">'+monNames[d.getMonth()]+' '+d.getFullYear()+'</div></div>';
     h2+='<div style="flex:1">';
-    h2+='<div style="font-weight:700;font-size:14px;color:var(--navy)">'+ev.title+'</div>';
+    h2+='<div style="font-weight:700;font-size:14px;color:var(--navy)'+(cancelled?';text-decoration:line-through':'')+'">'+ev.title+'</div>';
+    if(cancelled)h2+='<div style="font-size:11px;color:var(--bad);font-weight:700">Cancelled</div>';
     h2+='<div style="font-size:11px;color:var(--t3)">'+ev.venue+'</div></div>';
     h2+='<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">';
-    h2+='<span class="badge" style="background:'+e.bg+';color:'+e.c+'">'+e.label+'</span>';
-    if(isSec)h2+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad);padding:2px 7px" data-id="'+ev.id+'" onclick="removeCalEvent(this.dataset.id)"><svg class="ico" width="12" height="12"><use href="#ico-trash"/></svg></button>';
+    if(!cancelled)h2+='<span class="badge" style="background:'+e.bg+';color:'+e.c+'">'+e.label+'</span>';
+    if(isSec){
+      h2+='<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">';
+      h2+='<button class="btn btn-sm btn-n" style="padding:2px 7px;font-size:11px" data-id="'+ev.id+'" onclick="editCalEvent(this.dataset.id)"><svg class="ico" width="12" height="12"><use href="#ico-pencil"/></svg></button>';
+      if(!cancelled){
+        h2+='<button class="btn btn-sm" style="background:var(--warnbg);color:var(--warn);border:1px solid var(--warn);padding:2px 7px" data-id="'+ev.id+'" onclick="cancelCalEvent(this.dataset.id)"><svg class="ico" width="12" height="12"><use href="#ico-ban"/></svg></button>';
+      } else {
+        h2+='<button class="btn btn-sm btn-n" style="padding:2px 7px;font-size:11px" data-id="'+ev.id+'" onclick="restoreCalEvent(this.dataset.id)">Restore</button>';
+      }
+      h2+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad);padding:2px 7px" data-id="'+ev.id+'" onclick="removeCalEvent(this.dataset.id)"><svg class="ico" width="12" height="12"><use href="#ico-trash"/></svg></button>';
+      h2+='</div>';
+    }
     h2+='</div></div>';
     return h2;
   }
@@ -4399,6 +4450,45 @@ function rCalendar(){
   }
 
   document.getElementById('pane-calendar').innerHTML=h;
+}
+
+function editCalEvent(id){
+  var ev=CALENDAR_EVENTS.find(function(e){return e.id===id;});
+  if(!ev)return;
+  var newTitle=prompt('Edit event title:',ev.title);
+  if(newTitle===null)return;
+  newTitle=newTitle.trim();
+  if(!newTitle){alert('Title cannot be empty.');return;}
+  ev.title=newTitle;
+  // Supabase update
+  supa('calendar_events?id=eq.'+id,{
+    method:'PATCH',
+    body:JSON.stringify({title:newTitle})
+  }).catch(function(e){console.warn('Calendar update failed:',e);});
+  rCalendar();
+}
+
+function cancelCalEvent(id){
+  if(!confirm('Mark this event as cancelled?'))return;
+  var ev=CALENDAR_EVENTS.find(function(e){return e.id===id;});
+  if(!ev)return;
+  ev.cancelled=true;
+  supa('calendar_events?id=eq.'+id,{
+    method:'PATCH',
+    body:JSON.stringify({cancelled:true})
+  }).catch(function(e){console.warn('Cancel failed:',e);});
+  rCalendar();
+}
+
+function restoreCalEvent(id){
+  var ev=CALENDAR_EVENTS.find(function(e){return e.id===id;});
+  if(!ev)return;
+  ev.cancelled=false;
+  supa('calendar_events?id=eq.'+id,{
+    method:'PATCH',
+    body:JSON.stringify({cancelled:false})
+  }).catch(function(e){console.warn('Restore failed:',e);});
+  rCalendar();
 }
 
 function addCalEvent(){
