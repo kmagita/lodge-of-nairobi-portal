@@ -1,4 +1,20 @@
-<!DOCTYPE html>
+h+='<div id="new-poll-form" style="display:none;margin-bottom:14px">';
+    h+='<div class="card" style="border:2px solid var(--gold)">';
+    h+='<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px">New poll</div>';
+    h+='<div class="fg"><label class="lbl">Poll label</label><input id="poll-label" placeholder="e.g. October Rehearsal — 7 Oct 2026"></div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+    h+='<div class="fg"><label class="lbl">Date</label><input type="date" id="poll-date"></div>';
+    h+='<div class="fg"><label class="lbl">Type</label><select id="poll-type">';
+    h+='<option value="rehearsal">Rehearsal</option>';
+    h+='<option value="meeting">Lodge meeting</option>';
+    h+='<option value="other">Other</option>';
+    h+='</select></div></div>';
+    h+='<div class="fg"><label class="lbl">Meal options <span style="font-size:10px;color:var(--t3)">(comma-separated)</span></label>';
+    h+='<input id="poll-meal-options" value="Chicken, Fish, Vegetarian" placeholder="e.g. Chicken, Fish, Vegetarian, No meal"></div>';
+    h+='<div style="display:flex;gap:8px;margin-top:4px">';
+    h+='<button class="btn btn-navy btn-sm" style="flex:1;justify-content:center" onclick="createPoll()"><svg class="ico" width="16" height="16"><use href="#ico-plus"/></svg> Create poll</button>';
+    h+='<button class="btn btn-n btn-sm" onclick="hidePollForm()">Cancel</button>';
+    h+='</div></div></div>';<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2272,15 +2288,23 @@ function createPoll(){
   var label=document.getElementById('poll-label');
   var date=document.getElementById('poll-date');
   var type=document.getElementById('poll-type');
+  var mealOpts=document.getElementById('poll-meal-options');
   if(!label||!label.value.trim()){alert('Enter a poll label.');return;}
   if(!date||!date.value){alert('Select a date.');return;}
   var d=new Date(date.value+'T12:00:00');
   var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   var dayLabel=days[d.getDay()]+' '+d.getDate()+' '+date.value.split('-')[1]+' '+date.value.split('-')[0];
-  var fields=newPollDraft&&newPollDraft.fields&&newPollDraft.fields.length
-    ? newPollDraft.fields
-    : [{id:'f1',type:'yesno',label:'Attending?'}];
-  if(!fields.length){alert('Add at least one question to the poll.');return;}
+  // Build meal options from input (default to Chicken/Fish/Vegetarian if blank)
+  var mealOptsList=['Chicken','Fish','Vegetarian'];
+  if(mealOpts&&mealOpts.value.trim()){
+    mealOptsList=mealOpts.value.split(',').map(function(o){return o.trim();}).filter(Boolean);
+  }
+  var fields=[
+    {id:'f1',type:'yesno',label:'Attending?'},
+    {id:'f2',type:'choice',label:'Meal preference',options:mealOptsList,showIf:{fid:'f1',val:true}},
+    {id:'f3',type:'yesno',label:'Bringing a guest?',showIf:{fid:'f1',val:true}},
+    {id:'f4',type:'text',label:'Guest name',showIf:{fid:'f3',val:true}}
+  ];
   var poll={id:'poll-tmp-'+Date.now(),type:type?type.value:'rehearsal',
     label:label.value.trim(),dayLabel:dayLabel,date:date.value,
     active:true,fields:fields,votes:{},showNames:false};
@@ -2291,7 +2315,7 @@ function createPoll(){
   }).then(function(r){return r.json();})
   .then(function(data){
     if(data&&data.code){
-      alert('Database error: '+(data.message||data.code)+'. Check RLS policies in Supabase.');
+      alert('Database error: '+(data.message||data.code));
     } else if(data&&data[0]){
       poll.id=data[0].id;
     }
@@ -2301,7 +2325,7 @@ function createPoll(){
         'A poll has been created. Please respond.',allIds);
     }
     hidePollForm();
-    alert('Poll created successfully.');
+    alert('Poll created.');
     rPolls();
   }).catch(function(e){
     alert('Failed to save poll: '+e.message);
@@ -2345,18 +2369,9 @@ function removeDraftField(i){
 }
 
 function showCreatePoll(){
-  // Pre-populate with standard fields
-  newPollDraft={fields:[
-    {id:'f1',type:'yesno',label:'Attending?'},
-    {id:'f2',type:'choice',label:'Meal preference',
-     options:['Chicken','Fish','Vegetarian'],showIf:{fid:'f1',val:true}},
-    {id:'f3',type:'yesno',label:'Bringing a guest?',showIf:{fid:'f1',val:true}},
-    {id:'f4',type:'text',label:'Guest name',showIf:{fid:'f3',val:true}}
-  ]};
   var form=document.getElementById('new-poll-form');
   if(!form){pollForm=true;rPolls();return;}
   form.style.display='block';
-  renderPollFieldsList();  // show the pre-populated fields
   form.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
