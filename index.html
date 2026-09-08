@@ -1938,8 +1938,11 @@ var SUB_PAYMENTS=[];
 var STEWARD_PAYMENTS=[];
 
 var noticeCounter=100;
+var _prevUnread=0;
 function pushNotice(type,title,body,toIds){
-  var toAll=toIds.indexOf('all')>-1;
+  // If toIds contains all member IDs (lodge-wide), use to_all flag instead
+  // so new members automatically see it without needing ID in the list
+  var toAll=toIds.indexOf('all')>-1||toIds.length>=MEMBERS.length;
   var payload={type:type,title:title,body:body,
     to_all:toAll,to_ids:toAll?[]:toIds,created_by:CU.id};
   supa('notices',{method:'POST',body:JSON.stringify(payload)})
@@ -1950,6 +1953,7 @@ function pushNotice(type,title,body,toIds){
         NOTICES.unshift({id:row.id,type:type,title:title,body:body,
           to:toIds,date:new Date().toISOString().split('T')[0],read:false});
         buildNav();
+        notifyUser();
       }
     }).catch(function(e){
       // fallback: add in-memory even if DB write fails
@@ -1980,14 +1984,14 @@ var MEMBERS=[];
 var RLBL={master:'W. Master',secretary:'Secretary',dc:'D.C.',mentor:'Mentor',almoner:'Almoner',treasurer:'Treasurer',brother:'Brother',steward:'Ch. Steward'};
 
 var NAV_ROLES={
-  master:    ['home','members','duties','library','practice','mentor','almoner','agenda','admin','reports','summons','calendar','notices'],
-  secretary: ['home','members','duties','agenda','admin','reports','summons','practice','calendar','notices'],
-  dc:        ['home','members','duties','library','practice','reports','summons','calendar','notices'],
-  mentor:    ['home','members','library','practice','mentor','reports','summons','calendar','notices'],
-  almoner:   ['home','almoner','reports','summons','practice','calendar','notices'],
-  treasurer: ['home','members','reports','summons','practice','calendar','notices'],
+  master:    ['home','members','duties','library','practice','mentor','almoner','agenda','admin','reports','polls','summons','calendar','notices'],
+  secretary: ['home','members','duties','agenda','admin','reports','polls','summons','practice','calendar','notices'],
+  dc:        ['home','members','duties','library','practice','reports','polls','summons','calendar','notices'],
+  mentor:    ['home','members','library','practice','mentor','reports','polls','summons','calendar','notices'],
+  almoner:   ['home','almoner','reports','polls','summons','practice','calendar','notices'],
+  treasurer: ['home','members','reports','polls','summons','practice','calendar','notices'],
   steward:   ['home','polls','summons','practice','calendar','notices'],
-  brother:   ['home','duties','practice','summons','calendar','notices']
+  brother:   ['home','duties','practice','polls','summons','calendar','notices']
 };
 
 var ALL_NAV=[
@@ -2201,7 +2205,33 @@ function unreadNotices(){
   });
 }
 
+
+// ── Notification feedback ─────────────────────────────────────────────────
+var _notifAudio = null;
+function notifyUser(){
+  // Vibrate (mobile)
+  if(navigator.vibrate) navigator.vibrate([100, 50, 100]);
+  // Chime (simple beep via Web Audio)
+  try{
+    var ctx = new (window.AudioContext||window.webkitAudioContext)();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.4);
+  }catch(e){}
+}
+
 function buildNav(){
+  var prev=_prevUnread||0;
+  var curr=unreadNotices().length;
+  if(curr>prev&&navigator.vibrate)navigator.vibrate([100,50,100]);
+  _prevUnread=curr;
   var ok=NAV_ROLES[CU.role]||[];
   var unread=unreadNotices().length;
   document.getElementById('bnav').innerHTML=ALL_NAV.filter(function(n){
@@ -4192,176 +4222,33 @@ function supaUpsertVote(pollId, answers){
 function rHome(){
   var meet=nm();
   var h='<div class="hero"><div style="font-size:11px;color:var(--t3);margin-bottom:6px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Welcome, Brother</div>';
-  // Unread notices banner
+  // Unread notices banner — compact pill, expandable
   var unread=unreadNotices();
   if(unread.length){
-    h+='<div style="background:var(--bad);border-radius:10px;padding:12px 14px;margin-bottom:14px;cursor:pointer" data-id="notices" onclick="goTo(this.dataset.id)">';
-    h+='<div style="display:flex;align-items:center;gap:10px">';
-    h+='<span style="background:rgba(255,255,255,.25);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:700;color:#fff">'+unread.length+'</span>';
-    h+='<div style="flex:1">';
-    h+='<div style="font-weight:700;font-size:13px;color:#fff">'+unread.length+' unread notice'+(unread.length!==1?'s':'')+'</div>';
-    h+='<div style="font-size:11px;color:rgba(255,255,255,.8);margin-top:1px">'+unread[0].title+'</div>';
-    h+='</div>';
-    h+='<svg style="color:rgba(255,255,255,.7);flex-shrink:0" class="ico" width="18" height="18"><use href="#ico-arrow-right"/></svg>';
-    h+='</div></div>';
-  }
-  h+='<div class="sf" style="font-size:24px;font-weight:700;color:var(--navy)">'+CU.name.replace('W.Bro. ','').replace('Bro. ','')+'</div>';
-  h+=ob(CU.office)+'&nbsp;'+db(CU.deg);
-  h+='</div>';
-
-  // Next meeting card
-  if(meet){
-    var days=Math.round((meet-new Date())/(1000*60*60*24));
-    var dd=meet.getDate(),mo=['January','February','March','April','May','June','July','August','September','October','November','December'][meet.getMonth()],yy=meet.getFullYear();
-    var suffix=dd===1?'st':dd===2?'nd':dd===3?'rd':'th';
-    h+='<div class="card" style="border-top:4px solid var(--gold)">';
-    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Next meeting</div>';
-    h+='<div style="font-size:22px;font-weight:700;color:var(--navy);margin-bottom:4px">'+NEXT_MEETING.num+'</div>';
-    h+='<div style="font-size:14px;color:var(--t2);margin-bottom:10px">Thursday '+dd+suffix+' '+mo+' '+yy+'</div>';
-    h+='<div style="display:flex;align-items:center;gap:6px"><div style="font-size:13px;color:var(--ok);font-weight:700">'+days+' day'+(days!==1?'s':'')+' away</div></div>';
-    h+='</div>';
-  }
-
-  // RSVP (not for almoner or steward)
-  if(CU.role!=='almoner'&&CU.role!=='steward')h+=rsvpWidget();
-
-  // Subscription status
-  var sub=CU.sub||'Unknown';
-  h+='<div class="card" style="display:flex;align-items:center;gap:12px">';
-  h+='<div style="background:var(--goldbg);border-radius:8px;padding:9px;flex-shrink:0"><svg class="ico" width="18" height="18"><use href="#ico-lock"/></svg></div>';
-  h+='<div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--navy)">Subscription</div>';
-  h+='<div style="font-size:12px;color:'+sc(sub)+'">'+sub+'</div></div></div>';
-
-  // Secretary tools
-  if(CU.role==='secretary'){
-    h+='<div class="stitle">Secretary tools</div>';
-    h+='<div class="card">';
-    h+='<div class="tcrd" style="border:none;padding:0;margin-bottom:10px" data-id="duties" onclick="goTo(this.dataset.id)">';
-    h+='<div class="tico"><svg class="ico" width="20" height="20"><use href="#ico-shield-star"/></svg></div>';
-    h+='<div><div style="font-weight:700;font-size:13px;color:var(--navy)">Charge assignments</div><div style="font-size:11px;color:var(--t3)">Manage ritual duties</div></div></div>';
-    h+='<div class="tcrd" style="border:none;padding:0" data-id="summons" onclick="goTo(this.dataset.id)">';
-    h+='<div class="tico"><svg class="ico" width="20" height="20"><use href="#ico-mail"/></svg></div>';
-    h+='<div><div style="font-weight:700;font-size:13px;color:var(--navy)">Summons builder</div><div style="font-size:11px;color:var(--t3)">Prepare & circulate summons</div></div></div>';
-    h+='</div>';
-  }
-
-  // Role-specific quick action cards
-  if(CU.role==='steward'){
-    var ptotal=0;POLLS.forEach(function(p){ptotal+=Object.keys(p.votes).length;});
-    h+='<div class="card" style="border-top:4px solid var(--gold)">';
-    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:4px">Meal Polls</div>';
-    h+='<div style="font-size:12px;color:var(--t2);margin-bottom:10px">'+ptotal+' response'+(ptotal!==1?'s':'')+' received across '+POLLS.length+' poll'+(POLLS.length!==1?'s':'')+'.</div>';
-    h+='<button class="btn btn-n btn-sm" data-id="polls" onclick="goTo(this.dataset.id)">Manage polls</button>';
-    h+='</div>';
-  }
-  if(CU.role==='almoner'){
-    var concerns=WELFARE.filter(function(w){return w.status==='Concern'||w.status==='Serious';});
-    var birthdays30=[];var today2=new Date();
-    MEMBERS.forEach(function(m){if(!m.dob)return;var d=new Date(m.dob);var n=new Date(today2.getFullYear(),d.getMonth(),d.getDate());if(n<today2)n.setFullYear(today2.getFullYear()+1);if(Math.round((n-today2)/(86400000))<=14)birthdays30.push(gn(m));});
-    h+='<div class="card" style="border-top:4px solid var(--ok)">';
-    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Welfare summary</div>';
-    h+='<div style="display:flex;gap:12px;margin-bottom:10px">';
-    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+(MEMBERS.length-concerns.length)+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">GOOD</div></div>';
-    h+='<div style="flex:1;text-align:center;background:'+(concerns.length?'var(--warnbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:'+(concerns.length?'var(--warn)':'var(--t3)')+'">'+concerns.length+'</div><div style="font-size:10px;color:'+(concerns.length?'var(--warn)':'var(--t3)')+';font-weight:600">CONCERN</div></div>';
-    h+='</div>';
-    if(birthdays30.length)h+='<div style="font-size:12px;color:var(--t2);margin-bottom:8px">&#127874; Birthdays in 14 days: '+birthdays30.join(', ')+'</div>';
-    h+='<button class="btn btn-n btn-sm" data-id="almoner" onclick="goTo(this.dataset.id)">View welfare register</button>';
-    h+='</div>';
-  }
-  if(CU.role==='treasurer'){
-    var arrears=MEMBERS.filter(function(m){return m.sub==='Arrears';});
-    var paid=MEMBERS.filter(function(m){return m.sub==='Paid';});
-    h+='<div class="card" style="border-top:4px solid var(--info)">';
-    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Subscriptions</div>';
-    h+='<div style="display:flex;gap:12px;margin-bottom:10px">';
-    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+paid.length+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">PAID</div></div>';
-    h+='<div style="flex:1;text-align:center;background:'+(arrears.length?'var(--badbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:'+(arrears.length?'var(--bad)':'var(--t3)')+'">'+arrears.length+'</div><div style="font-size:10px;color:'+(arrears.length?'var(--bad)':'var(--t3)')+';font-weight:600">ARREARS</div></div>';
-    h+='</div>';
-    h+='<button class="btn btn-n btn-sm" data-id="members" onclick="goTo(this.dataset.id)">Manage dues</button>';
-    h+='</div>';
-  }
-  // Lodge mentor dashboard card
-  if(CU.role==='mentor'){
-    var totalPairs=MENTORING_PAIRS.length;
-    var totalSess=MENTORING_PAIRS.reduce(function(s,p){return s+p.sessions.length;},0);
-    var unmentored2=MEMBERS.filter(function(m){return (m.deg==='EA'||m.deg==='FC')&&!MENTORING_PAIRS.find(function(p){return p.mentee===m.id;});});
-    h+='<div class="card" style="border-top:4px solid var(--purp)">';
-    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Mentoring programme</div>';
-    h+='<div style="display:flex;gap:10px;margin-bottom:10px">';
-    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+totalPairs+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">PAIRS</div></div>';
-    h+='<div style="flex:1;text-align:center;background:var(--infobg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--info)">'+totalSess+'</div><div style="font-size:10px;color:var(--info);font-weight:600">SESSIONS</div></div>';
-    if(unmentored2.length)h+='<div style="flex:1;text-align:center;background:var(--badbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--bad)">'+unmentored2.length+'</div><div style="font-size:10px;color:var(--bad);font-weight:600">UNASSIGNED</div></div>';
-    h+='</div>';
-    h+='<button class="btn btn-n btn-sm" data-id="mentor" onclick="goTo(this.dataset.id)">Open mentor dashboard</button>';
-    h+='</div>';
-  }
-  // Personal mentor card (any MM brother assigned as personal mentor)
-  var myMenteePairs=MENTORING_PAIRS.filter(function(p){return p.personalMentor===CU.id;});
-  if(myMenteePairs.length&&CU.role!=='mentor'){
-    h+='<div class="stitle">Your mentees</div>';
-    myMenteePairs.forEach(function(pair){
-      var menteeM=gm(pair.mentee);
-      if(!menteeM)return;
-      var isOpen=typeof pmMenteeOpen!=='undefined'&&pmMenteeOpen===pair.id;
-      var ms=pair.milestones||{};
-      h+='<div class="card" style="border-left:4px solid var(--purp);margin-bottom:8px">';
-      h+='<div class="srow" style="margin-bottom:6px">';
-      h+='<div style="flex:1"><div style="font-weight:700;font-size:14px;color:var(--navy)">'+menteeM.name+'</div>';
-      h+='<div style="font-size:11px;color:var(--t3)">'+menteeM.deg+' &middot; '+pair.sessions.length+' session'+(pair.sessions.length!==1?'s':'')+' logged</div></div>';
-      h+='<span class="badge" style="background:'+(ms.passed?'var(--okbg)':ms.initiated?'var(--infobg)':'var(--bg2)')+';color:'+(ms.passed?'var(--ok)':ms.initiated?'var(--info)':'var(--t3)')+'">'+  (ms.raised?'Raised':ms.passed?'Passed':ms.initiated?'Initiated':'Pre-init')+'</span>';
-      h+='<button class="btn btn-n btn-sm" style="margin-left:8px" data-id="'+pair.id+'" onclick="togglePMCard(this.dataset.id)">'+(isOpen?'&#9650;':'&#9660;')+'</button>';
+    var expanded=window._noticeExpanded===true;
+    if(expanded){
+      h+='<div style="background:var(--bad);border-radius:10px;margin-bottom:14px;overflow:hidden">';
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer" onclick="window._noticeExpanded=false;rHome()">';
+      h+='<span style="background:rgba(255,255,255,.25);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">'+unread.length+'</span>';
+      h+='<div style="flex:1;font-weight:700;font-size:13px;color:#fff">'+unread.length+' unread notice'+(unread.length!==1?'s':'')+'</div>';
+      h+='<span style="color:rgba(255,255,255,.7);font-size:12px">&#9650; Hide</span>';
       h+='</div>';
-      if(isOpen){
-        // Recent sessions
-        if(pair.sessions.length){
-          h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:6px">Recent sessions</div>';
-          pair.sessions.slice(-3).reverse().forEach(function(s){
-            h+='<div style="font-size:12px;padding:5px 8px;background:var(--bg2);border-radius:6px;margin-bottom:4px">';
-            h+='<div style="font-weight:600;color:var(--navy)">'+s.date+' &mdash; '+s.topic+'</div>';
-            if(s.notes)h+='<div style="color:var(--t3);font-style:italic">'+s.notes+'</div>';
-            h+='</div>';
-          });
-        }
-        // Notes
-        h+='<div class="fg" style="margin-bottom:8px"><label class="lbl">Your notes on '+gn(menteeM)+'</label>';
-        h+='<textarea id="pmn-'+pair.id+'" style="min-height:60px">'+pair.notes+'</textarea></div>';
-        h+='<button class="btn btn-n btn-sm" data-id="'+pair.id+'" onclick="savePMNotes(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-device-floppy"/></svg> Save notes</button>';
-        // Log session
-        h+='<div style="border-top:1px solid var(--bdr);margin-top:12px;padding-top:12px">';
-        h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:8px">Log new session</div>';
-        h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-        h+='<div class="fg" style="margin:0"><label class="lbl">Date</label><input type="date" id="pms-date-'+pair.id+'" value="'+new Date().toISOString().split('T')[0]+'"></div>';
-        h+='<div class="fg" style="margin:0"><label class="lbl">Duration (min)</label><input type="number" id="pms-dur-'+pair.id+'" value="60" min="15"></div>';
+      unread.slice(0,3).forEach(function(n){
+        h+='<div style="padding:8px 14px;border-top:1px solid rgba(255,255,255,.2);cursor:pointer" data-id="notices" onclick="goTo(this.dataset.id)">';
+        h+='<div style="font-size:12px;font-weight:700;color:#fff">'+n.title+'</div>';
+        h+='<div style="font-size:11px;color:rgba(255,255,255,.8)">'+n.body.substring(0,60)+(n.body.length>60?'…':'')+'</div>';
         h+='</div>';
-        h+='<div class="fg"><label class="lbl">Topic</label><input id="pms-topic-'+pair.id+'" placeholder="What was covered?"></div>';
-        h+='<div class="fg"><label class="lbl">Notes</label><input id="pms-notes-'+pair.id+'" placeholder="Progress notes"></div>';
-        h+='<button class="btn btn-navy btn-sm" data-id="'+pair.id+'" onclick="logPersonalMentorSession(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Log session</button>';
-        h+='</div>';
-      }
+      });
+      if(unread.length>3)h+='<div style="padding:8px 14px;font-size:11px;color:rgba(255,255,255,.7);cursor:pointer" data-id="notices" onclick="goTo(this.dataset.id)">See all '+unread.length+' notices &#8594;</div>';
       h+='</div>';
-    });
+    } else {
+      h+='<div style="display:flex;align-items:center;gap:10px;background:var(--bad);border-radius:10px;padding:10px 14px;margin-bottom:14px;cursor:pointer" onclick="window._noticeExpanded=true;rHome()">';
+      h+='<span style="background:rgba(255,255,255,.25);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">'+unread.length+'</span>';
+      h+='<div style="flex:1;font-size:13px;font-weight:700;color:#fff">'+unread.length+' unread notice'+(unread.length!==1?'s':'')+'</div>';
+      h+='<span style="color:rgba(255,255,255,.7);font-size:12px">&#9660; Show</span>';
+      h+='</div>';
+    }
   }
-  if(CU.role==='dc'){
-    var pending=CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Assigned';});
-    var delivered=CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Delivered';});
-    h+='<div class="card" style="border-top:4px solid var(--navy)">';
-    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Ritual assignments</div>';
-    h+='<div style="display:flex;gap:12px;margin-bottom:10px">';
-    h+='<div style="flex:1;text-align:center;background:var(--goldbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--gold)">'+pending.length+'</div><div style="font-size:10px;color:var(--gold);font-weight:600">ASSIGNED</div></div>';
-    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+delivered.length+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">DELIVERED</div></div>';
-    h+='</div>';
-    h+='<div style="display:flex;gap:8px">';
-    h+='<button class="btn btn-n btn-sm" data-id="duties" onclick="goTo(this.dataset.id)">View duties</button>';
-    h+='<button class="btn btn-navy btn-sm" data-id="assignduty" onclick="goTo(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Assign</button>';
-    h+='</div></div>';
-  }
-
-  document.getElementById('pane-home').innerHTML=h;
-}
-
-
-
-// ── Office → role mapping (drives nav access) ────────────────────────────
 function officeToRole(office){
   var map={
     'Worshipful Master':'master',
@@ -5474,44 +5361,37 @@ function renderPollSummary(poll){
 
 function renderPollVoter(poll,myV,isClosed){
   var h='';
-  var locked  = isPollLocked(poll);
+  var locked    = isPollLocked(poll);
   var submitted = myV._submitted === true;
-  var hasVoted  = Object.keys(myV).filter(function(k){return k.charAt(0)!=='_';}).length > 0;
+  var hasFields = Object.keys(myV).filter(function(k){return k.charAt(0)!=='_';}).length > 0;
 
-  // ── Submitted state ───────────────────────────────────────────────────
+  // ── Submitted state ────────────────────────────────────────────────────
   if(submitted && !isClosed){
-    var attendLabel = myV.f1===true ? 'Attending' : myV.f1===false ? 'Not attending' : '—';
-    var mealLabel   = myV.f2 || '';
-    var guestLabel  = myV.f3===true ? (myV.f4 ? 'Guest: '+myV.f4 : 'Bringing a guest') : '';
-    h+='<div style="background:var(--okbg);border-radius:8px;padding:10px 12px;margin-bottom:10px">';
-    h+='<div style="font-weight:700;font-size:13px;color:var(--ok);margin-bottom:4px">&#10003; Response submitted</div>';
-    h+='<div style="font-size:12px;color:var(--t2)">'+attendLabel;
-    if(mealLabel)h+=' &middot; '+mealLabel;
-    if(guestLabel)h+=' &middot; '+guestLabel;
+    var attend  = myV.f1===true?'Attending':myV.f1===false?'Not attending':'—';
+    var meal    = myV.f2||'';
+    var guest   = myV.f3===true?(myV.f4?'Guest: '+myV.f4:'Bringing a guest'):'';
+    h+='<div style="background:var(--okbg);border-radius:8px;padding:10px 12px;margin-bottom:8px">';
+    h+='<div style="font-weight:700;font-size:13px;color:var(--ok);margin-bottom:3px">&#10003; Response submitted</div>';
+    h+='<div style="font-size:12px;color:var(--t2)">'+attend;
+    if(meal)h+=' &middot; '+meal;
+    if(guest)h+=' &middot; '+guest;
     h+='</div></div>';
-    if(locked){
-      if(myV._changeRequested){
-        h+='<div style="font-size:11px;color:var(--warn);font-weight:700;margin-bottom:6px;padding:6px 8px;background:var(--warnbg);border-radius:6px">&#9203; Change request sent — awaiting Chief Steward confirmation.</div>';
-      } else {
-        h+='<div style="font-size:11px;color:var(--t3);margin-bottom:6px">Poll locked. Requests go to the Chief Steward for approval.</div>';
-        h+='<button class="btn btn-warn btn-sm" data-pid="'+poll.id+'" onclick="changeVote(this.dataset.pid)">Request change</button>';
-      }
+    if(!locked){
+      h+='<button class="btn btn-n btn-sm" data-pid="'+poll.id+'" onclick="changeVote(this.dataset.pid)" style="font-size:12px">Edit response</button>';
     } else {
-      h+='<button class="btn btn-n btn-sm" data-pid="'+poll.id+'" onclick="changeVote(this.dataset.pid)">Change response</button>';
+      h+='<div style="font-size:11px;color:var(--t3);margin-top:4px">&#128274; Locked — contact the Chief Steward to make changes.</div>';
     }
     return h;
   }
 
-  // ── Closed or locked read-only ─────────────────────────────────────────
-  if(isClosed || (locked && !hasVoted)){
-    if(hasVoted){
-      h+='<div style="font-size:12px;color:var(--t3);margin-bottom:6px">Your response '+(isClosed?'(poll closed)':'(poll locked)')+':</div>';
-      var pollFields=Array.isArray(poll.fields)?poll.fields:[];
-      pollFields.forEach(function(field){
+  // ── Poll closed — read only ────────────────────────────────────────────
+  if(isClosed){
+    if(hasFields){
+      h+='<div style="font-size:12px;color:var(--t3);margin-bottom:6px">Your response (poll closed):</div>';
+      (Array.isArray(poll.fields)?poll.fields:[]).forEach(function(field){
         var val=myV[field.id];
         if(val===undefined||val===null||val==='')return;
-        var disp=typeof val==='boolean'?(val?'Yes':'No'):String(val);
-        h+='<div style="font-size:13px;margin-bottom:4px"><span style="color:var(--t3)">'+field.label+':</span> <strong>'+disp+'</strong></div>';
+        h+='<div style="font-size:13px;margin-bottom:3px"><span style="color:var(--t3)">'+field.label+':</span> <strong>'+(typeof val==='boolean'?(val?'Yes':'No'):String(val))+'</strong></div>';
       });
     } else {
       h+='<div style="font-size:12px;color:var(--t3)">Poll closed — no response recorded.</div>';
@@ -5519,137 +5399,53 @@ function renderPollVoter(poll,myV,isClosed){
     return h;
   }
 
-  // ── Active voting form ─────────────────────────────────────────────────
-  if(locked && !submitted){
-    h+='<div style="font-size:11px;color:var(--warn);margin-bottom:8px;padding:6px 8px;background:var(--warnbg);border-radius:6px">&#9888; Less than 2 days to the event — submit now. After submitting, changes require Chief Steward approval.</div>';
+  // ── Locked but not yet voted — still allow first vote ─────────────────
+  if(locked){
+    h+='<div style="font-size:11px;color:var(--warn);margin-bottom:8px;padding:6px 8px;background:var(--warnbg);border-radius:6px">&#9888; Less than 2 days to the event. Please submit your response — changes after submission will require Chief Steward approval.</div>';
   }
-  var pollFields=Array.isArray(poll.fields)?poll.fields:[];
-  pollFields.forEach(function(field){
+
+  // ── Voting form ────────────────────────────────────────────────────────
+  (Array.isArray(poll.fields)?poll.fields:[]).forEach(function(field){
     if(field.showIf){if(myV[field.showIf.fid]!==field.showIf.val)return;}
-    h+='<div class="fg" style="margin-bottom:10px"><label class="lbl">'+field.label+'</label>';
+    h+='<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:6px">'+field.label+'</div>';
     if(field.type==='yesno'){
-      h+='<div style="display:flex;gap:8px">';
       [{lbl:'Yes',val:true},{lbl:'No',val:false}].forEach(function(o){
         var active=myV[field.id]===o.val;
-        h+='<button class="btn '+(active?'btn-navy':'btn-n')+' btn-sm"';
-        h+=' data-pid="'+poll.id+'" data-fid="'+field.id+'" data-bval="'+o.val+'"';
-        h+=' onclick="castVote(this.dataset.pid,this.dataset.fid,JSON.parse(this.dataset.bval))">'+o.lbl+'</button>';
+        h+='<div data-pid="'+poll.id+'" data-fid="'+field.id+'" data-bval="'+o.val+'" onclick="castVote(this.dataset.pid,this.dataset.fid,JSON.parse(this.dataset.bval))"';
+        h+=' style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border-radius:8px;border:2px solid '+(active?'var(--navy)':'var(--bdr)')+';background:'+(active?'var(--goldbg)':'var(--white)')+';cursor:pointer">';
+        h+='<div style="width:20px;height:20px;border-radius:50%;border:2px solid '+(active?'var(--navy)':'var(--t3)')+';display:flex;align-items:center;justify-content:center;flex-shrink:0">';
+        if(active)h+='<div style="width:10px;height:10px;border-radius:50%;background:var(--navy)"></div>';
+        h+='</div>';
+        h+='<span style="font-size:14px;font-weight:'+(active?'700':'400')+';color:'+(active?'var(--navy)':'var(--t2)')+'">'+o.lbl+'</span>';
+        h+='</div>';
       });
-      h+='</div>';
     } else if(field.type==='choice'){
-      h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
-      field.options.forEach(function(opt){
+      (field.options||[]).forEach(function(opt){
         var active=myV[field.id]===opt;
-        h+='<button class="btn '+(active?'btn-navy':'btn-n')+' btn-sm"';
-        h+=' data-pid="'+poll.id+'" data-fid="'+field.id+'" data-opt="'+opt+'"';
-        h+=' onclick="castVote(this.dataset.pid,this.dataset.fid,this.dataset.opt)">'+opt+'</button>';
+        h+='<div data-pid="'+poll.id+'" data-fid="'+field.id+'" data-opt="'+opt+'" onclick="castVote(this.dataset.pid,this.dataset.fid,this.dataset.opt)"';
+        h+=' style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border-radius:8px;border:2px solid '+(active?'var(--navy)':'var(--bdr)')+';background:'+(active?'var(--goldbg)':'var(--white)')+';cursor:pointer">';
+        h+='<div style="width:20px;height:20px;border-radius:4px;border:2px solid '+(active?'var(--navy)':'var(--t3)')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;background:'+(active?'var(--navy)':'transparent')+'">';
+        if(active)h+='<svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" fill="none"/></svg>';
+        h+='</div>';
+        h+='<span style="font-size:14px;font-weight:'+(active?'700':'400')+';color:'+(active?'var(--navy)':'var(--t2)')+'">'+opt+'</span>';
+        h+='</div>';
       });
-      h+='</div>';
     } else if(field.type==='text'){
-      h+='<input value="'+(myV[field.id]||'')+'" placeholder="Enter name"';
+      h+='<input value="'+(myV[field.id]||'')+'" placeholder="Enter name" style="width:100%"';
       h+=' data-pid="'+poll.id+'" data-fid="'+field.id+'"';
       h+=' onchange="castVoteText(this.dataset.pid,this.dataset.fid,this.value)">';
     }
     h+='</div>';
   });
-  // Submit button — show when attending question is answered
-  if(myV.f1 !== undefined){
-    h+='<button class="btn btn-navy btn-sm" style="width:100%;justify-content:center;margin-top:4px"';
+
+  // Submit button — show once attending is answered
+  if(myV.f1!==undefined){
+    h+='<button class="btn btn-navy" style="width:100%;justify-content:center;margin-top:4px;padding:12px"';
     h+=' data-pid="'+poll.id+'" onclick="submitVote(this.dataset.pid)">';
-    h+='<svg class="ico" width="16" height="16"><use href="#ico-check"/></svg> Submit response</button>';
+    h+='<svg class="ico" width="16" height="16"><use href="#ico-check"/></svg>&nbsp; Submit response</button>';
   }
   return h;
 }
-
-
-function renderPollSummary(poll){
-  var ids=Object.keys(poll.votes);
-  if(!ids.length)return '<div style="font-size:12px;color:var(--t3);margin-bottom:10px">No responses yet.</div>';
-  var att=ids.filter(function(k){return poll.votes[k].f1===true;});
-  var dec=ids.filter(function(k){return poll.votes[k].f1===false;});
-  var gs=ids.filter(function(k){return poll.votes[k].f3===true;});
-  var h='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
-  h+='<span class="badge" style="background:var(--okbg);color:var(--ok)">'+att.length+' attending</span>';
-  h+='<span class="badge" style="background:var(--badbg);color:var(--bad)">'+dec.length+' declining</span>';
-  if(gs.length)h+='<span class="badge" style="background:var(--warnbg);color:var(--warn)">'+gs.length+' guest'+(gs.length!==1?'s':'')+'</span>';
-  var choices={};
-  att.forEach(function(k){var v=poll.votes[k].f2||'';choices[v]=(choices[v]||0)+1;});
-  Object.keys(choices).sort().forEach(function(ch){
-    if(ch)h+='<span class="badge" style="background:var(--infobg);color:var(--info)">'+ch+': '+choices[ch]+'</span>';
-  });
-  h+='</div>';
-  return h;
-}
-
-function renderPollVoter(poll,myV,isClosed){
-  var h='';
-  if(isClosed){
-    if(Object.keys(myV).length){
-      h+='<div style="font-size:12px;color:var(--t3);margin-bottom:6px">Your response (poll closed):</div>';
-      poll.fields.forEach(function(field){
-        var val=myV[field.id];
-        if(val===undefined||val===null||val==='')return;
-        var disp=typeof val==='boolean'?(val?'Yes':'No'):String(val);
-        h+='<div style="font-size:13px;margin-bottom:4px"><span style="color:var(--t3)">'+field.label+':</span> <strong>'+disp+'</strong></div>';
-      });
-    } else {
-      h+='<div style="font-size:12px;color:var(--t3)">Poll closed — no response recorded.</div>';
-    }
-    return h;
-  }
-  poll.fields.forEach(function(field){
-    if(field.showIf){if(myV[field.showIf.fid]!==field.showIf.val)return;}
-    h+='<div class="fg" style="margin-bottom:10px"><label class="lbl">'+field.label+'</label>';
-    if(field.type==='yesno'){
-      h+='<div style="display:flex;gap:8px">';
-      var opts=[{lbl:'Yes',val:true},{lbl:'No',val:false}];
-      opts.forEach(function(o){
-        var active=myV[field.id]===o.val;
-        h+='<button class="btn '+(active?'btn-navy':'btn-n')+' btn-sm"';
-        h+=' data-pid="'+poll.id+'" data-fid="'+field.id+'" data-bval="'+o.val+'"';
-        h+=' onclick="castVote(this.dataset.pid,this.dataset.fid,JSON.parse(this.dataset.bval))">'+o.lbl+'</button>';
-      });
-      h+='</div>';
-    } else if(field.type==='choice'){
-      h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
-      field.options.forEach(function(opt){
-        var active=myV[field.id]===opt;
-        h+='<button class="btn '+(active?'btn-navy':'btn-n')+' btn-sm"';
-        h+=' data-pid="'+poll.id+'" data-fid="'+field.id+'" data-opt="'+opt+'"';
-        h+=' onclick="castVote(this.dataset.pid,this.dataset.fid,this.dataset.opt)">'+opt+'</button>';
-      });
-      h+='</div>';
-    } else if(field.type==='text'){
-      h+='<input value="'+(myV[field.id]||'')+'" placeholder="Enter name"';
-      h+=' data-pid="'+poll.id+'" data-fid="'+field.id+'"';
-      h+=' onchange="castVoteText(this.dataset.pid,this.dataset.fid,this.value)">';
-    }
-    h+='</div>';
-  });
-  return h;
-}
-
-
-function removePollField(idx){
-  newPollDraft.fields.splice(idx,1);
-  renderPollFieldsList();
-}
-
-function updatePollFieldLabel(idx,val){
-  if(newPollDraft.fields[idx])newPollDraft.fields[idx].label=val;
-}
-
-function updatePollFieldOptions(idx,val){
-  if(newPollDraft.fields[idx]){
-    newPollDraft.fields[idx].options=val.split(',').map(function(s){return s.trim();}).filter(Boolean);
-  }
-}
-
-
-
-
-
-
 
 
 function isPollLocked(poll){
@@ -5701,6 +5497,7 @@ function changeVote(pollId){
   rPolls();
 }
 
+}
 
 
 // ════════════════════════════════
