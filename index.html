@@ -1326,9 +1326,13 @@ function loadAppData() {
       POLLS = d.map(function(p) {
         var votes = {};
         (p.poll_votes||[]).forEach(function(v) { votes[v.member_id] = v.answers; });
+        // fields may be a string (old double-encoded) or array (correct)
+        var fields = p.fields;
+        if(typeof fields === 'string'){try{fields=JSON.parse(fields);}catch(e){fields=[];}}
+        if(!Array.isArray(fields))fields=[];
         return {id:p.id, type:p.type, label:p.label, dayLabel:p.day_label,
-                date:p.date, active:p.active, fields:p.fields,
-                votes:votes, showNames:false};
+                date:p.date, active:p.active===true||p.active==='true',
+                fields:fields, votes:votes, showNames:false};
       });
     }),
     safeFetch('sub_payments?select=*', function(d) {
@@ -2144,7 +2148,8 @@ function rPolls(){
             h2+='<div style="display:flex;align-items:flex-start;gap:8px">';
             h2+='<div style="flex:1">';
             h2+='<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:2px">'+gn(m)+'</div>';
-            poll.fields.forEach(function(field){
+            var pollFields=Array.isArray(poll.fields)?poll.fields:[];
+  pollFields.forEach(function(field){
               var val=myV[field.id];
               if(val===undefined||val===null||val==='')return;
               var dispVal=typeof val==='boolean'?(val?'Yes':'No'):val;
