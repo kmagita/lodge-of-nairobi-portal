@@ -2356,7 +2356,7 @@ function showCreatePoll(){
   var form=document.getElementById('new-poll-form');
   if(!form){pollForm=true;rPolls();return;}
   form.style.display='block';
-  renderPollFields();  // show the pre-populated fields
+  renderPollFieldsList();  // show the pre-populated fields
   form.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
@@ -5141,7 +5141,7 @@ function renderPollVoter(poll,myV,isClosed){
 
 function removePollField(idx){
   newPollDraft.fields.splice(idx,1);
-  renderPollFields();
+  renderPollFieldsList();
 }
 
 function updatePollFieldLabel(idx,val){
