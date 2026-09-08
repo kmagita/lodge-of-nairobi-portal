@@ -5474,11 +5474,40 @@ function renderPollSummary(poll){
 
 function renderPollVoter(poll,myV,isClosed){
   var h='';
-  var hasVoted=Object.keys(myV).length>0;
-  if(isClosed){
+  var locked  = isPollLocked(poll);
+  var submitted = myV._submitted === true;
+  var hasVoted  = Object.keys(myV).filter(function(k){return k.charAt(0)!=='_';}).length > 0;
+
+  // ── Submitted state ───────────────────────────────────────────────────
+  if(submitted && !isClosed){
+    var attendLabel = myV.f1===true ? 'Attending' : myV.f1===false ? 'Not attending' : '—';
+    var mealLabel   = myV.f2 || '';
+    var guestLabel  = myV.f3===true ? (myV.f4 ? 'Guest: '+myV.f4 : 'Bringing a guest') : '';
+    h+='<div style="background:var(--okbg);border-radius:8px;padding:10px 12px;margin-bottom:10px">';
+    h+='<div style="font-weight:700;font-size:13px;color:var(--ok);margin-bottom:4px">&#10003; Response submitted</div>';
+    h+='<div style="font-size:12px;color:var(--t2)">'+attendLabel;
+    if(mealLabel)h+=' &middot; '+mealLabel;
+    if(guestLabel)h+=' &middot; '+guestLabel;
+    h+='</div></div>';
+    if(locked){
+      if(myV._changeRequested){
+        h+='<div style="font-size:11px;color:var(--warn);font-weight:700;margin-bottom:6px;padding:6px 8px;background:var(--warnbg);border-radius:6px">&#9203; Change request sent — awaiting Chief Steward confirmation.</div>';
+      } else {
+        h+='<div style="font-size:11px;color:var(--t3);margin-bottom:6px">Poll locked. Requests go to the Chief Steward for approval.</div>';
+        h+='<button class="btn btn-warn btn-sm" data-pid="'+poll.id+'" onclick="changeVote(this.dataset.pid)">Request change</button>';
+      }
+    } else {
+      h+='<button class="btn btn-n btn-sm" data-pid="'+poll.id+'" onclick="changeVote(this.dataset.pid)">Change response</button>';
+    }
+    return h;
+  }
+
+  // ── Closed or locked read-only ─────────────────────────────────────────
+  if(isClosed || (locked && !hasVoted)){
     if(hasVoted){
-      h+='<div style="font-size:12px;color:var(--t3);margin-bottom:6px">Your response (poll closed):</div>';
-      poll.fields.forEach(function(field){
+      h+='<div style="font-size:12px;color:var(--t3);margin-bottom:6px">Your response '+(isClosed?'(poll closed)':'(poll locked)')+':</div>';
+      var pollFields=Array.isArray(poll.fields)?poll.fields:[];
+      pollFields.forEach(function(field){
         var val=myV[field.id];
         if(val===undefined||val===null||val==='')return;
         var disp=typeof val==='boolean'?(val?'Yes':'No'):String(val);
@@ -5489,20 +5518,22 @@ function renderPollVoter(poll,myV,isClosed){
     }
     return h;
   }
-  poll.fields.forEach(function(field){
-    if(field.showIf){
-      var cv=myV[field.showIf.fid];
-      if(cv!==field.showIf.val)return;
-    }
+
+  // ── Active voting form ─────────────────────────────────────────────────
+  if(locked && !submitted){
+    h+='<div style="font-size:11px;color:var(--warn);margin-bottom:8px;padding:6px 8px;background:var(--warnbg);border-radius:6px">&#9888; Less than 2 days to the event — submit now. After submitting, changes require Chief Steward approval.</div>';
+  }
+  var pollFields=Array.isArray(poll.fields)?poll.fields:[];
+  pollFields.forEach(function(field){
+    if(field.showIf){if(myV[field.showIf.fid]!==field.showIf.val)return;}
     h+='<div class="fg" style="margin-bottom:10px"><label class="lbl">'+field.label+'</label>';
     if(field.type==='yesno'){
       h+='<div style="display:flex;gap:8px">';
-      [true,false].forEach(function(bval){
-        var lbl=bval?'Yes':'No';
-        var active=myV[field.id]===bval;
+      [{lbl:'Yes',val:true},{lbl:'No',val:false}].forEach(function(o){
+        var active=myV[field.id]===o.val;
         h+='<button class="btn '+(active?'btn-navy':'btn-n')+' btn-sm"';
-        h+=' data-pid="'+poll.id+'" data-fid="'+field.id+'" data-bval="'+bval+'"';
-        h+=' onclick="castVote(this.dataset.pid,this.dataset.fid,this.dataset.bval===\'true\')">'+lbl+'</button>';
+        h+=' data-pid="'+poll.id+'" data-fid="'+field.id+'" data-bval="'+o.val+'"';
+        h+=' onclick="castVote(this.dataset.pid,this.dataset.fid,JSON.parse(this.dataset.bval))">'+o.lbl+'</button>';
       });
       h+='</div>';
     } else if(field.type==='choice'){
@@ -5515,13 +5546,18 @@ function renderPollVoter(poll,myV,isClosed){
       });
       h+='</div>';
     } else if(field.type==='text'){
-      var cur=myV[field.id]||'';
-      h+='<input value="'+cur+'" placeholder="Enter name"';
+      h+='<input value="'+(myV[field.id]||'')+'" placeholder="Enter name"';
       h+=' data-pid="'+poll.id+'" data-fid="'+field.id+'"';
       h+=' onchange="castVoteText(this.dataset.pid,this.dataset.fid,this.value)">';
     }
     h+='</div>';
   });
+  // Submit button — show when attending question is answered
+  if(myV.f1 !== undefined){
+    h+='<button class="btn btn-navy btn-sm" style="width:100%;justify-content:center;margin-top:4px"';
+    h+=' data-pid="'+poll.id+'" onclick="submitVote(this.dataset.pid)">';
+    h+='<svg class="ico" width="16" height="16"><use href="#ico-check"/></svg> Submit response</button>';
+  }
   return h;
 }
 
@@ -5614,6 +5650,56 @@ function updatePollFieldOptions(idx,val){
 
 
 
+
+
+function isPollLocked(poll){
+  // Locked 2 days before the event date
+  var eventDate = new Date(poll.date + 'T00:00:00');
+  var lockDate  = new Date(eventDate.getTime() - 2*24*60*60*1000);
+  return new Date() >= lockDate;
+}
+
+function submitVote(pollId){
+  var poll = POLLS.find(function(p){return p.id===pollId;});
+  if(!poll) return;
+  if(!poll.votes[CU.id] || !poll.votes[CU.id].f1){
+    alert('Please indicate whether you are attending before submitting.');
+    return;
+  }
+  poll.votes[CU.id]._submitted = true;
+  poll.votes[CU.id]._submittedAt = new Date().toISOString();
+  supaUpsertVote(pollId, poll.votes[CU.id]);
+  rPolls();
+}
+
+function changeVote(pollId){
+  var poll = POLLS.find(function(p){return p.id===pollId;});
+  if(!poll) return;
+  if(isPollLocked(poll)){
+    // After lock: send a change REQUEST to Chief Steward — do NOT auto-change
+    var stewardIds = MEMBERS.filter(function(m){
+      return officeToRole(m.office)==='steward';
+    }).map(function(m){return m.id;});
+    if(stewardIds.length){
+      pushNotice('poll','⚠️ Change request — '+gn(CU),
+        gn(CU)+' has requested to change their response for: '+poll.label+
+        '. Current response: '+(poll.votes[CU.id]&&poll.votes[CU.id].f1===true?'Attending':'Not attending')+
+        '. Please contact them directly and update if needed.',
+        stewardIds);
+    }
+    // Mark pending change request — vote stays locked
+    poll.votes[CU.id]._changeRequested = true;
+    supaUpsertVote(pollId, poll.votes[CU.id]);
+    alert('Change request sent to the Chief Steward. Your current response remains until they confirm.');
+    rPolls();
+    return;
+  }
+  // Not locked — allow free editing
+  poll.votes[CU.id]._submitted = false;
+  poll.votes[CU.id]._changeRequested = false;
+  supaUpsertVote(pollId, poll.votes[CU.id]);
+  rPolls();
+}
 
 
 
