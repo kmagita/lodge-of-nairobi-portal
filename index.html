@@ -2086,23 +2086,22 @@ function rPolls(){
     h+='<button class="btn btn-navy btn-sm" onclick="showCreatePoll()"><svg class="ico" width="16" height="16"><use href="#ico-plus"/></svg> New poll</button>';
     h+='</div>';
 
-    // ── New poll creation form ───────────────────────────────────────────
-    if(pollForm){
-      h+='<div class="card" style="margin-bottom:14px;border:2px solid var(--gold)">';
-      h+='<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px">New poll</div>';
-      h+='<div class="fg"><label class="lbl">Label</label><input id="poll-label" placeholder="e.g. Thursday Rehearsal — 1 Oct 2026"></div>';
-      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-      h+='<div class="fg"><label class="lbl">Date</label><input type="date" id="poll-date"></div>';
-      h+='<div class="fg"><label class="lbl">Type</label><select id="poll-type">';
-      h+='<option value="rehearsal">Rehearsal</option>';
-      h+='<option value="meeting">Lodge meeting</option>';
-      h+='<option value="other">Other</option>';
-      h+='</select></div></div>';
-      h+='<div style="display:flex;gap:8px;margin-top:4px">';
-      h+='<button class="btn btn-navy btn-sm" style="flex:1;justify-content:center" onclick="createPoll()"><svg class="ico" width="16" height="16"><use href="#ico-plus"/></svg> Create poll</button>';
-      h+='<button class="btn btn-n btn-sm" onclick="pollForm=false;rPolls()">Cancel</button>';
-      h+='</div></div>';
-    }
+    // ── New poll creation form — always in DOM, toggled by showCreatePoll() ─
+    h+='<div id="new-poll-form" style="display:none;margin-bottom:14px">';
+    h+='<div class="card" style="border:2px solid var(--gold)">';
+    h+='<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px">New poll</div>';
+    h+='<div class="fg"><label class="lbl">Label</label><input id="poll-label" placeholder="e.g. Thursday Rehearsal — 1 Oct 2026"></div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+    h+='<div class="fg"><label class="lbl">Date</label><input type="date" id="poll-date"></div>';
+    h+='<div class="fg"><label class="lbl">Type</label><select id="poll-type">';
+    h+='<option value="rehearsal">Rehearsal</option>';
+    h+='<option value="meeting">Lodge meeting</option>';
+    h+='<option value="other">Other</option>';
+    h+='</select></div></div>';
+    h+='<div style="display:flex;gap:8px;margin-top:4px">';
+    h+='<button class="btn btn-navy btn-sm" style="flex:1;justify-content:center" onclick="createPoll()"><svg class="ico" width="16" height="16"><use href="#ico-plus"/></svg> Create poll</button>';
+    h+='<button class="btn btn-n btn-sm" onclick="hidePollForm()">Cancel</button>';
+    h+='</div></div></div>';
 
     if(!POLLS.length){h+='<div style="text-align:center;padding:40px;color:var(--t3)">No polls yet. Create one above.</div>';}
     POLLS.forEach(function(poll){
@@ -2251,7 +2250,7 @@ function createPoll(){
   POLLS.unshift(poll);
   supa('polls',{method:'POST',
     body:JSON.stringify({type:poll.type,label:poll.label,day_label:dayLabel,
-      date:date.value,active:true,fields:JSON.stringify(fields),created_by:CU.id})
+      date:date.value,active:true,fields:fields,created_by:CU.id})
   }).then(function(r){return r.json();})
   .then(function(data){
     if(data&&data.code){
@@ -2264,15 +2263,13 @@ function createPoll(){
       pushNotice('poll','New poll — '+poll.label,
         'A poll has been created. Please respond.',allIds);
     }
-    pollForm=false;
-    if(label)label.value='';
-    if(date)date.value='';
+    hidePollForm();
     alert('Poll created successfully.');
     rPolls();
   }).catch(function(e){
     alert('Failed to save poll: '+e.message);
     POLLS=POLLS.filter(function(p){return p.id!==poll.id;});
-    pollForm=false;
+    hidePollForm();
     rPolls();
   });
 }
@@ -2311,13 +2308,19 @@ function removeDraftField(i){
 }
 
 function showCreatePoll(){
-  pollForm=true;
-  newPollDraft={fields:[]};
-  rPolls();
-  // Scroll pane to top so form is visible on mobile
-  var pane=document.getElementById('pane-polls');
-  if(pane)pane.scrollTop=0;
-  window.scrollTo(0,0);
+  var form=document.getElementById('new-poll-form');
+  if(!form){pollForm=true;rPolls();return;}  // fallback
+  form.style.display='block';
+  form.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function hidePollForm(){
+  var form=document.getElementById('new-poll-form');
+  if(form)form.style.display='none';
+  var lbl=document.getElementById('poll-label');
+  var dt=document.getElementById('poll-date');
+  if(lbl)lbl.value='';
+  if(dt)dt.value='';
 }
 
 function toggleNfOpts(t){
