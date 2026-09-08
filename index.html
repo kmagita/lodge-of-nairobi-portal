@@ -1275,6 +1275,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
     <div style="margin-bottom:13px"><label class="lbl">Email address</label><input type="email" id="li-email" placeholder="Email address"></div>
     <div style="margin-bottom:13px"><label class="lbl">Password</label><input type="password" id="li-pw" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"></div>
     <div id="li-err" style="display:none;color:var(--bad);font-size:12px;background:var(--badbg);padding:8px 10px;border-radius:6px;margin-bottom:10px">Incorrect email or password.</div>
+    <div style="text-align:center;font-size:10px;color:var(--t3);margin-bottom:8px">v08 Sep 11:21</div>
     <button class="btn btn-n" id="li-btn" style="width:100%;padding:11px;font-size:14px;justify-content:center" onclick="doLogin()">Sign in</button>
 
   </div>
@@ -1990,14 +1991,14 @@ var MEMBERS=[];
 var RLBL={master:'W. Master',secretary:'Secretary',dc:'D.C.',mentor:'Mentor',almoner:'Almoner',treasurer:'Treasurer',brother:'Brother',steward:'Ch. Steward'};
 
 var NAV_ROLES={
-  master:    ['home','members','duties','library','practice','mentor','almoner','agenda','admin','reports','polls','summons','calendar','notices'],
-  secretary: ['home','members','duties','agenda','admin','reports','polls','summons','practice','calendar','notices'],
-  dc:        ['home','members','duties','library','practice','reports','polls','summons','calendar','notices'],
-  mentor:    ['home','members','library','practice','mentor','reports','polls','summons','calendar','notices'],
-  almoner:   ['home','almoner','reports','polls','summons','practice','calendar','notices'],
-  treasurer: ['home','members','reports','polls','summons','practice','calendar','notices'],
+  master:    ['home','members','duties','library','practice','mentor','almoner','agenda','admin','reports','summons','calendar','notices'],
+  secretary: ['home','members','duties','agenda','admin','reports','summons','practice','calendar','notices'],
+  dc:        ['home','members','duties','library','practice','reports','summons','calendar','notices'],
+  mentor:    ['home','members','library','practice','mentor','reports','summons','calendar','notices'],
+  almoner:   ['home','almoner','reports','summons','practice','calendar','notices'],
+  treasurer: ['home','members','reports','summons','practice','calendar','notices'],
   steward:   ['home','polls','summons','practice','calendar','notices'],
-  brother:   ['home','duties','practice','polls','summons','calendar','notices']
+  brother:   ['home','duties','practice','summons','calendar','notices']
 };
 
 var ALL_NAV=[
@@ -2012,7 +2013,7 @@ var ALL_NAV=[
   {id:'admin',   label:'Admin',    icon:'lock'},
   {id:'reports', label:'Reports',  icon:'report-analytics'},
   {id:'summons', label:'Summons',  icon:'mail'},
-  {id:'polls',   label:'Meal Poll',icon:'tools-kitchen-2'},
+  {id:'polls',   label:'Poll',icon:'clipboard-list'},
   {id:'calendar',label:'Calendar', icon:'calendar-event'},
   {id:'notices', label:'Notices',  icon:'bell'}
 ];
@@ -3264,7 +3265,7 @@ function rAssignForm(){
   h+='<div class="fg"><label class="lbl">Passage / charge</label><select id="af-lib">';
   h+='<option value="">— Select passage —</option>';
   LIBRARY.forEach(function(l){
-    h+='<option value="'+l.id+'">'+l.title+' ('+l.degree+')</option>';
+    h+='<option value="'+l.id+'">'+l.title+'</option>';
   });
   h+='</select></div>';
 
@@ -3293,10 +3294,10 @@ function rAssignForm(){
 }
 
 function saveAssign(){
-  var pid=document.getElementById('asgn-passage');
-  var prim=document.getElementById('asgn-primary');
-  var back=document.getElementById('asgn-backup');
-  var mdate=document.getElementById('asgn-date');
+  var pid=document.getElementById('af-lib');
+  var prim=document.getElementById('af-prim');
+  var back=document.getElementById('af-back');
+  var mdate=document.getElementById('af-date');
   if(!pid||!pid.value){alert('Select a passage.');return;}
   if(!prim||!prim.value){alert('Select a primary speaker.');return;}
   if(!mdate||!mdate.value){alert('Select a meeting date.');return;}
@@ -3536,125 +3537,81 @@ function pushNotice(type,title,body,toIds){
 }
 
 function rNotices(){
-  // Mark visible notices as read
+  // Mark all as read
   NOTICES.forEach(function(n){
     if(n.to.indexOf('all')>-1||n.to.indexOf(CU.id)>-1)n.read=true;
   });
-  buildNav(); // refresh badge
-  // Uses global NOTICES array
-  var mine=NOTICES.filter(function(n){return n.to.indexOf(CU.id)>-1||n.to.indexOf('all')>-1;});
-  var unread=mine.filter(function(n){return!n.read;}).length;
-  var h='<div class="sf" style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:16px">Notices'+(unread?' <span style="font-size:13px;font-weight:600;color:var(--bad)">('+unread+' unread)</span>':'')+'</div>';
+  buildNav();
 
-  // Meal polls for brothers embedded at top
-  if(CU.role==='brother'){
-    var now=new Date();
-    var activePolls=POLLS.filter(function(p){
-      var dl=new Date(p.date);dl.setDate(dl.getDate()-2);
-      return p.active&&now<=dl;
-    });
-    if(activePolls.length){
-      h+='<div class="stitle">Meal poll</div>';
-      activePolls.forEach(function(poll){
-        var myV=poll.votes[CU.id]||{};
-        var topC=poll.type==='rehearsal'?'var(--info)':'var(--gold)';
-        h+='<div class="card" style="border-top:4px solid '+topC+';margin-bottom:10px">';
-        h+='<div class="srow" style="margin-bottom:10px"><div>';
-        h+='<div style="font-weight:700;font-size:14px;color:var(--navy)">'+poll.label+'</div>';
-        h+='<div style="font-size:12px;color:var(--t3)">'+poll.dayLabel+'</div>';
-        h+='</div><span class="badge" style="background:var(--okbg);color:var(--ok)">Open</span></div>';
-        h+=renderPollVoter(poll,myV,false);
-        // Self-remit payment option
-        if(myV.f1===true){
-          var existingMeal=STEWARD_PAYMENTS.find(function(p){return p.memberId===CU.id&&p.pollId===poll.id&&p.type==='rehearsal_meal';});
-          var existingGuest=STEWARD_PAYMENTS.find(function(p){return p.memberId===CU.id&&p.pollId===poll.id&&p.type==='guest_surcharge';});
-          var showRemit=!existingMeal||(myV.f3===true&&!existingGuest);
-          if(showRemit&&poll.type==='rehearsal'){
-            var remitOpen=typeof selfRemitOpen!=='undefined'&&selfRemitOpen===poll.id;
-            h+='<div style="border-top:1px solid var(--bdr);margin-top:10px;padding-top:10px">';
-            if(!remitOpen){
-              h+='<button class="btn btn-n btn-sm" data-id="'+poll.id+'" onclick="toggleSelfRemit(this.dataset.id)">';
-              h+='<svg class="ico" width="14" height="14"><use href="#ico-send"/></svg> Remit payment</button>';
-            } else {
-              h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:8px">Submit payment reference</div>';
-              h+='<div class="fg"><label class="lbl">What is this payment for?</label><select id="sr-type-'+poll.id+'">';
-              if(!existingMeal)h+='<option value="rehearsal_meal">Rehearsal night meal ('+MEAL_COSTS.rehearsal+')</option>';
-              if(myV.f3===true&&!existingGuest)h+='<option value="guest_surcharge">Guest surcharge ('+MEAL_COSTS.guest_surcharge+')</option>';
-              h+='</select></div>';
-              h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-              h+='<div class="fg" style="margin:0"><label class="lbl">Payment method</label><select id="sr-method-'+poll.id+'">';
-              ['Bank transfer','M-Pesa','Cash','Card'].forEach(function(mt){h+='<option>'+mt+'</option>';});
-              h+='</select></div>';
-              h+='<div class="fg" style="margin:0"><label class="lbl">Reference number</label><input id="sr-ref-'+poll.id+'" placeholder="e.g. QJF7X2K9"></div>';
-              h+='</div>';
-              h+='<div style="display:flex;gap:8px">';
-              h+='<button class="btn btn-navy btn-sm" data-pid="'+poll.id+'" onclick="selfRemitPayment(this.dataset.pid)"><svg class="ico" width="14" height="14"><use href="#ico-check"/></svg> Submit</button>';
-              h+='<button class="btn btn-out btn-sm" data-pid="'+poll.id+'" onclick="toggleSelfRemit(this.dataset.pid)">Cancel</button>';
-              h+='</div></div>';
-            }
-          }
-          if(existingMeal){
-            h+='<div style="font-size:12px;color:var(--ok);font-weight:600;margin-top:8px">&#10003; Meal payment submitted'+(existingMeal.reference?' &middot; Ref: '+existingMeal.reference:'')+'</div>';
-          }
-        }
-        // Self-remit payment option
-        if(myV.f1===true){
-          var existingMeal=STEWARD_PAYMENTS.find(function(p){return p.memberId===CU.id&&p.pollId===poll.id&&p.type==='rehearsal_meal';});
-          var existingGuest=STEWARD_PAYMENTS.find(function(p){return p.memberId===CU.id&&p.pollId===poll.id&&p.type==='guest_surcharge';});
-          var showRemit=!existingMeal||(myV.f3===true&&!existingGuest);
-          if(showRemit&&poll.type==='rehearsal'){
-            var remitOpen=typeof selfRemitOpen!=='undefined'&&selfRemitOpen===poll.id;
-            h+='<div style="border-top:1px solid var(--bdr);margin-top:10px;padding-top:10px">';
-            if(!remitOpen){
-              h+='<button class="btn btn-n btn-sm" data-id="'+poll.id+'" onclick="toggleSelfRemit(this.dataset.id)">';
-              h+='<svg class="ico" width="14" height="14"><use href="#ico-send"/></svg> Remit payment</button>';
-            } else {
-              h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:8px">Submit payment reference</div>';
-              h+='<div class="fg"><label class="lbl">What is this payment for?</label><select id="sr-type-'+poll.id+'">';
-              if(!existingMeal)h+='<option value="rehearsal_meal">Rehearsal night meal ('+MEAL_COSTS.rehearsal+')</option>';
-              if(myV.f3===true&&!existingGuest)h+='<option value="guest_surcharge">Guest surcharge ('+MEAL_COSTS.guest_surcharge+')</option>';
-              h+='</select></div>';
-              h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-              h+='<div class="fg" style="margin:0"><label class="lbl">Payment method</label><select id="sr-method-'+poll.id+'">';
-              ['Bank transfer','M-Pesa','Cash','Card'].forEach(function(mt){h+='<option>'+mt+'</option>';});
-              h+='</select></div>';
-              h+='<div class="fg" style="margin:0"><label class="lbl">Reference number</label><input id="sr-ref-'+poll.id+'" placeholder="e.g. QJF7X2K9"></div>';
-              h+='</div>';
-              h+='<div style="display:flex;gap:8px">';
-              h+='<button class="btn btn-navy btn-sm" data-pid="'+poll.id+'" onclick="selfRemitPayment(this.dataset.pid)"><svg class="ico" width="14" height="14"><use href="#ico-check"/></svg> Submit</button>';
-              h+='<button class="btn btn-out btn-sm" data-pid="'+poll.id+'" onclick="toggleSelfRemit(this.dataset.pid)">Cancel</button>';
-              h+='</div></div>';
-            }
-          }
-          if(existingMeal){
-            h+='<div style="font-size:12px;color:var(--ok);font-weight:600;margin-top:8px">&#10003; Meal payment submitted'+(existingMeal.reference?' &middot; Ref: '+existingMeal.reference:'')+'</div>';
-          }
-        }
-        h+='</div>';
-      });
-    }
+  var mine=NOTICES.filter(function(n){
+    return n.to.indexOf('all')>-1||n.to.indexOf(CU.id)>-1;
+  }).sort(function(a,b){return b.date.localeCompare(a.date);});
+
+  var typeC={
+    poll:'var(--navy)',assignment:'var(--gold)',welfare:'var(--ok)',
+    summons:'var(--bad)',minutes:'var(--info)',payment:'var(--warn)',info:'var(--t3)'
+  };
+  var typeBg={
+    poll:'var(--infobg)',assignment:'var(--goldbg)',welfare:'var(--okbg)',
+    summons:'var(--badbg)',minutes:'var(--infobg)',payment:'var(--warnbg)',info:'var(--bg2)'
+  };
+  var typeIcon={
+    poll:'clipboard-list',assignment:'shield-star',welfare:'heart',
+    summons:'mail',minutes:'file-text',payment:'credit-card',info:'info-circle'
+  };
+
+  var h='<div class="sf" style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px">Notices</div>';
+  h+='<div style="font-size:12px;color:var(--t3);margin-bottom:16px">Lodge of Nairobi № 1778</div>';
+
+  if(!mine.length){
+    h+='<div class="card" style="text-align:center;padding:32px;color:var(--t3)">No notices at this time.</div>';
+    document.getElementById('pane-notices').innerHTML=h;
+    return;
   }
 
-  h+='<div class="stitle">Latest notices</div>';
-  var typeC={assignment:'var(--navy)',welfare:'var(--ok)',summons:'var(--gold)',general:'var(--t3)'};
-  var typeBg={assignment:'var(--infobg)',welfare:'var(--okbg)',summons:'var(--goldbg)',general:'var(--bg2)'};
-  var typeIco={assignment:'shield-star',welfare:'heart',summons:'mail',general:'bell'};
   mine.forEach(function(n){
-    var col=typeC[n.type]||'var(--t3)';
-    var bg=typeBg[n.type]||'var(--bg2)';
-    var ico=typeIco[n.type]||'bell';
-    h+='<div class="card" style="border-left:4px solid '+col+';opacity:'+(n.read?.75:1)+'">';
-    h+='<div style="display:flex;gap:12px;align-items:flex-start">';
-    h+='<div style="background:'+bg+';border-radius:8px;padding:9px;flex-shrink:0"><svg class="ico" width="18" height="18"><use href="#ico-'+ico+'"/></svg></div>';
-    h+='<div style="flex:1"><div class="srow" style="margin-bottom:5px">';
-    h+='<div style="font-weight:700;font-size:13px;color:var(--navy)">'+n.title+'</div>';
-    if(!n.read)h+='<div style="width:8px;height:8px;border-radius:50%;background:var(--bad);flex-shrink:0"></div>';
+    var tc=typeC[n.type]||typeC.info;
+    var tbg=typeBg[n.type]||typeBg.info;
+    var ico=typeIcon[n.type]||typeIcon.info;
+    var isOpen=window._openNotice===n.id;
+
+    // Find related poll if this is a poll notice
+    var relPoll=n.type==='poll'?POLLS.find(function(p){return n.title.indexOf(p.label)>-1;}):null;
+
+    h+='<div class="card" style="border-left:4px solid '+tc+';margin-bottom:8px;padding:0;overflow:hidden">';
+
+    // ── Header row (always visible) ──────────────────────────────────────
+    h+='<div data-nid="'+n.id+'" onclick="window._openNotice=(window._openNotice===this.dataset.nid?null:this.dataset.nid);rNotices()" ';
+    h+='style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer">';
+    h+='<div style="width:32px;height:32px;border-radius:8px;background:'+tbg+';display:flex;align-items:center;justify-content:center;flex-shrink:0">';
+    h+='<svg class="ico" width="16" height="16" style="color:'+tc+'"><use href="#ico-'+ico+'"/></svg></div>';
+    h+='<div style="flex:1;min-width:0">';
+    h+='<div style="font-weight:700;font-size:13px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+n.title+'</div>';
+    h+='<div style="font-size:11px;color:var(--t3);margin-top:1px">'+n.date+'</div>';
     h+='</div>';
-    h+='<div style="font-size:12px;color:var(--t2);line-height:1.6">'+n.body+'</div>';
-    h+='<div style="font-size:11px;color:var(--t3);margin-top:6px;font-weight:600">'+n.date+'</div>';
-    h+='</div></div></div>';
+    if(!n.read)h+='<div style="width:8px;height:8px;border-radius:50%;background:var(--bad);flex-shrink:0"></div>';
+    h+='<span style="font-size:12px;color:var(--t3);flex-shrink:0">'+(isOpen?'&#9650;':'&#9660;')+'</span>';
+    h+='</div>';
+
+    // ── Expanded content ──────────────────────────────────────────────────
+    if(isOpen){
+      h+='<div style="padding:0 14px 14px;border-top:1px solid var(--bdr)">';
+      h+='<div style="font-size:13px;color:var(--t2);line-height:1.6;margin-top:12px">'+n.body+'</div>';
+
+      // If this is a poll notice, show the voting form inline
+      if(relPoll&&relPoll.active){
+        var myV=relPoll.votes[CU.id]||{};
+        var submitted=myV._submitted===true;
+        h+='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr)">';
+        h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">'+relPoll.label+'</div>';
+        h+=renderPollVoter(relPoll,myV,!relPoll.active);
+        h+='</div>';
+      }
+      h+='</div>';
+    }
+    h+='</div>';
   });
-  if(!mine.length)h+='<div style="text-align:center;padding:30px;color:var(--t3)">No notices at this time.</div>';
+
   document.getElementById('pane-notices').innerHTML=h;
 }
 
@@ -4360,7 +4317,37 @@ function rHome(){
     h+='</div></div>';
   }
 
-  document.getElementById('pane-home').innerHTML=h;
+
+  // ── Active poll card for non-stewards ────────────────────────────────
+  if(CU.role!=='steward'){
+    var ap=POLLS.find(function(p){return p.active;});
+    if(ap){
+      var myV=ap.votes[CU.id]||{};
+      var submitted=myV._submitted===true;
+      h+='<div class="stitle">Active poll</div>';
+      h+='<div class="card" style="margin-bottom:10px">';
+      h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:4px">'+ap.label+'</div>';
+      h+='<div style="font-size:12px;color:var(--t3);margin-bottom:10px">'+ap.dayLabel+'</div>';
+      if(submitted){
+        var attend=myV.f1===true?'Attending':myV.f1===false?'Not attending':'—';
+        var meal=myV.f2?(' &middot; '+myV.f2):'';
+        h+='<div style="background:var(--okbg);border-radius:8px;padding:8px 12px;font-size:13px">';
+        h+='<span style="color:var(--ok);font-weight:700">&#10003; Submitted</span> — '+attend+meal;
+        h+='</div>';
+        h+='<button class="btn btn-n btn-sm" style="margin-top:8px" data-id="polls" onclick="goTo(this.dataset.id)">View full poll</button>';
+      } else {
+        h+=renderPollVoter(ap,myV,false);
+        h+='<button class="btn btn-n btn-sm" style="margin-top:6px" data-id="polls" onclick="goTo(this.dataset.id)">Open poll</button>';
+      }
+      h+='</div>';
+    }
+  }
+
+  try{
+    document.getElementById('pane-home').innerHTML=h;
+  }catch(e){
+    document.getElementById('pane-home').innerHTML='<div style="padding:20px;color:red">'+e.message+'</div>';
+  }
 }
 
 
