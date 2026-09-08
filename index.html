@@ -2075,7 +2075,26 @@ function rPolls(){
     h+='<div style="font-size:13px;color:var(--t2)">'+POLLS.length+' poll'+(POLLS.length!==1?'s':'')+'</div>';
     h+='<button class="btn btn-navy btn-sm" onclick="showCreatePoll()"><svg class="ico" width="16" height="16"><use href="#ico-plus"/></svg> New poll</button>';
     h+='</div>';
-    if(!POLLS.length){h+='<div style="text-align:center;padding:40px;color:var(--t3)">No polls yet.</div>';}
+
+    // ── New poll creation form ───────────────────────────────────────────
+    if(pollForm){
+      h+='<div class="card" style="margin-bottom:14px;border:2px solid var(--gold)">';
+      h+='<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px">New poll</div>';
+      h+='<div class="fg"><label class="lbl">Label</label><input id="poll-label" placeholder="e.g. Thursday Rehearsal — 1 Oct 2026"></div>';
+      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+      h+='<div class="fg"><label class="lbl">Date</label><input type="date" id="poll-date"></div>';
+      h+='<div class="fg"><label class="lbl">Type</label><select id="poll-type">';
+      h+='<option value="rehearsal">Rehearsal</option>';
+      h+='<option value="meeting">Lodge meeting</option>';
+      h+='<option value="other">Other</option>';
+      h+='</select></div></div>';
+      h+='<div style="display:flex;gap:8px;margin-top:4px">';
+      h+='<button class="btn btn-navy btn-sm" style="flex:1;justify-content:center" onclick="createPoll()"><svg class="ico" width="16" height="16"><use href="#ico-plus"/></svg> Create poll</button>';
+      h+='<button class="btn btn-n btn-sm" onclick="pollForm=false;rPolls()">Cancel</button>';
+      h+='</div></div>';
+    }
+
+    if(!POLLS.length){h+='<div style="text-align:center;padding:40px;color:var(--t3)">No polls yet. Create one above.</div>';}
     POLLS.forEach(function(poll){
       var total=Object.keys(poll.votes).length;
       var attending=Object.keys(poll.votes).filter(function(k){return poll.votes[k].f1===true;});
