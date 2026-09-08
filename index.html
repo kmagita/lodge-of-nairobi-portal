@@ -2238,28 +2238,43 @@ function createPoll(){
   if(!date||!date.value){alert('Select a date.');return;}
   var d=new Date(date.value+'T12:00:00');
   var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  var dayLabel=days[d.getDay()]+' '+d.getDate()+'th '+date.value.split('-')[1]+' '+date.value.split('-')[0];
+  var dayLabel=days[d.getDay()]+' '+d.getDate()+' '+date.value.split('-')[1]+' '+date.value.split('-')[0];
   var fields=[
     {id:'f1',type:'yesno',label:'Attending?'},
     {id:'f2',type:'choice',label:'Meal preference',options:['Chicken','Fish','Vegetarian'],showIf:{fid:'f1',val:true}},
     {id:'f3',type:'yesno',label:'Bringing a guest?',showIf:{fid:'f1',val:true}},
     {id:'f4',type:'text',label:'Guest name',showIf:{fid:'f3',val:true}}
   ];
-  var poll={id:'poll'+Date.now(),type:type?type.value:'rehearsal',
+  var poll={id:'poll-tmp-'+Date.now(),type:type?type.value:'rehearsal',
     label:label.value.trim(),dayLabel:dayLabel,date:date.value,
     active:true,fields:fields,votes:{},showNames:false};
   POLLS.unshift(poll);
   supa('polls',{method:'POST',
     body:JSON.stringify({type:poll.type,label:poll.label,day_label:dayLabel,
-      date:date.value,active:true,fields:fields,created_by:CU.id})
+      date:date.value,active:true,fields:JSON.stringify(fields),created_by:CU.id})
   }).then(function(r){return r.json();})
-  .then(function(d){if(d&&d[0])poll.id=d[0].id;})
-  .catch(function(e){console.warn('Poll create failed:',e);});
-  pushNotice('poll','New poll: '+poll.label,
-    'Please respond to the poll for '+poll.label+'.',
-    MEMBERS.map(function(m){return m.id;}));
-  if(label)label.value=''; if(date)date.value='';
-  rPolls();
+  .then(function(data){
+    if(data&&data.code){
+      alert('Database error: '+(data.message||data.code)+'. Check RLS policies in Supabase.');
+    } else if(data&&data[0]){
+      poll.id=data[0].id;
+    }
+    var allIds=MEMBERS.map(function(m){return m.id;});
+    if(allIds.length){
+      pushNotice('poll','New poll — '+poll.label,
+        'A poll has been created. Please respond.',allIds);
+    }
+    pollForm=false;
+    if(label)label.value='';
+    if(date)date.value='';
+    alert('Poll created successfully.');
+    rPolls();
+  }).catch(function(e){
+    alert('Failed to save poll: '+e.message);
+    POLLS=POLLS.filter(function(p){return p.id!==poll.id;});
+    pollForm=false;
+    rPolls();
+  });
 }
 
 function deletePoll(id){
@@ -2295,7 +2310,15 @@ function removeDraftField(i){
   rPolls();
 }
 
-function showCreatePoll(){pollForm=true;newPollDraft={fields:[]};rPolls();}
+function showCreatePoll(){
+  pollForm=true;
+  newPollDraft={fields:[]};
+  rPolls();
+  // Scroll pane to top so form is visible on mobile
+  var pane=document.getElementById('pane-polls');
+  if(pane)pane.scrollTop=0;
+  window.scrollTo(0,0);
+}
 
 function toggleNfOpts(t){
   var w=document.getElementById('nf-opts-wrap');
