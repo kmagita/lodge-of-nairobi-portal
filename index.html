@@ -1913,11 +1913,18 @@ function downloadSummons(id){
 }
 function removeSummons(id){
   if(!confirm('Remove this summons?'))return;
-  var idx=SUMMONS_DOCS.findIndex(function(x){return x.id===id;});
-  if(idx>-1)SUMMONS_DOCS.splice(idx,1);
+  var doc=SUMMONS_DOCS.find(function(x){return x.id===id;});
+  SUMMONS_DOCS=SUMMONS_DOCS.filter(function(x){return x.id!==id;});
+  supa('summons_docs?id=eq.'+id,{method:'DELETE'})
+    .catch(function(e){console.warn('Summons delete failed:',e);});
+  if(doc&&doc.pdfPath){
+    fetch(SUPA_URL+'/storage/v1/object/summons-pdfs/'+doc.pdfPath,{
+      method:'DELETE',
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_TOKEN}
+    }).catch(function(e){console.warn('Storage delete failed:',e);});
+  }
   rSummons();
 }
-
 function rMembers(){
   var isSec=(CU.role==='secretary');
   var isTreas=CU.role==='treasurer';
@@ -2061,10 +2068,13 @@ function recordSubPayment(mid){
 function saveSubStatus(mid){
   var m=gm(mid);if(!m)return;
   var sel=document.getElementById('ts-status-'+mid);
-  if(sel)m.sub=sel.value;
+  if(!sel)return;
+  m.sub=sel.value;
+  supa('members?id=eq.'+mid,{method:'PATCH',
+    body:JSON.stringify({sub:m.sub})
+  }).catch(function(e){console.warn('Sub status save failed:',e);});
   treasOpen=null;rMembers();
 }
-
 function rPolls(){
   var isSteward=CU.role==='steward';
   var h='<div class="sf" style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:16px">Meal Polls</div>';
@@ -3190,18 +3200,17 @@ function saveLodgeMentorData(pid){
   if(!p)return;
   var pm=document.getElementById('pm-sel-'+pid);
   var lnotes=document.getElementById('lm-notes-'+pid);
-  var minit=document.getElementById('ms-init-'+pid);
-  var mpass=document.getElementById('ms-pass-'+pid);
-  var mraise=document.getElementById('ms-raise-'+pid);
   if(pm)p.personalMentor=pm.value;
   if(lnotes)p.lodgeNotes=lnotes.value;
-  if(!p.milestones)p.milestones={};
-  if(minit)p.milestones.initiated=minit.value||null;
-  if(mpass)p.milestones.passed=mpass.value||null;
-  if(mraise)p.milestones.raised=mraise.value||null;
+  supa('mentoring_pairs?id=eq.'+pid,{method:'PATCH',
+    body:JSON.stringify({
+      personal_mentor:p.personalMentor||null,
+      lodge_notes:p.lodgeNotes
+    })
+  }).catch(function(e){console.warn('Mentor data save failed:',e);});
+  alert('Mentoring data saved.');
   rMentor();
 }
-
 function addMentoringPair(){
   var mentee=document.getElementById('mp-mentee');
   var mentor=document.getElementById('mp-mentor');
@@ -3259,10 +3268,13 @@ function savePMNotes(pid){
   var p=MENTORING_PAIRS.find(function(x){return x.id===pid;});
   if(!p)return;
   var el=document.getElementById('pmn-'+pid);
-  if(el)p.notes=el.value;
+  if(!el)return;
+  p.notes=el.value;
+  supa('mentoring_pairs?id=eq.'+pid,{method:'PATCH',
+    body:JSON.stringify({notes:p.notes})
+  }).catch(function(e){console.warn('PM notes save failed:',e);});
   rHome();
 }
-
 function toggleMentorPair(id){mentorOpen=(mentorOpen===id?null:id);rMentor();}
 function saveMentorNotes(pid){
   var p=MENTORING_PAIRS.find(function(x){return x.id===pid;});
@@ -3411,6 +3423,14 @@ function moveAgendaItem(idx,dir){
   var a=AGENDA_ITEMS[idx],b=AGENDA_ITEMS[idx+dir];
   if(!a||!b)return;
   var tmp=a.order;a.order=b.order;b.order=tmp;
+  AGENDA_ITEMS.sort(function(x,y){return x.order-y.order;});
+  // Persist new order
+  supa('agenda_items?id=eq.'+a.id,{method:'PATCH',
+    body:JSON.stringify({sort_order:a.order})
+  }).catch(function(e){console.warn('Agenda reorder failed:',e);});
+  supa('agenda_items?id=eq.'+b.id,{method:'PATCH',
+    body:JSON.stringify({sort_order:b.order})
+  }).catch(function(e){console.warn('Agenda reorder failed:',e);});
   rAgenda();
 }
 function uploadMinutesPDF(){
@@ -3987,9 +4007,15 @@ function saveLibAssign(id){
   if(!item)return;
   var ps=document.getElementById('la-prim-'+id);
   var ss=document.getElementById('la-stby-'+id);
-  if(ps)item.assignedPrimary=ps.value;
-  if(ss)item.assignedStandby=ss.value;
-  libEditId=null;
+  if(ps)item.primaryId=ps.value;
+  if(ss)item.standbyId=ss.value;
+  // Store as metadata on library item
+  supa('library?id=eq.'+id,{method:'PATCH',
+    body:JSON.stringify({
+      qa:Object.assign({},item.qa||{},{primaryId:item.primaryId,standbyId:item.standbyId})
+    })
+  }).catch(function(e){console.warn('Lib assign save failed:',e);});
+  alert('Assignment saved.');
   rLibrary();
 }
 function editLibContent(id){
@@ -4019,10 +4045,18 @@ function removeLibItem(id){
 }
 
 function publishAlmonerReport(asNotice){
-  alert(asNotice?'Notice sent to all brethren.':'Report published to officers.');
+  var concerns=WELFARE.filter(function(w){return w.status==='Concern';});
+  var body='Welfare report: '+MEMBERS.length+' members, '+
+    concerns.length+' requiring attention.';
+  if(asNotice){
+    var officerIds=MEMBERS.filter(function(m){
+      return officeToRole(m.office)!=='brother';}).map(function(m){return m.id;});
+    pushNotice('welfare','Almoner Report',body,officerIds);
+    alert('Report sent to all officers.');
+  } else {
+    alert('Report: '+body);
+  }
 }
-
-// ── Dues ─────────────────────────────────────────────────────────────────
 function saveDues(mid){
   var m=gm(mid);
   if(!m)return;
@@ -4080,28 +4114,32 @@ function selfRemitPayment(pid){
   var typeEl=document.getElementById('sr-type-'+pid);
   var methodEl=document.getElementById('sr-method-'+pid);
   var refEl=document.getElementById('sr-ref-'+pid);
-  var type=typeEl?typeEl.value:'rehearsal_meal';
-  var ref=refEl?refEl.value.trim():'';
-  var amount=type==='guest_surcharge'?MEAL_COSTS.guest_surcharge:MEAL_COSTS.rehearsal;
-  STEWARD_PAYMENTS.push({
-    id:'stp'+Date.now(), memberId:CU.id, type:type, pollId:pid,
-    amount:amount, date:new Date().toISOString().split('T')[0],
-    method:methodEl?methodEl.value:'Bank transfer',
-    reference:ref, remittedBy:CU.id, notes:'Self-remitted', guestExempt:false
-  });
-  // Notify steward
-  var steward=MEMBERS.find(function(m){return m.role==='steward';});
-  if(steward) pushNotice('general',
-    'Payment remitted by '+gn(CU),
-    gn(CU)+' has submitted a payment reference'+(ref?' ('+ref+')':'')+' for '+type.replace('_',' ')+'.',
-    [steward.id]
-  );
-  selfRemitOpen=null;
+  if(!typeEl||!typeEl.value){alert('Select payment type.');return;}
+  if(!methodEl||!methodEl.value){alert('Select payment method.');return;}
+  var ptype=typeEl.value;
+  var amount=ptype==='meal'?MEAL_COSTS.rehearsal:MEAL_COSTS.guest_surcharge;
+  var rec={memberId:CU.id,pollId:pid,
+    type:ptype==='meal'?'rehearsal_meal':'guest_surcharge',
+    amount:amount,date:new Date().toISOString().split('T')[0],
+    method:methodEl.value,reference:refEl?refEl.value:'',remittedBy:CU.id};
+  STEWARD_PAYMENTS.push(rec);
+  supa('steward_payments',{method:'POST',
+    body:JSON.stringify({member_id:CU.id,poll_id:pid,type:rec.type,
+      amount:rec.amount,date:rec.date,method:rec.method,
+      reference:rec.reference,remitted_by:CU.id})
+  }).then(function(r){return r.json();})
+  .then(function(d){if(d&&d[0])rec.id=d[0].id;})
+  .catch(function(e){console.warn('Self-remit save failed:',e);});
+  // Notify Chief Steward
+  var stewardIds=MEMBERS.filter(function(m){
+    return officeToRole(m.office)==='steward';}).map(function(m){return m.id;});
+  if(stewardIds.length){
+    pushNotice('payment','Payment remitted — '+gn(CU),
+      gn(CU)+' has remitted a '+(ptype==='meal'?'meal':'guest surcharge')+
+      ' payment of KShs '+amount+'.',stewardIds);
+  }
   rNotices();
 }
-
-
-var stewardPayOpen=null;
 function toggleStewardPay(key){stewardPayOpen=(stewardPayOpen===key?null:key);rPolls();}
 
 function recordMealPayment(pollId,mid){
@@ -4276,48 +4314,20 @@ var libImportVisible=false;
 
 function importLibPassage(){
   var title=document.getElementById('li-title');
-  var type=document.getElementById('li-type');
-  var deg=document.getElementById('li-deg');
   var content=document.getElementById('li-content');
-  var qnaEl=document.getElementById('li-qna');
-  if(!title||!title.value.trim()){alert('Please enter a passage title.');return;}
-  if(!content||!content.value.trim()){alert('Please paste the passage text.');return;}
-
-  // Parse Q&A if provided
-  var qna=[];
-  if(qnaEl&&qnaEl.value.trim()){
-    var blocks=qnaEl.value.trim().split(/\n\s*\n/);
-    blocks.forEach(function(block){
-      var qMatch=block.match(/Q:\s*(.+)/);
-      var aMatch=block.match(/A:\s*([\s\S]+)/);
-      if(qMatch&&aMatch){
-        qna.push({q:qMatch[1].trim(),a:aMatch[1].trim()});
-      }
-    });
-  }
-
-  var newLib={
-    id:'lib'+Date.now(),
-    title:title.value.trim(),
-    type:type?type.value:'charge',
-    degree:deg?deg.value:'MM',
-    assignedPrimary:'',
-    assignedStandby:'',
-    content:content.value.trim()
-  };
-  if(qna.length)newLib.qna=qna;
-  LIBRARY.push(newLib);
-
-  var msg='Passage imported: '+newLib.title;
-  if(qna.length)msg+=' ('+qna.length+' Q&A pairs)';
-  alert(msg);
-  libImportVisible=false;
-  libContentId=null;
+  if(!title||!title.value.trim()){alert('Enter a passage title.');return;}
+  if(!content||!content.value.trim()){alert('Enter the passage content.');return;}
+  var item={id:'lib'+Date.now(),title:title.value.trim(),
+    content:content.value.trim(),qa:[]};
+  LIBRARY.push(item);
+  supa('library',{method:'POST',
+    body:JSON.stringify({title:item.title,content:item.content,qa:[]})
+  }).then(function(r){return r.json();})
+  .then(function(d){if(d&&d[0])item.id=d[0].id;})
+  .catch(function(e){console.warn('Import failed:',e);});
+  title.value='';content.value='';
   rLibrary();
 }
-
-
-// ── PDF helpers ───────────────────────────────────────────────────────────
 function readPDF(inputId, callback){
   var el=document.getElementById(inputId);
   if(!el||!el.files||!el.files[0])return;
@@ -4475,11 +4485,29 @@ var welfareOpen=null;
 function toggleWelfare(mid){welfareOpen=(welfareOpen===mid?null:mid);rAlmoner();}
 function saveWelfare(mid){
   var w=WELFARE.find(function(x){return x.memberId===mid;});
-  if(!w){w={id:'w'+Date.now(),memberId:mid,status:'Good',lastContact:null,notes:'',contacts:[]};WELFARE.push(w);}
-  var sel=document.getElementById('ws-status-'+mid);
-  var txt=document.getElementById('ws-notes-'+mid);
-  if(sel)w.status=sel.value;
-  if(txt)w.notes=txt.value;
+  // Support both element ID patterns
+  var sel=document.getElementById('wst-'+mid)||document.getElementById('ws-status-'+mid);
+  var txt=document.getElementById('wnt-'+mid)||document.getElementById('ws-notes-'+mid);
+  var newStatus=sel?sel.value:'Good';
+  var newNotes=txt?txt.value:'';
+  if(w){
+    w.status=newStatus; w.notes=newNotes;
+    w.lastContact=new Date().toISOString().split('T')[0];
+    supa('welfare?member_id=eq.'+mid,{method:'PATCH',
+      body:JSON.stringify({status:newStatus,notes:newNotes,
+        last_contact:w.lastContact,updated_at:new Date().toISOString()})
+    }).catch(function(e){console.warn('Welfare save failed:',e);});
+  } else {
+    w={memberId:mid,status:newStatus,notes:newNotes,
+      lastContact:new Date().toISOString().split('T')[0],contacts:[]};
+    WELFARE.push(w);
+    supa('welfare',{method:'POST',
+      body:JSON.stringify({member_id:mid,status:newStatus,notes:newNotes,
+        last_contact:w.lastContact})
+    }).then(function(r){return r.json();})
+    .then(function(d){if(d&&d[0])w.id=d[0].id;})
+    .catch(function(e){console.warn('Welfare create failed:',e);});
+  }
   rAlmoner();
 }
 function logContact(mid){
@@ -4780,7 +4808,16 @@ function downloadCommitteeMinutes(id){
 
 function removeCommitteeMinutes(id){
   if(!confirm('Remove these minutes?'))return;
+  var rec=COMMITTEE_MINUTES.find(function(r){return r.id===id;});
   COMMITTEE_MINUTES=COMMITTEE_MINUTES.filter(function(r){return r.id!==id;});
+  supa('committee_minutes?id=eq.'+id,{method:'DELETE'})
+    .catch(function(e){console.warn('Committee minutes delete failed:',e);});
+  if(rec&&rec.pdfPath){
+    fetch(SUPA_URL+'/storage/v1/object/committee-minutes-pdfs/'+rec.pdfPath,{
+      method:'DELETE',
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_TOKEN}
+    }).catch(function(e){console.warn('Storage delete failed:',e);});
+  }
   rSummons();
 }
 
