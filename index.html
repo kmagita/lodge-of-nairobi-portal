@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <!-- build: 2026-09-08 11:08:16 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi — Member Portal</title>
 <style>
@@ -1789,9 +1793,11 @@ function loadAppData() {
     }),
     safeFetch('notices?select=*&order=created_at.desc', function(d) {
       NOTICES = d.map(function(n) {
-        return {id:n.id, type:n.type, title:n.title, body:n.body,
-                to:n.to_all?['all']:n.to_ids,
-                date:n.created_at.split('T')[0], read:false};
+        return {id:n.id, type:n.type||'info',
+                title:n.title||'Notice', body:n.body||'',
+                to:n.to_all?['all']:(n.to_ids||[]),
+                date:(n.created_at||new Date().toISOString()).split('T')[0],
+                read:false};
       });
     }),
     safeFetch('polls?select=*,poll_votes(*)&order=created_at.desc', function(d) {
@@ -4222,7 +4228,7 @@ function supaUpsertVote(pollId, answers){
 function rHome(){
   var meet=nm();
   var h='<div class="hero"><div style="font-size:11px;color:var(--t3);margin-bottom:6px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Welcome, Brother</div>';
-  // Unread notices banner — compact, always shows, expands on tap
+  // Unread notices banner — compact collapsible
   var unread=unreadNotices();
   if(unread.length){
     var expanded=window._noticeExpanded===true;
@@ -4236,15 +4242,130 @@ function rHome(){
       unread.slice(0,3).forEach(function(n){
         h+='<div data-id="notices" onclick="goTo(this.dataset.id)" style="padding:8px 14px;border-top:1px solid rgba(255,255,255,.2);cursor:pointer">';
         h+='<div style="font-size:12px;font-weight:700;color:#fff">'+n.title+'</div>';
-        h+='<div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px">'+n.body.slice(0,80)+'</div>';
+        h+='<div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px">'+(n.body||'').slice(0,80)+'</div>';
         h+='</div>';
       });
       h+='<div data-id="notices" onclick="goTo(this.dataset.id)" style="padding:8px 14px;border-top:1px solid rgba(255,255,255,.2);text-align:center;font-size:12px;color:rgba(255,255,255,.8);cursor:pointer">View all &#8594;</div>';
     }
     h+='</div>';
   }
+    // Role-specific quick action cards
+  if(CU.role==='steward'){
+    var ptotal=0;POLLS.forEach(function(p){ptotal+=Object.keys(p.votes).length;});
+    h+='<div class="card" style="border-top:4px solid var(--gold)">';
+    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:4px">Meal Polls</div>';
+    h+='<div style="font-size:12px;color:var(--t2);margin-bottom:10px">'+ptotal+' response'+(ptotal!==1?'s':'')+' received across '+POLLS.length+' poll'+(POLLS.length!==1?'s':'')+'.</div>';
+    h+='<button class="btn btn-n btn-sm" data-id="polls" onclick="goTo(this.dataset.id)">Manage polls</button>';
+    h+='</div>';
+  }
+  if(CU.role==='almoner'){
+    var concerns=WELFARE.filter(function(w){return w.status==='Concern'||w.status==='Serious';});
+    var birthdays30=[];var today2=new Date();
+    MEMBERS.forEach(function(m){if(!m.dob)return;var d=new Date(m.dob);var n=new Date(today2.getFullYear(),d.getMonth(),d.getDate());if(n<today2)n.setFullYear(today2.getFullYear()+1);if(Math.round((n-today2)/(86400000))<=14)birthdays30.push(gn(m));});
+    h+='<div class="card" style="border-top:4px solid var(--ok)">';
+    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Welfare summary</div>';
+    h+='<div style="display:flex;gap:12px;margin-bottom:10px">';
+    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+(MEMBERS.length-concerns.length)+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">GOOD</div></div>';
+    h+='<div style="flex:1;text-align:center;background:'+(concerns.length?'var(--warnbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:'+(concerns.length?'var(--warn)':'var(--t3)')+'">'+concerns.length+'</div><div style="font-size:10px;color:'+(concerns.length?'var(--warn)':'var(--t3)')+';font-weight:600">CONCERN</div></div>';
+    h+='</div>';
+    if(birthdays30.length)h+='<div style="font-size:12px;color:var(--t2);margin-bottom:8px">&#127874; Birthdays in 14 days: '+birthdays30.join(', ')+'</div>';
+    h+='<button class="btn btn-n btn-sm" data-id="almoner" onclick="goTo(this.dataset.id)">View welfare register</button>';
+    h+='</div>';
+  }
+  if(CU.role==='treasurer'){
+    var arrears=MEMBERS.filter(function(m){return m.sub==='Arrears';});
+    var paid=MEMBERS.filter(function(m){return m.sub==='Paid';});
+    h+='<div class="card" style="border-top:4px solid var(--info)">';
+    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Subscriptions</div>';
+    h+='<div style="display:flex;gap:12px;margin-bottom:10px">';
+    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+paid.length+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">PAID</div></div>';
+    h+='<div style="flex:1;text-align:center;background:'+(arrears.length?'var(--badbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:'+(arrears.length?'var(--bad)':'var(--t3)')+'">'+arrears.length+'</div><div style="font-size:10px;color:'+(arrears.length?'var(--bad)':'var(--t3)')+';font-weight:600">ARREARS</div></div>';
+    h+='</div>';
+    h+='<button class="btn btn-n btn-sm" data-id="members" onclick="goTo(this.dataset.id)">Manage dues</button>';
+    h+='</div>';
+  }
+  // Lodge mentor dashboard card
+  if(CU.role==='mentor'){
+    var totalPairs=MENTORING_PAIRS.length;
+    var totalSess=MENTORING_PAIRS.reduce(function(s,p){return s+p.sessions.length;},0);
+    var unmentored2=MEMBERS.filter(function(m){return (m.deg==='EA'||m.deg==='FC')&&!MENTORING_PAIRS.find(function(p){return p.mentee===m.id;});});
+    h+='<div class="card" style="border-top:4px solid var(--purp)">';
+    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Mentoring programme</div>';
+    h+='<div style="display:flex;gap:10px;margin-bottom:10px">';
+    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+totalPairs+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">PAIRS</div></div>';
+    h+='<div style="flex:1;text-align:center;background:var(--infobg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--info)">'+totalSess+'</div><div style="font-size:10px;color:var(--info);font-weight:600">SESSIONS</div></div>';
+    if(unmentored2.length)h+='<div style="flex:1;text-align:center;background:var(--badbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--bad)">'+unmentored2.length+'</div><div style="font-size:10px;color:var(--bad);font-weight:600">UNASSIGNED</div></div>';
+    h+='</div>';
+    h+='<button class="btn btn-n btn-sm" data-id="mentor" onclick="goTo(this.dataset.id)">Open mentor dashboard</button>';
+    h+='</div>';
+  }
+  // Personal mentor card (any MM brother assigned as personal mentor)
+  var myMenteePairs=MENTORING_PAIRS.filter(function(p){return p.personalMentor===CU.id;});
+  if(myMenteePairs.length&&CU.role!=='mentor'){
+    h+='<div class="stitle">Your mentees</div>';
+    myMenteePairs.forEach(function(pair){
+      var menteeM=gm(pair.mentee);
+      if(!menteeM)return;
+      var isOpen=typeof pmMenteeOpen!=='undefined'&&pmMenteeOpen===pair.id;
+      var ms=pair.milestones||{};
+      h+='<div class="card" style="border-left:4px solid var(--purp);margin-bottom:8px">';
+      h+='<div class="srow" style="margin-bottom:6px">';
+      h+='<div style="flex:1"><div style="font-weight:700;font-size:14px;color:var(--navy)">'+menteeM.name+'</div>';
+      h+='<div style="font-size:11px;color:var(--t3)">'+menteeM.deg+' &middot; '+pair.sessions.length+' session'+(pair.sessions.length!==1?'s':'')+' logged</div></div>';
+      h+='<span class="badge" style="background:'+(ms.passed?'var(--okbg)':ms.initiated?'var(--infobg)':'var(--bg2)')+';color:'+(ms.passed?'var(--ok)':ms.initiated?'var(--info)':'var(--t3)')+'">'+  (ms.raised?'Raised':ms.passed?'Passed':ms.initiated?'Initiated':'Pre-init')+'</span>';
+      h+='<button class="btn btn-n btn-sm" style="margin-left:8px" data-id="'+pair.id+'" onclick="togglePMCard(this.dataset.id)">'+(isOpen?'&#9650;':'&#9660;')+'</button>';
+      h+='</div>';
+      if(isOpen){
+        // Recent sessions
+        if(pair.sessions.length){
+          h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:6px">Recent sessions</div>';
+          pair.sessions.slice(-3).reverse().forEach(function(s){
+            h+='<div style="font-size:12px;padding:5px 8px;background:var(--bg2);border-radius:6px;margin-bottom:4px">';
+            h+='<div style="font-weight:600;color:var(--navy)">'+s.date+' &mdash; '+s.topic+'</div>';
+            if(s.notes)h+='<div style="color:var(--t3);font-style:italic">'+s.notes+'</div>';
+            h+='</div>';
+          });
+        }
+        // Notes
+        h+='<div class="fg" style="margin-bottom:8px"><label class="lbl">Your notes on '+gn(menteeM)+'</label>';
+        h+='<textarea id="pmn-'+pair.id+'" style="min-height:60px">'+pair.notes+'</textarea></div>';
+        h+='<button class="btn btn-n btn-sm" data-id="'+pair.id+'" onclick="savePMNotes(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-device-floppy"/></svg> Save notes</button>';
+        // Log session
+        h+='<div style="border-top:1px solid var(--bdr);margin-top:12px;padding-top:12px">';
+        h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:8px">Log new session</div>';
+        h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+        h+='<div class="fg" style="margin:0"><label class="lbl">Date</label><input type="date" id="pms-date-'+pair.id+'" value="'+new Date().toISOString().split('T')[0]+'"></div>';
+        h+='<div class="fg" style="margin:0"><label class="lbl">Duration (min)</label><input type="number" id="pms-dur-'+pair.id+'" value="60" min="15"></div>';
+        h+='</div>';
+        h+='<div class="fg"><label class="lbl">Topic</label><input id="pms-topic-'+pair.id+'" placeholder="What was covered?"></div>';
+        h+='<div class="fg"><label class="lbl">Notes</label><input id="pms-notes-'+pair.id+'" placeholder="Progress notes"></div>';
+        h+='<button class="btn btn-navy btn-sm" data-id="'+pair.id+'" onclick="logPersonalMentorSession(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Log session</button>';
+        h+='</div>';
+      }
+      h+='</div>';
+    });
+  }
+  if(CU.role==='dc'){
+    var pending=CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Assigned';});
+    var delivered=CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Delivered';});
+    h+='<div class="card" style="border-top:4px solid var(--navy)">';
+    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Ritual assignments</div>';
+    h+='<div style="display:flex;gap:12px;margin-bottom:10px">';
+    h+='<div style="flex:1;text-align:center;background:var(--goldbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--gold)">'+pending.length+'</div><div style="font-size:10px;color:var(--gold);font-weight:600">ASSIGNED</div></div>';
+    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+delivered.length+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">DELIVERED</div></div>';
+    h+='</div>';
+    h+='<div style="display:flex;gap:8px">';
+    h+='<button class="btn btn-n btn-sm" data-id="duties" onclick="goTo(this.dataset.id)">View duties</button>';
+    h+='<button class="btn btn-navy btn-sm" data-id="assignduty" onclick="goTo(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Assign</button>';
+    h+='</div></div>';
+  }
 
-  // Refresh nav}
+  document.getElementById('pane-home').innerHTML=h;
+}
+
+
+
+// ── Office → role mapping (drives nav access) ────────────────────────────
 function officeToRole(office){
   var map={
     'Worshipful Master':'master',
@@ -5493,7 +5614,6 @@ function changeVote(pollId){
   rPolls();
 }
 
-}
 
 
 // ════════════════════════════════
