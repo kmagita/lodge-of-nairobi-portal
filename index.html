@@ -1949,10 +1949,10 @@ var NAV_ROLES={
   secretary: ['home','members','duties','agenda','admin','reports','summons','practice','calendar','notices'],
   dc:        ['home','members','duties','library','practice','reports','summons','calendar','notices'],
   mentor:    ['home','members','library','practice','mentor','reports','summons','calendar','notices'],
-  almoner:   ['home','almoner','reports','summons','practice','calendar','notices'],
-  treasurer: ['home','members','reports','summons','practice','calendar','notices'],
-  steward:   ['home','polls','summons','practice','calendar','notices'],
-  brother:   ['home','duties','practice','summons','calendar','notices']
+  almoner:   ['home','almoner','library','reports','summons','practice','calendar','notices'],
+  treasurer: ['home','members','library','reports','summons','practice','calendar','notices'],
+  steward:   ['home','polls','library','summons','practice','calendar','notices'],
+  brother:   ['home','duties','library','practice','summons','calendar','notices']
 };
 
 var ALL_NAV=[
@@ -3004,10 +3004,23 @@ function pmInit(){if(!window._pmLoaded){window._pmLoaded=true;load();}loadVoices
 function rPractice(){
   if(typeof pmInit==='function'){
     pmInit();
-    // Give PM a moment to render then switch to library tab
     setTimeout(function(){
-      if(typeof showTab==='function')showTab('library');
-    },100);
+      // Inject portal library passages into PM if PM is empty
+      if(typeof st!=='undefined' && st.passages && LIBRARY && LIBRARY.length){
+        if(!st.passages.length){
+          var myRank={EA:1,FC:2,MM:3}[CU.deg]||1;
+          st.passages=LIBRARY.filter(function(l){
+            return ({EA:1,FC:2,MM:3}[l.degree]||1)<=myRank && l.content;
+          }).map(function(l){
+            return {id:l.id, title:l.title, text:l.content,
+                    format:l.type==='catechism'?'qa':'recite',
+                    qnaPairs:[], speakers:[], respLines:[]};
+          });
+          if(st.passages.length && typeof renderLibrary==='function') renderLibrary();
+        }
+      }
+      if(typeof showTab==='function') showTab('library');
+    }, 300);
   }
 }
 
