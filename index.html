@@ -1847,13 +1847,19 @@ function loadAppData() {
                 })};
       });
     }),
-    safeFetch('library?select=*', function(d) { LIBRARY = d; }),
+    safeFetch('library?select=*', function(d) {
+      LIBRARY = d.map(function(l){
+        return {id:l.id, title:l.title||'', content:l.content||'',
+                degree:l.degree||'EA', type:l.type||'charge', qa:l.qa||[]};
+      });
+    }),
     safeFetch('charge_assignments?select=*', function(d) {
       CHARGE_ASSIGNMENTS = d.map(function(a) {
         return {id:a.id, pid:a.passage_id, ptitle:'', mdate:a.meeting_date,
                 prim:a.primary_id, back:a.backup_id, by:a.assigned_by,
                 status:a.status, dby:a.delivered_by};
       });
+
     }),
     safeFetch('agenda_items?select=*&order=sort_order', function(d) {
       AGENDA_ITEMS = d.map(function(a) {
@@ -3099,124 +3105,74 @@ function rDuties(){
 }
 
 function rLibrary(){
-  var liType=document.getElementById('li-type');
-  if(liType)libImportType=liType.value;
-  var isDC=CU.role==='dc', isBrother=(CU.role==='brother');
+  var isDC=CU.role==='dc';
   var DEG={EA:1,FC:2,MM:3};
   var myRank=DEG[CU.deg]||1;
-  var h='<div class="sf" style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px">Ritual Library</div>';
-  var dcM=MEMBERS.find(function(m){return m.role==='dc';});
-  h+='<div style="font-size:12px;color:var(--t3);margin-bottom:16px">Custodian: '+(dcM?gn(dcM):'DC')+'</div>';
-
-  // Brothers: only their assigned passages
-  if(isBrother){
-    var myLib=LIBRARY.filter(function(l){return l.assignedPrimary===CU.id||l.assignedStandby===CU.id;});
-    if(!myLib.length){
-      h+='<div class="card" style="text-align:center;padding:24px;color:var(--t3)"><div style="font-size:32px;margin-bottom:8px">&#128214;</div><div style="font-weight:600">No passages currently assigned to you.</div></div>';
-    } else {
-      h+='<div class="info-ban"><svg class="ico" width="16" height="16"><use href="#ico-info-circle"/></svg> Showing only your assigned passages.</div>';
-      myLib.forEach(function(l){
-        var isPrimary=l.assignedPrimary===CU.id;
-        h+='<div class="card" style="border-left:4px solid '+bColor+'">';
-        h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:4px">'+l.title+'</div>';
-        h+='<div style="font-size:12px;color:var(--t3)">'+l.type+' &middot; '+l.degree+' degree</div>';
-        h+='<button class="btn btn-navy btn-sm" style="margin-top:8px" data-lid="'+l.id+'" onclick="openPractice&&openPractice(this.dataset.lid)"><svg class="ico" width="14" height="14"><use href="#ico-player-play"/></svg> Practice</button>';
-        h+='</div>';
-      });
-    }
-    document.getElementById('pane-library').innerHTML=h;
-    return;
-  }
-
   var degs=['EA','FC','MM'];
   var dlbl={EA:'First Degree',FC:'Second Degree',MM:'Third Degree'};
 
-  degs.forEach(function(d){
-    var items=LIBRARY.filter(function(l){return l.degree===d&&(DEG[d]||1)<=myRank;});
-    if(!items.length)return;
-    h+='<div class="stitle">'+dlbl[d]+'</div>';
-    items.forEach(function(l){
-      var primM=l.assignedPrimary?gm(l.assignedPrimary):null;
-      var stbyM=l.assignedStandby?gm(l.assignedStandby):null;
-      var isEditing=isDC&&libEditId===l.id;
-      var isEditContent=isDC&&libContentId===l.id;
-      h+='<div class="card">';
+  var h='<div class="sf" style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px">Ritual Library</div>';
+  h+='<div style="font-size:12px;color:var(--t3);margin-bottom:16px">Lodge of Nairobi № 1778</div>';
 
-      // Header row
-      h+='<div class="srow" style="margin-bottom:8px"><div style="flex:1"><div style="font-weight:700;font-size:14px;color:var(--navy)">'+l.title+'</div>';
-      h+='<div style="font-size:11px;color:var(--t3)">'+l.type+'</div></div>';
-      if(isDC){
-        h+='<div style="display:flex;gap:6px">';
-        h+='<button class="btn btn-n btn-sm" data-id="'+l.id+'" onclick="editLibContent(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-edit"/></svg> Text</button>';
-        h+='<button class="btn btn-n btn-sm" data-id="'+l.id+'" onclick="editLibAssign(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-users"/></svg> Assign</button>';
+  if(!LIBRARY.length){
+    h+='<div class="card" style="text-align:center;padding:32px;color:var(--t3)">';
+    h+='<div style="font-size:32px;margin-bottom:8px">&#128214;</div>';
+    h+='<div style="font-weight:600">Library is empty</div>';
+    if(isDC)h+='<div style="font-size:12px;margin-top:6px">Add passages using the forms below.</div>';
+    h+='</div>';
+  } else {
+    degs.forEach(function(d){
+      // Members only see passages at or below their degree
+      // DC sees everything
+      var items=LIBRARY.filter(function(l){
+        return l.degree===d && (isDC || (DEG[d]||1)<=myRank);
+      });
+      if(!items.length)return;
+      h+='<div class="stitle">'+dlbl[d]+'</div>';
+      items.forEach(function(l){
+        var isEditContent=isDC&&libContentId===l.id;
+        h+='<div class="card">';
+        // Header
+        h+='<div class="srow" style="margin-bottom:8px"><div style="flex:1">';
+        h+='<div style="font-weight:700;font-size:14px;color:var(--navy)">'+l.title+'</div>';
+        h+='<div style="font-size:11px;color:var(--t3)">'+(l.type||'charge')+'</div>';
         h+='</div>';
-      }
-      h+='</div>';
-
-      // ── Content editor (DC only) ─────────────────────────────────
-      if(isEditContent){
-        h+='<div style="background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:12px;margin-bottom:10px">';
-        h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Edit ritual text</div>';
-        h+='<div class="fg"><label class="lbl">Type</label><select id="le-type-'+l.id+'">';
-        ['charge','oration','catechism','prayer','responsive','other'].forEach(function(t){
-          h+='<option value="'+t+'"'+(l.type===t?' selected':'')+'>'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>';
-        });
-        h+='</select></div>';
-        h+='<div class="fg"><label class="lbl">Degree</label><select id="le-deg-'+l.id+'">';
-        ['EA','FC','MM'].forEach(function(d){h+='<option value="'+d+'"'+(l.degree===d?' selected':'')+'>'+d+'</option>';});
-        h+='</select></div>';
-        h+='<div class="fg"><label class="lbl">Ritual text</label>';
-        h+='<textarea id="le-content-'+l.id+'" style="min-height:160px;font-family:Georgia,serif;font-size:13px;line-height:1.8;resize:vertical">'+l.content+'</textarea></div>';
-        h+='<div style="display:flex;gap:8px">';
-        h+='<button class="btn btn-navy btn-sm" data-id="'+l.id+'" onclick="saveLibContent(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-device-floppy"/></svg> Save text</button>';
-        h+='<button class="btn btn-out btn-sm" data-id="clear" onclick="editLibContent(this.dataset.id)">Cancel</button>';
-        h+='</div></div>';
-      } else if(l.content){
-        // Preview (first 120 chars)
-        h+='<div style="font-size:12px;color:var(--t3);font-style:italic;margin-bottom:8px;line-height:1.6">'+l.content.substring(0,120)+(l.content.length>120?'…':'')+'</div>';
-      } else if(isDC){
-        h+='<div class="info-ban" style="margin-bottom:8px"><svg class="ico" width="14" height="14"><use href="#ico-info-circle"/></svg> No text added yet. Tap Text to import.</div>';
-      }
-
-      // ── Assignment panel ──────────────────────────────────────────
-      if(isEditing){
-        h+='<div style="background:var(--goldbg);border:1px solid var(--bdr);border-radius:8px;padding:12px;margin-bottom:10px">';
-        h+='<div class="fg"><label class="lbl">Primary</label><select id="la-prim-'+l.id+'"><option value="">— Unassigned —</option>';
-        MEMBERS.forEach(function(m){h+='<option value="'+m.id+'"'+(l.assignedPrimary===m.id?' selected':'')+'>'+m.name+'</option>';});
-        h+='</select></div>';
-        h+='<div class="fg"><label class="lbl">Standby</label><select id="la-stby-'+l.id+'"><option value="">— Unassigned —</option>';
-        MEMBERS.forEach(function(m){h+='<option value="'+m.id+'"'+(l.assignedStandby===m.id?' selected':'')+'>'+m.name+'</option>';});
-        h+='</select></div>';
-        h+='<div style="display:flex;gap:8px"><button class="btn btn-navy btn-sm" data-id="'+l.id+'" onclick="saveLibAssign(this.dataset.id)">Save</button><button class="btn btn-out btn-sm" data-id="null" onclick="editLibAssign(this.dataset.id)">Cancel</button></div>';
+        if(isDC){
+          h+='<div style="display:flex;gap:6px">';
+          h+='<button class="btn btn-n btn-sm" data-id="'+l.id+'" onclick="libContentId=(libContentId===this.dataset.id?null:this.dataset.id);rLibrary()" style="padding:4px 8px">'+( isEditContent?'Done':'Edit')+'</button>';
+          h+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad);padding:4px 8px" data-id="'+l.id+'" onclick="removeLibItem(this.dataset.id)"><svg class="ico" width="12" height="12"><use href="#ico-trash"/></svg></button>';
+          h+='</div>';
+        }
         h+='</div>';
-      }
-
-      // Primary / Standby display + Practice button
-      h+='<div style="display:flex;gap:16px;font-size:12px;margin-bottom:8px">';
-      h+='<div><div style="color:var(--t3);font-weight:600;margin-bottom:2px">Primary</div><div style="color:var(--navy)">'+(primM?gn(primM):'—')+'</div></div>';
-      h+='<div><div style="color:var(--t3);font-weight:600;margin-bottom:2px">Standby</div><div style="color:var(--t2)">'+(stbyM?gn(stbyM):'—')+'</div></div>';
-      h+='</div>';
-      h+='<button class="btn btn-n btn-sm" data-lid="'+l.id+'" onclick="openPractice&&openPractice(this.dataset.lid)"><svg class="ico" width="14" height="14"><use href="#ico-player-play"/></svg> Practice</button>';
-      h+='</div>';
+        // Content editor (DC only)
+        if(isEditContent){
+          h+='<textarea data-id="'+l.id+'" onchange="saveLibContent(this.dataset.id,this.value)" style="width:100%;min-height:180px;font-family:Georgia,serif;font-size:13px;line-height:1.8;margin-bottom:8px">'+l.content+'</textarea>';
+        } else if(l.content){
+          h+='<div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:8px;max-height:80px;overflow:hidden;mask-image:linear-gradient(to bottom,#000 60%,transparent)">'+l.content.slice(0,200)+'</div>';
+        }
+        // Practice button for members
+        if(!isDC){
+          h+='<button class="btn btn-n btn-sm" data-lid="'+l.id+'" onclick="openPractice&&openPractice(this.dataset.lid)"><svg class="ico" width="14" height="14"><use href="#ico-player-play"/></svg> Practice</button>';
+        }
+        h+='</div>';
+      });
     });
+  }
 
-    if(isDC){
-      h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
-      h+='<input id="lib-new-title" style="flex:2;min-width:120px" placeholder="New passage title">';
-      h+='<select id="lib-new-degree" style="flex:1;min-width:80px">';
-      h+='<option value="EA">1° EA</option>';
-      h+='<option value="FC">2° FC</option>';
-      h+='<option value="MM">3° MM</option>';
-      h+='</select>';
-      h+='<button class="btn btn-navy btn-sm" onclick="addLibItem()"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Add</button>';
-      h+='</div>';
-    }
-  });
-  // ── Import panel (DC only) ─────────────────────────────────────────
+  // DC: Add passage
   if(isDC){
+    h+='<div class="stitle" style="margin-top:16px">Add passage</div>';
+    h+='<div class="card">';
+    h+='<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:end">';
+    h+='<div class="fg" style="margin:0"><label class="lbl">Title</label><input id="lib-new-title" placeholder="e.g. Third Degree Charge"></div>';
+    h+='<div class="fg" style="margin:0"><label class="lbl">Degree</label><select id="lib-new-degree"><option value="EA">1° EA</option><option value="FC">2° FC</option><option value="MM">3° MM</option></select></div>';
+    h+='<button class="btn btn-navy btn-sm" onclick="addLibItem()" style="margin-bottom:0"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Add</button>';
+    h+='</div></div>';
+
+    // Import panel
     var libImportOpen=typeof libImportVisible!=='undefined'&&libImportVisible;
-    h+='<div class="stitle" style="display:flex;align-items:center;justify-content:space-between">';
-    h+='<span>Import passages</span>';
+    h+='<div class="stitle" style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">';
+    h+='<span>Import passage</span>';
     h+='<button class="btn btn-n btn-sm" onclick="libImportVisible=!libImportVisible;rLibrary()">'+(libImportOpen?'&#9650; Hide':'&#9660; Show')+'</button>';
     h+='</div>';
     if(libImportOpen){
@@ -3225,19 +3181,19 @@ function rLibrary(){
       h+='<div class="fg" style="margin:0"><label class="lbl">Passage title</label><input id="li-title" placeholder="e.g. Third Degree Charge"></div>';
       h+='<div class="fg" style="margin:0"><label class="lbl">Degree</label><select id="li-degree"><option value="EA">1° EA</option><option value="FC">2° FC</option><option value="MM">3° MM</option></select></div>';
       h+='</div>';
-      h+='<div class="fg" style="margin-bottom:10px"><label class="lbl">Type</label><select id="li-type" onchange="rLibrary()">';
+      h+='<div class="fg" style="margin-bottom:10px"><label class="lbl">Type</label><select id="li-type" onchange="libImportType=this.value;rLibrary()">';
       ['charge','oration','catechism','prayer','responsive','other'].forEach(function(t){
-        var sel=libImportType===t?' selected':'';
+        var sel=(typeof libImportType!=='undefined'&&libImportType===t)?' selected':'';
         h+='<option value="'+t+'"'+sel+'>'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>';
       });
       h+='</select></div>';
       h+='<div class="fg">';
       h+='<label class="lbl">Ritual text</label>';
       h+='<textarea id="li-content" style="min-height:220px;font-family:Georgia,serif;font-size:13px;line-height:1.8" placeholder="Paste the full text here..."></textarea>';
-      if(libImportType==='catechism'){
+      if(typeof libImportType!=='undefined'&&libImportType==='catechism'){
         h+='<div style="margin-top:8px;padding:10px 12px;background:var(--infobg);border-radius:8px;font-size:12px;color:var(--info);line-height:1.7">';
-        h+='<strong>Catechism format:</strong> Paste Q&amp;A pairs — one per block, separated by a blank line:<br>';
-        h+='<code style="background:rgba(0,0,0,.08);padding:2px 6px;border-radius:4px;font-size:11px">Q: How were you prepared?<br>A: By being divested of all metals.</code>';
+        h+='<strong>Catechism format:</strong> Format each Q&amp;A pair as:<br>';
+        h+='<code style="background:rgba(0,0,0,.08);padding:2px 6px;border-radius:4px;font-size:11px">Q: How were you prepared?<br>A: By being divested of all metals.</code><br>Separate pairs with a blank line.';
         h+='</div>';
       }
       h+='</div>';
@@ -3247,21 +3203,20 @@ function rLibrary(){
       h+='</div></div>';
     }
   }
+
   document.getElementById('pane-library').innerHTML=h;
 }
 
-var libContentId=null;
+
 function editLibContent(id){
   libContentId=(libContentId===id||id==='clear')?null:id;
   libEditId=null; // close assign panel if open
   rLibrary();
 }
-function saveLibContent(id){
-  var el=document.getElementById('lib-text-'+id);
-  if(!el)return;
+function saveLibContent(id,value){
   var lib=LIBRARY.find(function(l){return l.id===id;});
   if(!lib)return;
-  lib.content=el.value;
+  lib.content=value!==undefined?value:(document.getElementById('lib-text-'+id)||{value:''}).value;
   supa('library?id=eq.'+id,{method:'PATCH',
     body:JSON.stringify({content:lib.content})
   }).catch(function(e){console.warn('Library save failed:',e);});
