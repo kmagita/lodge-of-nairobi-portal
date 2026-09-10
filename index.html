@@ -2144,7 +2144,9 @@ function nw(){
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 (function(){
-  
+  window.addEventListener('resize',function(){
+    if(document.getElementById('pg-app').style.display!=='none')buildNav();
+  });
 })();
 
 // doLogin replaced by Supabase version above
@@ -2189,6 +2191,37 @@ function notifyUser(){
 }
 
 function buildNav(){
+  // Enforce desktop layout via JS (immune to CSS specificity issues)
+  var shell=document.querySelector('.shell');
+  var bnav=document.getElementById('bnav');
+  var isDesktop=window.innerWidth>=768;
+  if(shell){
+    shell.style.marginLeft=isDesktop?'220px':'';
+    shell.style.paddingTop='';
+  }
+  if(bnav){
+    if(isDesktop){
+      bnav.style.position='fixed';
+      bnav.style.top='0';
+      bnav.style.left='0';
+      bnav.style.bottom='0';
+      bnav.style.right='auto';
+      bnav.style.width='220px';
+      bnav.style.flexDirection='column';
+      bnav.style.justifyContent='flex-start';
+      bnav.style.alignItems='stretch';
+      bnav.style.paddingTop='70px';
+      bnav.style.paddingBottom='12px';
+      bnav.style.overflowY='auto';
+      bnav.style.borderTop='none';
+      bnav.style.borderRight='2px solid var(--gb)';
+      bnav.style.borderBottom='none';
+      bnav.style.transform='none';
+    } else {
+      // Reset to mobile defaults
+      bnav.style.cssText='';
+    }
+  }
   var prev=_prevUnread||0;
   var curr=unreadNotices().length;
   if(curr>prev&&navigator.vibrate)navigator.vibrate([100,50,100]);
@@ -2967,15 +3000,11 @@ function pmInit(){if(!window._pmLoaded){window._pmLoaded=true;load();}loadVoices
 
 function rPractice(){
   if(typeof pmInit==='function'){
-    if(!window._pmLoaded){
-      pmInit();
-    } else {
-      showTab('library');
-    }
-  } else {
-    document.getElementById('pane-practice').innerHTML=
-      '<div style="padding:40px;text-align:center;color:var(--t3)">Practice module is loading...</div>';
-    setTimeout(function(){if(typeof pmInit==='function'){pmInit();}},500);
+    pmInit();
+    // Give PM a moment to render then switch to library tab
+    setTimeout(function(){
+      if(typeof showTab==='function')showTab('library');
+    },100);
   }
 }
 
@@ -4832,6 +4861,7 @@ function importCSV(){
 var libImportType='charge';
 var libImportVisible=false;
 var libContentId=null;
+var _libOpen=null;
 var _correctOpen=null;
 var libEditId=null;
 
