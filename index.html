@@ -3099,6 +3099,8 @@ function rDuties(){
 }
 
 function rLibrary(){
+  var liType=document.getElementById('li-type');
+  if(liType)libImportType=liType.value;
   var isDC=CU.role==='dc', isBrother=(CU.role==='brother');
   var DEG={EA:1,FC:2,MM:3};
   var myRank=DEG[CU.deg]||1;
@@ -3199,8 +3201,14 @@ function rLibrary(){
     });
 
     if(isDC){
-      h+='<div style="display:flex;gap:8px;margin-bottom:10px">';
-      h+='<button class="btn btn-n btn-sm" style="flex:1;justify-content:center" onclick="addLibItem()"><svg class="ico" width="16" height="16"><use href="#ico-plus"/></svg> Add passage</button>';
+      h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
+      h+='<input id="lib-new-title" style="flex:2;min-width:120px" placeholder="New passage title">';
+      h+='<select id="lib-new-degree" style="flex:1;min-width:80px">';
+      h+='<option value="EA">1° EA</option>';
+      h+='<option value="FC">2° FC</option>';
+      h+='<option value="MM">3° MM</option>';
+      h+='</select>';
+      h+='<button class="btn btn-navy btn-sm" onclick="addLibItem()"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Add</button>';
       h+='</div>';
     }
   });
@@ -3213,24 +3221,27 @@ function rLibrary(){
     h+='</div>';
     if(libImportOpen){
       h+='<div class="card">';
-      h+='<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px">Import from text</div>';
-      h+='<div style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:10px">Paste the full text of a charge, oration or catechism. Each passage is imported as a single text block that can be split into chunks during practice.</div>';
-      h+='<div class="fg"><label class="lbl">Passage title</label><input id="li-title" placeholder="e.g. Third Degree Charge"></div>';
-      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-      h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Type</label><select id="li-type">';
-      ['charge','oration','catechism','prayer','responsive','other'].forEach(function(t){h+='<option value="'+t+'">'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>';});
-      h+='</select></div>';
-      h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Degree</label><select id="li-deg">';
-      ['EA','FC','MM'].forEach(function(d){h+='<option value="'+d+'">'+d+'</option>';});
-      h+='</select></div>';
+      h+='<div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:10px">';
+      h+='<div class="fg" style="margin:0"><label class="lbl">Passage title</label><input id="li-title" placeholder="e.g. Third Degree Charge"></div>';
+      h+='<div class="fg" style="margin:0"><label class="lbl">Degree</label><select id="li-degree"><option value="EA">1° EA</option><option value="FC">2° FC</option><option value="MM">3° MM</option></select></div>';
       h+='</div>';
-      h+='<div class="fg"><label class="lbl">Ritual text</label><textarea id="li-content" style="min-height:200px;font-family:Georgia,serif;font-size:13px;line-height:1.8" placeholder="Paste the full text here..."></textarea></div>';
-      h+='<div style="border-top:1px solid var(--bdr);padding-top:12px;margin-top:4px">';
-      h+='<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px">Import catechism Q&amp;A</div>';
-      h+='<div style="font-size:12px;color:var(--t2);margin-bottom:10px;line-height:1.6">For catechisms, paste Q&A pairs. Format each pair as:<br><code style="background:var(--bg2);padding:2px 6px;border-radius:4px">Q: Question text?<br>A: Answer text.</code><br>Separate pairs with a blank line.</div>';
-      h+='<textarea id="li-qna" style="min-height:160px;font-family:monospace;font-size:12px" placeholder="Q: How were you prepared?&#10;A: By being divested of all metals.&#10;&#10;Q: Where were you first prepared?&#10;A: In my heart."></textarea>';
+      h+='<div class="fg" style="margin-bottom:10px"><label class="lbl">Type</label><select id="li-type" onchange="rLibrary()">';
+      ['charge','oration','catechism','prayer','responsive','other'].forEach(function(t){
+        var sel=libImportType===t?' selected':'';
+        h+='<option value="'+t+'"'+sel+'>'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>';
+      });
+      h+='</select></div>';
+      h+='<div class="fg">';
+      h+='<label class="lbl">Ritual text</label>';
+      h+='<textarea id="li-content" style="min-height:220px;font-family:Georgia,serif;font-size:13px;line-height:1.8" placeholder="Paste the full text here..."></textarea>';
+      if(libImportType==='catechism'){
+        h+='<div style="margin-top:8px;padding:10px 12px;background:var(--infobg);border-radius:8px;font-size:12px;color:var(--info);line-height:1.7">';
+        h+='<strong>Catechism format:</strong> Paste Q&amp;A pairs — one per block, separated by a blank line:<br>';
+        h+='<code style="background:rgba(0,0,0,.08);padding:2px 6px;border-radius:4px;font-size:11px">Q: How were you prepared?<br>A: By being divested of all metals.</code>';
+        h+='</div>';
+      }
       h+='</div>';
-      h+='<div style="display:flex;gap:8px;margin-top:10px">';
+      h+='<div style="display:flex;gap:8px;margin-top:4px">';
       h+='<button class="btn btn-navy" style="flex:1;justify-content:center" onclick="importLibPassage()"><svg class="ico" width="16" height="16"><use href="#ico-file-import"/></svg> Import passage</button>';
       h+='<button class="btn btn-n btn-sm" onclick="libImportVisible=false;rLibrary()">Cancel</button>';
       h+='</div></div>';
@@ -4565,11 +4576,13 @@ function editLibContent(id){
 }
 function addLibItem(){
   var t=document.getElementById('lib-new-title');
+  var dg=document.getElementById('lib-new-degree');
   if(!t||!t.value.trim()){alert('Enter a passage title.');return;}
-  var item={id:'lib'+Date.now(),title:t.value.trim(),content:'',qa:[]};
+  var deg=dg?dg.value:'EA';
+  var item={id:'lib'+Date.now(),title:t.value.trim(),degree:deg,content:'',qa:[]};
   LIBRARY.push(item);
   supa('library',{method:'POST',
-    body:JSON.stringify({title:item.title,content:'',qa:[]})
+    body:JSON.stringify({title:item.title,degree:deg,content:'',qa:[]})
   }).then(function(r){return r.json();})
   .then(function(d){if(d&&d[0])item.id=d[0].id;})
   .catch(function(e){console.warn('Library add failed:',e);});
@@ -4850,18 +4863,21 @@ function importCSV(){
 }
 
 
+var libImportType='charge';
 var libImportVisible=false;
 
 function importLibPassage(){
   var title=document.getElementById('li-title');
   var content=document.getElementById('li-content');
+  var degEl=document.getElementById('li-degree');
   if(!title||!title.value.trim()){alert('Enter a passage title.');return;}
   if(!content||!content.value.trim()){alert('Enter the passage content.');return;}
+  var deg=degEl?degEl.value:'EA';
   var item={id:'lib'+Date.now(),title:title.value.trim(),
-    content:content.value.trim(),qa:[]};
+    content:content.value.trim(),degree:deg,qa:[]};
   LIBRARY.push(item);
   supa('library',{method:'POST',
-    body:JSON.stringify({title:item.title,content:item.content,qa:[]})
+    body:JSON.stringify({title:item.title,content:item.content,degree:deg,qa:[]})
   }).then(function(r){return r.json();})
   .then(function(d){if(d&&d[0])item.id=d[0].id;})
   .catch(function(e){console.warn('Import failed:',e);});
