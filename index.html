@@ -11,7 +11,7 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#f4f0e8;--bg2:#ede8dc;--white:#fff;--navy:#0e1f45;--gold:#a07820;--goldbg:#fdf6e3;--gb:#d4b86a;--text:#1a1a2e;--t2:#4a4060;--t3:#8a8aaa;--ok:#1a7a40;--okbg:#e8f5ee;--bad:#a02020;--badbg:#fde8e8;--warn:#a05010;--warnbg:#fff3e8;--info:#1a5080;--infobg:#e8f0fb;--purp:#5a2080;--purpbg:#f3eafc;--bdr:#ddd5c0;--bdr2:#c8bfa8}
-body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px;max-width:420px;margin:0 auto;min-height:100vh}
+body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px;min-height:100vh}
 input,select,textarea{background:var(--white);border:1.5px solid var(--bdr2);border-radius:8px;color:var(--text);padding:9px 12px;font-size:13px;width:100%;outline:none;font-family:inherit}
 input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 .btn{padding:9px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
@@ -2965,7 +2965,19 @@ var newPollDraft={fields:[]};
 
 function pmInit(){if(!window._pmLoaded){window._pmLoaded=true;load();}loadVoices&&loadVoices();showTab('library');}
 
-function rPractice(){if(typeof pmInit==='function'){if(!window._pmLoaded){pmInit();}else{showTab('library');}}}
+function rPractice(){
+  if(typeof pmInit==='function'){
+    if(!window._pmLoaded){
+      pmInit();
+    } else {
+      showTab('library');
+    }
+  } else {
+    document.getElementById('pane-practice').innerHTML=
+      '<div style="padding:40px;text-align:center;color:var(--t3)">Practice module is loading...</div>';
+    setTimeout(function(){if(typeof pmInit==='function'){pmInit();}},500);
+  }
+}
 
 // ── goTo map update for practice ──
 
