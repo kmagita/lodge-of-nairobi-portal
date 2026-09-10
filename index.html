@@ -23,7 +23,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 .stitle{color:var(--navy);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin:16px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--gb)}
 .topbar{position:sticky;top:0;z-index:200;background:var(--white);border-bottom:2px solid var(--gb);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
 .bnav{position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:2px solid var(--gb);display:flex;overflow-x:auto;overflow-y:hidden;padding:6px 4px 14px;z-index:50;-webkit-overflow-scrolling:touch;scrollbar-width:none}.bnav::-webkit-scrollbar{display:none}
-.nb{display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;color:var(--t3);min-width:58px;flex-shrink:0;padding:2px 6px}
+.nb{display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;touch-action:manipulation;color:var(--t3);min-width:58px;flex-shrink:0;padding:2px 6px}
 .nb.on{color:var(--navy)}.nb.on i{color:var(--gold)}
 .nb i{font-size:20px}.nb span{font-size:9px;font-weight:600;white-space:nowrap}
 .pane{padding:16px 16px 100px;display:none}.pane.on{display:block}
@@ -3063,7 +3063,7 @@ function rDuties(){
       var corrOpen=window._correctOpen===a.id;
       h+='<button class="btn btn-n btn-sm" style="font-size:11px;margin-top:6px" data-id="'+a.id+'" onclick="window._correctOpen=(window._correctOpen===this.dataset.id?null:this.dataset.id);rDuties()">'+( corrOpen?'Cancel':'Correct delivery')+'</button>';
       if(corrOpen){
-        h+='<div style="background:var(--warnbg);border:1px solid var(--warn);border-radius:8px;padding:12px;margin-top:8px">';
+        h+='<div id="corr-'+a.id+'" style="background:var(--warnbg);border:1px solid var(--warn);border-radius:8px;padding:12px;margin-top:8px">';
         h+='<div style="font-size:11px;font-weight:700;color:var(--warn);text-transform:uppercase;margin-bottom:10px">Who actually delivered?</div>';
         h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
         [a.prim,a.back].filter(Boolean).forEach(function(mid){
@@ -3140,16 +3140,20 @@ function rLibrary(){
 
         // ── Card header — always visible ──────────────────────────────────
         h+='<div class="card" style="margin-bottom:8px">';
-        h+='<div style="display:flex;align-items:center;gap:10px;cursor:pointer" data-lid="'+l.id+'" onclick="window._libOpen=(window._libOpen===this.dataset.lid?null:this.dataset.lid);rLibrary()">';
-        h+='<div style="flex:1">';
-        h+='<div style="font-weight:700;font-size:14px;color:var(--navy)">'+l.title+'</div>';
+        h+='<div style="display:flex;align-items:center;gap:6px">';
+        // Expand/collapse button (title area only — no nested buttons)
+        h+='<button data-lid="'+l.id+'" onclick="window._libOpen=(window._libOpen===this.dataset.lid?null:this.dataset.lid);rLibrary()" style="flex:1;display:flex;flex-direction:column;align-items:flex-start;background:none;border:none;cursor:pointer;padding:0;text-align:left;touch-action:manipulation;min-width:0">';
+        h+='<div style="font-weight:700;font-size:14px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">'+l.title+'</div>';
         h+='<div style="font-size:11px;color:var(--t3)">'+(l.type||'charge')+'</div>';
-        h+='</div>';
+        h+='</button>';
+        // Action buttons outside the expand button
         if(isDC){
-          h+='<button class="btn btn-n btn-sm" style="padding:3px 8px;font-size:11px" data-id="'+l.id+'" onclick="event.stopPropagation();libContentId=(libContentId===this.dataset.id?null:this.dataset.id);rLibrary()">'+( isEditContent?'Done':'Edit')+'</button>';
-          h+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad);padding:3px 6px" data-id="'+l.id+'" onclick="event.stopPropagation();removeLibItem(this.dataset.id)"><svg class="ico" width="12" height="12"><use href="#ico-trash"/></svg></button>';
+          h+='<button class="btn btn-n btn-sm" style="padding:3px 8px;font-size:11px;flex-shrink:0" data-id="'+l.id+'" onclick="libContentId=(libContentId===this.dataset.id?null:this.dataset.id);rLibrary()">'+( isEditContent?'Done':'Edit')+'</button>';
+          h+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad);padding:3px 6px;flex-shrink:0" data-id="'+l.id+'" onclick="removeLibItem(this.dataset.id)"><svg class="ico" width="12" height="12"><use href="#ico-trash"/></svg></button>';
         }
-        h+='<span style="font-size:13px;color:var(--t3);margin-left:4px">'+(isOpen?'&#9650;':'&#9660;')+'</span>';
+        h+='<button data-lid="'+l.id+'" onclick="window._libOpen=(window._libOpen===this.dataset.lid?null:this.dataset.lid);rLibrary()" style="background:none;border:none;cursor:pointer;padding:4px;touch-action:manipulation;flex-shrink:0">';
+        h+='<span style="font-size:13px;color:var(--t3)">'+(isOpen?'&#9650;':'&#9660;')+'</span>';
+        h+='</button>';
         h+='</div>';
 
         // ── Expanded view ─────────────────────────────────────────────────
@@ -3583,7 +3587,7 @@ function rNotices(){
     h+='<div class="card" style="border-left:4px solid '+tc+';margin-bottom:8px;padding:0;overflow:hidden">';
 
     // ── Header row (always visible) ──────────────────────────────────────
-    h+='<div data-nid="'+n.id+'" onclick="window._openNotice=(window._openNotice===this.dataset.nid?null:this.dataset.nid);rNotices()" ';
+    h+='<button data-nid="'+n.id+'" onclick="window._openNotice=(window._openNotice===this.dataset.nid?null:this.dataset.nid);rNotices()" style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;width:100%;background:none;border:none;text-align:left;touch-action:manipulation" ';
     h+='style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer">';
     h+='<div style="width:32px;height:32px;border-radius:8px;background:'+tbg+';display:flex;align-items:center;justify-content:center;flex-shrink:0">';
     h+='<svg class="ico" width="16" height="16" style="color:'+tc+'"><use href="#ico-'+ico+'"/></svg></div>';
@@ -3593,7 +3597,7 @@ function rNotices(){
     h+='</div>';
     if(!n.read)h+='<div style="width:8px;height:8px;border-radius:50%;background:var(--bad);flex-shrink:0"></div>';
     h+='<span style="font-size:12px;color:var(--t3);flex-shrink:0">'+(isOpen?'&#9650;':'&#9660;')+'</span>';
-    h+='</div>';
+    h+='</button>';
 
     // ── Expanded content ──────────────────────────────────────────────────
     if(isOpen){
