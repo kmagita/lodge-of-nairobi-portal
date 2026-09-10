@@ -61,24 +61,26 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
    ═══════════════════════════════════════════════ */
 @media (min-width: 768px) {
 
-  /* Topbar: fixed across top */
+  /* Fixed topbar */
   .topbar {
-    position: fixed !important;
+    position: fixed;
     top: 0; left: 0; right: 0;
     height: 60px;
     z-index: 200;
-    box-shadow: 0 1px 6px rgba(0,0,0,.08);
   }
 
-  /* Sidebar: fixed on left below topbar */
+  /* pg-app: push content below fixed topbar */
+  #pg-app {
+    display: block !important;
+    padding-top: 60px;
+    min-height: 100vh;
+  }
+
+  /* Fixed sidebar */
   .bnav {
     position: fixed !important;
-    top: 60px !important;
-    left: 0 !important;
-    bottom: 0 !important;
-    right: auto !important;
-    width: 220px !important;
-    height: auto !important;
+    top: 60px; left: 0; bottom: 0;
+    width: 220px;
     border-top: none !important;
     border-right: 2px solid var(--gb);
     border-bottom: none !important;
@@ -86,8 +88,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
     justify-content: flex-start !important;
     align-items: stretch !important;
     padding: 12px 0 !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
+    overflow-y: auto; overflow-x: hidden;
     z-index: 100 !important;
     transform: none !important;
     background: var(--white);
@@ -95,36 +96,24 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
   }
   .bnav::-webkit-scrollbar { display: none; }
 
-  /* Content pane: offset to account for fixed sidebar */
-  .pane {
-    display: none !important;
-    position: fixed !important;
-    top: 60px !important;
-    left: 220px !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    overflow-y: auto !important;
-    padding: 24px 32px 40px !important;
-    background: var(--bg);
-  }
-  .pane.on {
-    display: block !important;
-  }
-  #pane-practice {
-    padding: 0 !important;
-  }
-
-  /* pg-app: needs top padding for fixed topbar */
-  #pg-app {
-    padding-top: 60px;
-  }
-
-  /* Shell: just a container, layout done by fixed children */
+  /* Shell: offset right of sidebar */
   .shell {
     display: block !important;
+    margin-left: 220px;
+    min-height: calc(100vh - 60px);
   }
 
-  /* Nav buttons: vertical list */
+  /* Panes: normal block flow inside shell */
+  .pane {
+    display: none;
+    min-height: calc(100vh - 60px);
+    padding: 24px 32px 48px;
+    max-width: 860px;
+  }
+  .pane.on { display: block; }
+  #pane-practice { max-width: none; padding: 0; }
+
+  /* Nav buttons */
   .nb {
     flex-direction: row !important;
     justify-content: flex-start !important;
@@ -138,16 +127,17 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
     white-space: nowrap;
   }
   .nb span { display: inline !important; font-size: 13px !important; }
-  .nb.on {
-    background: var(--goldbg);
-    border-left: 3px solid var(--gold);
-    color: var(--navy);
-  }
+  .nb.on { background: var(--goldbg); border-left: 3px solid var(--gold); color: var(--navy); }
   .nb:not(.on) { border-left: 3px solid transparent; }
   .nb .ico { width: 18px; height: 18px; flex-shrink: 0; }
 
   .card { border-radius: 10px; }
   .fg { margin-bottom: 14px; }
+}
+
+@media (min-width: 1100px) {
+  .bnav { width: 240px !important; }
+  .shell { margin-left: 240px; }
 }
 
 @media (min-width: 1100px) {
@@ -1740,7 +1730,7 @@ function doLogin() {
           document.getElementById('li-err').style.display = 'none';
           document.getElementById('pg-login').style.display = 'none';
       window.scrollTo(0, 0);
-          document.getElementById('pg-app').style.display = window.innerWidth >= 768 ? 'flex' : 'block';
+          document.getElementById('pg-app').style.display = 'block';
           document.getElementById('tb-name').textContent = gn(CU);
           CU.role = officeToRole(CU.office);
           document.getElementById('tb-role').textContent = RLBL[CU.role] || CU.role;
@@ -3110,56 +3100,64 @@ function rLibrary(){
   var myRank=DEG[CU.deg]||1;
   var degs=['EA','FC','MM'];
   var dlbl={EA:'First Degree',FC:'Second Degree',MM:'Third Degree'};
+  var openId=window._libOpen||null;
 
   var h='<div class="sf" style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px">Ritual Library</div>';
   h+='<div style="font-size:12px;color:var(--t3);margin-bottom:16px">Lodge of Nairobi № 1778</div>';
 
   if(!LIBRARY.length){
-    h+='<div class="card" style="text-align:center;padding:32px;color:var(--t3)">';
-    h+='<div style="font-size:32px;margin-bottom:8px">&#128214;</div>';
-    h+='<div style="font-weight:600">Library is empty</div>';
-    if(isDC)h+='<div style="font-size:12px;margin-top:6px">Add passages using the forms below.</div>';
+    h+='<div class="card" style="text-align:center;padding:32px;color:var(--t3)"><div style="font-size:32px;margin-bottom:8px">&#128214;</div><div style="font-weight:600">Library is empty</div>';
+    if(isDC)h+='<div style="font-size:12px;margin-top:6px">Use the forms below to add passages.</div>';
     h+='</div>';
   } else {
     degs.forEach(function(d){
-      // Members only see passages at or below their degree
-      // DC sees everything
       var items=LIBRARY.filter(function(l){
         return l.degree===d && (isDC || (DEG[d]||1)<=myRank);
       });
       if(!items.length)return;
       h+='<div class="stitle">'+dlbl[d]+'</div>';
       items.forEach(function(l){
+        var isOpen=openId===l.id;
         var isEditContent=isDC&&libContentId===l.id;
-        h+='<div class="card">';
-        // Header
-        h+='<div class="srow" style="margin-bottom:8px"><div style="flex:1">';
+
+        // ── Card header — always visible ──────────────────────────────────
+        h+='<div class="card" style="margin-bottom:8px">';
+        h+='<div style="display:flex;align-items:center;gap:10px;cursor:pointer" data-lid="'+l.id+'" onclick="window._libOpen=(window._libOpen===this.dataset.lid?null:this.dataset.lid);rLibrary()">';
+        h+='<div style="flex:1">';
         h+='<div style="font-weight:700;font-size:14px;color:var(--navy)">'+l.title+'</div>';
         h+='<div style="font-size:11px;color:var(--t3)">'+(l.type||'charge')+'</div>';
         h+='</div>';
         if(isDC){
-          h+='<div style="display:flex;gap:6px">';
-          h+='<button class="btn btn-n btn-sm" data-id="'+l.id+'" onclick="libContentId=(libContentId===this.dataset.id?null:this.dataset.id);rLibrary()" style="padding:4px 8px">'+( isEditContent?'Done':'Edit')+'</button>';
-          h+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad);padding:4px 8px" data-id="'+l.id+'" onclick="removeLibItem(this.dataset.id)"><svg class="ico" width="12" height="12"><use href="#ico-trash"/></svg></button>';
-          h+='</div>';
+          h+='<button class="btn btn-n btn-sm" style="padding:3px 8px;font-size:11px" data-id="'+l.id+'" onclick="event.stopPropagation();libContentId=(libContentId===this.dataset.id?null:this.dataset.id);rLibrary()">'+( isEditContent?'Done':'Edit')+'</button>';
+          h+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad);padding:3px 6px" data-id="'+l.id+'" onclick="event.stopPropagation();removeLibItem(this.dataset.id)"><svg class="ico" width="12" height="12"><use href="#ico-trash"/></svg></button>';
         }
+        h+='<span style="font-size:13px;color:var(--t3);margin-left:4px">'+(isOpen?'&#9650;':'&#9660;')+'</span>';
         h+='</div>';
-        // Content editor (DC only)
-        if(isEditContent){
-          h+='<textarea data-id="'+l.id+'" onchange="saveLibContent(this.dataset.id,this.value)" style="width:100%;min-height:180px;font-family:Georgia,serif;font-size:13px;line-height:1.8;margin-bottom:8px">'+l.content+'</textarea>';
-        } else if(l.content){
-          h+='<div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:8px;max-height:80px;overflow:hidden;mask-image:linear-gradient(to bottom,#000 60%,transparent)">'+l.content.slice(0,200)+'</div>';
-        }
-        // Practice button for members
-        if(!isDC){
-          h+='<button class="btn btn-n btn-sm" data-lid="'+l.id+'" onclick="openPractice&&openPractice(this.dataset.lid)"><svg class="ico" width="14" height="14"><use href="#ico-player-play"/></svg> Practice</button>';
+
+        // ── Expanded view ─────────────────────────────────────────────────
+        if(isOpen){
+          h+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--bdr)">';
+          if(isEditContent){
+            // DC edit mode
+            h+='<textarea data-id="'+l.id+'" onchange="saveLibContent(this.dataset.id,this.value)" style="width:100%;min-height:200px;font-family:Georgia,serif;font-size:13px;line-height:1.8">'+( l.content||'')+'</textarea>';
+          } else if(l.content){
+            // Read-only full text
+            h+='<div style="font-family:Georgia,serif;font-size:14px;line-height:1.9;color:var(--t1);white-space:pre-wrap">'+l.content+'</div>';
+          } else {
+            h+='<div style="color:var(--t3);font-size:13px;font-style:italic">No content added yet.</div>';
+          }
+          // Practice button for everyone
+          h+='<div style="margin-top:12px">';
+          h+='<button class="btn btn-navy btn-sm" data-lid="'+l.id+'" data-pane="practice" onclick="goTo(this.dataset.pane)"><svg class="ico" width="14" height="14"><use href="#ico-player-play"/></svg> Practice</button>';
+          h+='</div>';
+          h+='</div>';
         }
         h+='</div>';
       });
     });
   }
 
-  // DC: Add passage
+  // DC: Add and Import
   if(isDC){
     h+='<div class="stitle" style="margin-top:16px">Add passage</div>';
     h+='<div class="card">';
@@ -3169,7 +3167,6 @@ function rLibrary(){
     h+='<button class="btn btn-navy btn-sm" onclick="addLibItem()" style="margin-bottom:0"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Add</button>';
     h+='</div></div>';
 
-    // Import panel
     var libImportOpen=typeof libImportVisible!=='undefined'&&libImportVisible;
     h+='<div class="stitle" style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">';
     h+='<span>Import passage</span>';
@@ -3192,8 +3189,8 @@ function rLibrary(){
       h+='<textarea id="li-content" style="min-height:220px;font-family:Georgia,serif;font-size:13px;line-height:1.8" placeholder="Paste the full text here..."></textarea>';
       if(typeof libImportType!=='undefined'&&libImportType==='catechism'){
         h+='<div style="margin-top:8px;padding:10px 12px;background:var(--infobg);border-radius:8px;font-size:12px;color:var(--info);line-height:1.7">';
-        h+='<strong>Catechism format:</strong> Format each Q&amp;A pair as:<br>';
-        h+='<code style="background:rgba(0,0,0,.08);padding:2px 6px;border-radius:4px;font-size:11px">Q: How were you prepared?<br>A: By being divested of all metals.</code><br>Separate pairs with a blank line.';
+        h+='<strong>Catechism format:</strong> Each Q&amp;A pair on its own line:<br>';
+        h+='<code style="font-size:11px;background:rgba(0,0,0,.06);padding:2px 6px;border-radius:4px">Q: How were you prepared?<br>A: By being divested of all metals.</code><br>Separate pairs with a blank line.';
         h+='</div>';
       }
       h+='</div>';
@@ -3207,7 +3204,7 @@ function rLibrary(){
   try{
     document.getElementById('pane-library').innerHTML=h;
   }catch(e){
-    document.getElementById('pane-library').innerHTML='<div style="padding:20px;color:red;font-size:13px"><b>rLibrary error:</b> '+e.message+'</div>';
+    document.getElementById('pane-library').innerHTML='<div style="padding:20px;color:red"><b>Error:</b> '+e.message+'</div>';
   }
 }
 
