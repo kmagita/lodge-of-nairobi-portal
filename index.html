@@ -2195,14 +2195,17 @@ function buildNav(){
   var shell=document.querySelector('.shell');
   var bnav=document.getElementById('bnav');
   var isDesktop=window.innerWidth>=768;
+  var topbar=document.querySelector('.topbar');
+  if(topbar){
+    topbar.style.marginLeft=isDesktop?'220px':'';
+  }
   if(shell){
     shell.style.marginLeft=isDesktop?'220px':'';
-    shell.style.paddingTop='';
   }
   if(bnav){
     if(isDesktop){
       bnav.style.position='fixed';
-      bnav.style.top='0';
+      bnav.style.top='60px';
       bnav.style.left='0';
       bnav.style.bottom='0';
       bnav.style.right='auto';
@@ -2210,7 +2213,7 @@ function buildNav(){
       bnav.style.flexDirection='column';
       bnav.style.justifyContent='flex-start';
       bnav.style.alignItems='stretch';
-      bnav.style.paddingTop='70px';
+      bnav.style.paddingTop='12px';
       bnav.style.paddingBottom='12px';
       bnav.style.overflowY='auto';
       bnav.style.borderTop='none';
@@ -3172,22 +3175,14 @@ function rLibrary(){
     });
   }
 
-  // DC: Add and Import
+  // DC: Add passage via full import form (toggled by + Add button)
   if(isDC){
-    h+='<div class="stitle" style="margin-top:16px">Add passage</div>';
-    h+='<div class="card">';
-    h+='<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:end">';
-    h+='<div class="fg" style="margin:0"><label class="lbl">Title</label><input id="lib-new-title" placeholder="e.g. Third Degree Charge"></div>';
-    h+='<div class="fg" style="margin:0"><label class="lbl">Degree</label><select id="lib-new-degree"><option value="EA">1° EA</option><option value="FC">2° FC</option><option value="MM">3° MM</option></select></div>';
-    h+='<button class="btn btn-navy btn-sm" onclick="addLibItem()" style="margin-bottom:0"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Add</button>';
-    h+='</div></div>';
-
-    var libImportOpen=typeof libImportVisible!=='undefined'&&libImportVisible;
-    h+='<div class="stitle" style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">';
-    h+='<span>Import passage</span>';
-    h+='<button class="btn btn-n btn-sm" onclick="libImportVisible=!libImportVisible;rLibrary()">'+(libImportOpen?'&#9650; Hide':'&#9660; Show')+'</button>';
+    var libAddOpen=typeof libImportVisible!=='undefined'&&libImportVisible;
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;margin-bottom:8px">';
+    h+='<div class="stitle" style="margin:0">Add passage</div>';
+    h+='<button class="btn btn-navy btn-sm" onclick="libImportVisible=!libImportVisible;rLibrary()"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Add passage</button>';
     h+='</div>';
-    if(libImportOpen){
+    if(libAddOpen){
       h+='<div class="card">';
       h+='<div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:10px">';
       h+='<div class="fg" style="margin:0"><label class="lbl">Passage title</label><input id="li-title" placeholder="e.g. Third Degree Charge"></div>';
@@ -3204,17 +3199,18 @@ function rLibrary(){
       h+='<textarea id="li-content" style="min-height:220px;font-family:Georgia,serif;font-size:13px;line-height:1.8" placeholder="Paste the full text here..."></textarea>';
       if(typeof libImportType!=='undefined'&&libImportType==='catechism'){
         h+='<div style="margin-top:8px;padding:10px 12px;background:var(--infobg);border-radius:8px;font-size:12px;color:var(--info);line-height:1.7">';
-        h+='<strong>Catechism format:</strong> Each Q&amp;A pair on its own line:<br>';
-        h+='<code style="font-size:11px;background:rgba(0,0,0,.06);padding:2px 6px;border-radius:4px">Q: How were you prepared?<br>A: By being divested of all metals.</code><br>Separate pairs with a blank line.';
+        h+='<strong>Catechism format:</strong> Each Q&amp;A pair on its own line, separated by a blank line:<br>';
+        h+='<code style="font-size:11px;background:rgba(0,0,0,.06);padding:2px 6px;border-radius:4px">Q: How were you prepared?<br>A: By being divested of all metals.</code>';
         h+='</div>';
       }
       h+='</div>';
       h+='<div style="display:flex;gap:8px;margin-top:4px">';
-      h+='<button class="btn btn-navy" style="flex:1;justify-content:center" onclick="importLibPassage()"><svg class="ico" width="16" height="16"><use href="#ico-file-import"/></svg> Import passage</button>';
+      h+='<button class="btn btn-navy" style="flex:1;justify-content:center" onclick="importLibPassage()"><svg class="ico" width="16" height="16"><use href="#ico-check"/></svg> Save passage</button>';
       h+='<button class="btn btn-n btn-sm" onclick="libImportVisible=false;rLibrary()">Cancel</button>';
       h+='</div></div>';
     }
   }
+
 
   try{
     document.getElementById('pane-library').innerHTML=h;
