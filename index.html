@@ -3002,26 +3002,40 @@ var newPollDraft={fields:[]};
 function pmInit(){if(!window._pmLoaded){window._pmLoaded=true;load();}loadVoices&&loadVoices();showTab('library');}
 
 function rPractice(){
-  if(typeof pmInit==='function'){
-    pmInit();
-    setTimeout(function(){
-      // Inject portal library passages into PM if PM is empty
-      if(typeof st!=='undefined' && st.passages && LIBRARY && LIBRARY.length){
-        if(!st.passages.length){
-          var myRank={EA:1,FC:2,MM:3}[CU.deg]||1;
-          st.passages=LIBRARY.filter(function(l){
-            return ({EA:1,FC:2,MM:3}[l.degree]||1)<=myRank && l.content;
-          }).map(function(l){
-            return {id:l.id, title:l.title, text:l.content,
-                    format:l.type==='catechism'?'qa':'recite',
-                    qnaPairs:[], speakers:[], respLines:[]};
-          });
-          if(st.passages.length && typeof renderLibrary==='function') renderLibrary();
-        }
+  if(typeof pmInit!=='function')return;
+  // Load PM state (localStorage)
+  pmInit();
+  setTimeout(function(){
+    // Bypass PIN screen — member is already authenticated via portal login
+    var pin=document.getElementById('pinScreen');
+    var main=document.getElementById('mainScreen');
+    if(pin)  pin.classList.remove('active');
+    if(main) main.classList.add('active');
+
+    // Inject portal library into PM (filtered by member's degree)
+    if(typeof st!=='undefined' && LIBRARY && LIBRARY.length){
+      var myRank={EA:1,FC:2,MM:3}[CU.deg]||1;
+      var myLib=LIBRARY.filter(function(l){
+        return ({EA:1,FC:2,MM:3}[l.degree]||1)<=myRank && l.content && l.content.trim();
+      });
+      if(myLib.length){
+        // Merge with any passages the member added themselves
+        var existingIds=st.passages.map(function(p){return p.id;});
+        myLib.forEach(function(l){
+          if(existingIds.indexOf(l.id)===-1){
+            st.passages.push({
+              id:l.id, title:l.title, text:l.content,
+              format:l.type==='catechism'?'catechism':'recite',
+              qnaPairs:[], speakers:[], respLines:[]
+            });
+          }
+        });
       }
-      if(typeof showTab==='function') showTab('library');
-    }, 300);
-  }
+    }
+
+    if(typeof showTab==='function') showTab('library');
+    if(typeof renderLibrary==='function') renderLibrary();
+  }, 250);
 }
 
 // ── goTo map update for practice ──
