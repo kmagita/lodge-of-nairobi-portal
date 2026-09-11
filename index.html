@@ -1259,6 +1259,16 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
   <div id="pane-assignduty" class="pane"></div>
   <div id="pane-polls" class="pane"></div>
   <div id="pane-practice" class="pane">
+<style>
+/* Hide PM elements that are redundant inside the portal */
+.btn-sm.btn-primary[onclick*="showAddTab"],
+.end-btn[onclick*="endSession"],
+#tabAdd,
+#tabSettings,
+[onclick*="showAddTab"],
+.top-bar .end-btn { display:none !important; }
+
+</style>
 <div style="position:sticky;top:0;z-index:200;background:#1a2236;padding:8px 16px"><button onclick="goTo('home')" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:rgba(255,255,255,.75);padding:4px 0"><svg style="width:16px;height:16px;flex-shrink:0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back to portal</button></div>
 <div class="screen main-screen" id="mainScreen">
 
@@ -3028,6 +3038,25 @@ function rPractice(){
   // Load PM state (localStorage)
   pmInit();
   setTimeout(function(){
+    // Patch openPractice to allow TTS passages without recording
+    if(typeof openPractice==='function'&&!window._pmPatched){
+      var _origOpen=openPractice;
+      window.openPractice=function(id){
+        var p=st&&st.passages?st.passages.find(function(x){return x.id===id;}):null;
+        if(p&&p.refVoiceType==='tts'&&!p.refAudio)p.refAudio='tts'; // bypass recording check
+        _origOpen(id);
+      };
+      window._pmPatched=true;
+    }
+    // Hide End button (portal nav handles navigation) and Add/Settings tabs
+    var endBtns=document.querySelectorAll('.end-btn');
+    endBtns.forEach(function(b){b.style.display='none';});
+    var addBtns=document.querySelectorAll('[onclick*="showAddTab"]');
+    addBtns.forEach(function(b){b.style.display='none';});
+    var addTab=document.getElementById('tabAdd');
+    if(addTab)addTab.style.display='none';
+    var setTab=document.getElementById('tabSettings');
+    if(setTab)setTab.style.display='none';
     // Bypass PIN screen — member is already authenticated via portal login
     var pin=document.getElementById('pinScreen');
     var main=document.getElementById('mainScreen');
@@ -7031,4 +7060,14 @@ function pmInit(){
 
 </script>
 </body>
-</html>
+</html
+/* Portal integration — hide PM-internal elements that duplicate portal UI */
+#pane-practice .end-btn { display: none !important; }
+#pane-practice .btn-sm[onclick="showAddTab()"] { display: none !important; }
+#pane-practice #tabAdd { display: none !important; }
+#pane-practice #tabSettings { display: none !important; }
+#pane-practice .nav-item[onclick*="Settings"] { display: none !important; }
+#pane-practice .nav-item[onclick*="showTab(\'settings\')"] { display: none !important; }
+#pane-practice .nav-bar .nav-item:last-child { display: none !important; }
+#pane-practice .pin-screen { display: none !important; }
+>
