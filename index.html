@@ -125,7 +125,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 }
 @media (min-width: 1100px) {
   .bnav  { width: 240px; }
-  .shell { margin-left: 240px; }
+  .shell { margin-left: 246px; }
   .pane  { padding: 28px 40px 52px; }
 }
 </style>
@@ -2197,10 +2197,10 @@ function buildNav(){
   var isDesktop=window.innerWidth>=768;
   var topbar=document.querySelector('.topbar');
   if(topbar){
-    topbar.style.marginLeft=isDesktop?'220px':'';
+    topbar.style.marginLeft=isDesktop?'226px':'';
   }
   if(shell){
-    shell.style.marginLeft=isDesktop?'220px':'';
+    shell.style.marginLeft=isDesktop?'226px':'';
   }
   if(bnav){
     if(isDesktop){
@@ -4280,235 +4280,150 @@ function supaUpsertVote(pollId, answers){
 
 function rHome(){
   if(!CU)return;
-  var meet=nm();
-  var rehearsal=nw();
+  var meet=nm(),rehearsal=nw();
   var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   var months=['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-  function fmtDate(d){
-    return d?days[d.getDay()]+' '+d.getDate()+' '+months[d.getMonth()]+' '+d.getFullYear():'—';
-  }
-
+  function fd(d){return d?days[d.getDay()]+' '+d.getDate()+' '+months[d.getMonth()]+' '+d.getFullYear():'—';}
   var h='';
 
-  // ── 1. NEXT MEETING + ATTENDANCE ─────────────────────────────────────
-  var activePoll=POLLS.find(function(p){return p.active;});
-  var myV=activePoll?(activePoll.votes[CU.id]||{}):null;
-  var submitted=myV&&myV._submitted===true;
-  var attending=myV&&myV.f1===true;
-
+  // ── 1. UPCOMING EVENTS ───────────────────────────────────────────────
   h+='<div class="card" style="border-top:4px solid var(--navy);margin-bottom:10px">';
-  h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Next meeting</div>';
-  if(meet){
-    h+='<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:'+(activePoll?'10':'0')+'px">';
-    h+='<div style="flex:1">';
-    h+='<div style="font-size:22px;font-weight:700;color:var(--navy);line-height:1.2">'+meet.getDate()+'</div>';
-    h+='<div style="font-size:13px;color:var(--navy);font-weight:600">'+months[meet.getMonth()]+' '+meet.getFullYear()+'</div>';
-    h+='<div style="font-size:12px;color:var(--t3);margin-top:2px">'+days[meet.getDay()]+'</div>';
-    h+='</div>';
-    // Attendance badge — only when poll exists and submitted
-    if(activePoll&&submitted){
-      h+='<div style="text-align:right">';
-      h+='<div class="badge" style="background:'+(attending?'var(--okbg)':'var(--badbg)')+';color:'+(attending?'var(--ok)':'var(--bad)')+';font-size:12px;padding:4px 10px">';
-      h+=(attending?'&#10003; Attending':'&#10007; Apology sent')+'</div>';
-      h+='</div>';
-    }
-    h+='</div>';
-  } else {
-    h+='<div style="font-size:14px;color:var(--t3);margin-bottom:8px">No upcoming meeting scheduled</div>';
+  h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Upcoming</div>';
+  if(!meet&&!rehearsal){
+    h+='<div style="font-size:13px;color:var(--t3)">No upcoming meetings scheduled</div>';
   }
-
-  // Inline poll — minimised with tap to expand
-  if(activePoll&&!submitted){
-    var pollExpHome=window._homePollExpanded===true;
-    h+='<div style="padding-top:10px;border-top:1px solid var(--bdr)">';
-    h+='<button onclick="window._homePollExpanded=!window._homePollExpanded;rHome()" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--warnbg);border:none;border-radius:8px;padding:10px 12px;cursor:pointer;touch-action:manipulation;margin-bottom:'+(pollExpHome?'10':'0')+'px">';
-    h+='<span style="font-size:13px;font-weight:700;color:var(--warn)">&#9888; Respond to poll</span>';
-    h+='<span style="font-size:12px;color:var(--warn)">'+(pollExpHome?'&#9650;':'&#9660;')+'</span>';
-    h+='</button>';
-    if(pollExpHome){
-      h+=renderPollVoter(activePoll,myV||{},false);
-    }
-    h+='</div>';
-  }
-
-  // Change response button — only when submitted
-  if(activePoll&&submitted){
-    h+='<button class="btn btn-n btn-sm" style="margin-top:8px;font-size:11px" data-pid="'+activePoll.id+'" onclick="changeVote(this.dataset.pid);rHome()">Change response</button>';
-  }
-
-  // Rehearsal line
   if(rehearsal){
-    h+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bdr);font-size:12px;color:var(--t3)">';
-    h+='Rehearsal &amp; Committee: '+days[rehearsal.getDay()]+' '+rehearsal.getDate()+' '+months[rehearsal.getMonth()];
-    h+='</div>';
+    h+='<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--bdr)">';
+    h+='<div style="text-align:center;min-width:40px"><div style="font-size:22px;font-weight:700;color:var(--navy);line-height:1">'+rehearsal.getDate()+'</div>';
+    h+='<div style="font-size:10px;color:var(--t3);font-weight:700">'+months[rehearsal.getMonth()].slice(0,3).toUpperCase()+'</div></div>';
+    h+='<div><div style="font-size:13px;font-weight:600;color:var(--navy)">Rehearsal &amp; Committee</div>';
+    h+='<div style="font-size:11px;color:var(--t3)">'+days[rehearsal.getDay()]+'</div></div></div>';
+  }
+  if(meet){
+    h+='<div style="display:flex;align-items:center;gap:12px;padding:8px 0">';
+    h+='<div style="text-align:center;min-width:40px"><div style="font-size:22px;font-weight:700;color:var(--navy);line-height:1">'+meet.getDate()+'</div>';
+    h+='<div style="font-size:10px;color:var(--t3);font-weight:700">'+months[meet.getMonth()].slice(0,3).toUpperCase()+'</div></div>';
+    h+='<div><div style="font-size:13px;font-weight:600;color:var(--navy)">Regular Lodge Meeting</div>';
+    h+='<div style="font-size:11px;color:var(--t3)">'+days[meet.getDay()]+'</div></div></div>';
   }
   h+='</div>';
 
-  // ── 2. UNREAD NOTICES ────────────────────────────────────────────────
-  var unread=unreadNotices();
-  if(unread.length){
-    var expanded=window._noticeExpanded===true;
-    h+='<div style="background:var(--bad);border-radius:10px;margin-bottom:10px;overflow:hidden">';
-    h+='<div onclick="window._noticeExpanded=!window._noticeExpanded;rHome()" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer">';
-    h+='<span style="background:rgba(255,255,255,.25);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:700;color:#fff">'+unread.length+'</span>';
-    h+='<div style="flex:1;font-weight:700;font-size:13px;color:#fff">'+unread.length+' unread notice'+(unread.length!==1?'s':'')+'</div>';
-    h+='<span style="color:rgba(255,255,255,.8);font-size:14px">'+(expanded?'&#9650;':'&#9660;')+'</span>';
-    h+='</div>';
-    if(expanded){
-      unread.slice(0,3).forEach(function(n){
-        h+='<div data-id="notices" onclick="goTo(this.dataset.id)" style="padding:8px 14px;border-top:1px solid rgba(255,255,255,.2);cursor:pointer">';
-        h+='<div style="font-size:12px;font-weight:700;color:#fff">'+n.title+'</div>';
-        h+='<div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px">'+(n.body||'').slice(0,80)+'</div>';
-        h+='</div>';
-      });
-      h+='<div data-id="notices" onclick="goTo(this.dataset.id)" style="padding:8px 14px;border-top:1px solid rgba(255,255,255,.2);text-align:center;font-size:12px;color:rgba(255,255,255,.8);cursor:pointer">View all &#8594;</div>';
-    }
+  // ── 2. POLL — only if active and not yet submitted ───────────────────
+  var activePoll=POLLS.find(function(p){return p.active;});
+  var myV=activePoll?(activePoll.votes[CU.id]||{}):null;
+  var submitted=myV&&myV._submitted===true;
+  if(activePoll&&!submitted){
+    var pollExpHome=window._homePollExpanded===true;
+    h+='<div class="card" style="margin-bottom:10px">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Poll</div>';
+    h+='<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:8px">'+activePoll.label+'</div>';
+    h+='<button onclick="window._homePollExpanded=!window._homePollExpanded;rHome()" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--warnbg);border:none;border-radius:8px;padding:10px 12px;cursor:pointer;touch-action:manipulation">';
+    h+='<span style="font-size:13px;font-weight:700;color:var(--warn)">&#9888; Respond to poll</span>';
+    h+='<span style="font-size:12px;color:var(--warn)">'+(pollExpHome?'&#9650;':'&#9660;')+'</span></button>';
+    if(pollExpHome){h+='<div style="margin-top:10px">'+renderPollVoter(activePoll,myV,false)+'</div>';}
     h+='</div>';
   }
 
-  // ── 3. MY CHARGE ASSIGNMENTS ─────────────────────────────────────────
-  var myCharges=CHARGE_ASSIGNMENTS.filter(function(a){
-    return (a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';
-  });
+  // ── 3. NEW NOTICES — unread only; tap to mark read and move to Notices ─
+  var mine=NOTICES.filter(function(n){return n.to.indexOf('all')>-1||n.to.indexOf(CU.id)>-1;});
+  var unread=mine.filter(function(n){return !n.read;});
+  if(unread.length){
+    h+='<div class="card" style="margin-bottom:10px">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">New notices ('+unread.length+')</div>';
+    unread.slice(0,5).forEach(function(n){
+      h+='<button data-nid="'+n.id+'" onclick="markHomeNoticeRead(this.dataset.nid)" style="display:flex;align-items:center;width:100%;background:none;border:none;border-top:1px solid var(--bdr);padding:8px 0;cursor:pointer;touch-action:manipulation;text-align:left;gap:10px">';
+      h+='<div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--navy)">'+n.title+'</div>';
+      h+='<div style="font-size:11px;color:var(--t3);margin-top:1px">'+n.date+'</div></div>';
+      h+='<div style="width:8px;height:8px;border-radius:50%;background:var(--bad);flex-shrink:0"></div>';
+      h+='</button>';
+    });
+    if(unread.length>5)h+='<div style="font-size:12px;color:var(--t3);padding:6px 0;text-align:center;border-top:1px solid var(--bdr)">'+(unread.length-5)+' more in Notices tab</div>';
+    h+='</div>';
+  }
+
+  // ── 4. MY CHARGES ───────────────────────────────────────────────────
+  var myCharges=CHARGE_ASSIGNMENTS.filter(function(a){return(a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';});
   if(myCharges.length){
     h+='<div class="card" style="border-top:4px solid var(--gold);margin-bottom:10px">';
     h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">My charge assignments</div>';
     myCharges.forEach(function(a){
       var lib=LIBRARY.find(function(l){return l.id===a.pid;});
       var isPrimary=a.prim===CU.id;
-      var lib_title = lib ? lib.title : (a.ptitle||'Charge');
       h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bdr)">';
-      h+='<div style="flex:1">';
-      h+='<div style="font-weight:700;font-size:13px;color:var(--navy)">'+lib_title+'</div>';
-      h+='<div style="font-size:11px;color:var(--t3)">'+a.mdate+' &middot; <span style="color:'+(isPrimary?'var(--navy)':'var(--t3)')+';">'+(isPrimary?'Primary':'Standby')+'</span></div>';
-      h+='</div>';
+      h+='<div style="flex:1"><div style="font-weight:700;font-size:13px;color:var(--navy)">'+(lib?lib.title:a.ptitle||'Charge')+'</div>';
+      h+='<div style="font-size:11px;color:var(--t3)">'+a.mdate+' &middot; '+(isPrimary?'Primary':'Standby')+'</div></div>';
       h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">Practice</button>';
       h+='</div>';
     });
-    h+='<button class="btn btn-n btn-sm" style="margin-top:8px" data-id="duties" onclick="goTo(this.dataset.id)">View all duties</button>';
     h+='</div>';
   }
 
-  // ── 4. POCKET MENTOR PROGRESS SUMMARY ────────────────────────────────
+  // ── 5. PRACTICE PROGRESS ────────────────────────────────────────────
   try{
-    var pmPassages=JSON.parse(localStorage.getItem('pm_passages')||'[]');
-    var pmProgress=JSON.parse(localStorage.getItem('pm_progress')||'{}');
-    if(pmPassages.length){
-      var totalSess=Object.values(pmProgress).reduce(function(s,p){return s+(p.sessions||0);},0);
-      var completed=Object.values(pmProgress).filter(function(p){return p.completed;}).length;
-      var avgAcc=0;
-      var withSess=Object.values(pmProgress).filter(function(p){return p.sessions>0;});
-      if(withSess.length) avgAcc=Math.round(withSess.reduce(function(s,p){return s+(p.accuracy||0);},0)/withSess.length);
-
-      h+='<div class="card" style="border-top:4px solid var(--ok);margin-bottom:10px">';
-      h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
-      h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Practice progress</div>';
-      h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">Open practice</button>';
+    var pmP=JSON.parse(localStorage.getItem('pm_passages')||'[]');
+    var pmPr=JSON.parse(localStorage.getItem('pm_progress')||'{}');
+    h+='<div class="card" style="border-top:4px solid var(--ok);margin-bottom:10px">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:'+(pmP.length?'10':'0')+'px">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Practice progress</div>';
+    h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">'+(pmP.length?'Open':'Start practising')+'</button></div>';
+    if(pmP.length){
+      var ts=Object.values(pmPr).reduce(function(s,p){return s+(p.sessions||0);},0);
+      var cp=Object.values(pmPr).filter(function(p){return p.completed;}).length;
+      var ws=Object.values(pmPr).filter(function(p){return p.sessions>0;});
+      var aa=ws.length?Math.round(ws.reduce(function(s,p){return s+(p.accuracy||0);},0)/ws.length):0;
+      h+='<div style="display:flex;gap:8px">';
+      h+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--navy)">'+pmP.length+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">PASSAGES</div></div>';
+      h+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--navy)">'+ts+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">SESSIONS</div></div>';
+      h+='<div style="flex:1;text-align:center;background:'+(cp?'var(--okbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:'+(cp?'var(--ok)':'var(--t3)')+'">'+cp+'</div><div style="font-size:10px;color:'+(cp?'var(--ok)':'var(--t3)')+';font-weight:600">COMPLETE</div></div>';
+      if(ws.length)h+='<div style="flex:1;text-align:center;background:var(--goldbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--gold)">'+aa+'%</div><div style="font-size:10px;color:var(--gold);font-weight:600">ACCURACY</div></div>';
       h+='</div>';
-      h+='<div style="display:flex;gap:10px">';
-      h+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--navy)">'+pmPassages.length+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">PASSAGES</div></div>';
-      h+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--navy)">'+totalSess+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">SESSIONS</div></div>';
-      h+='<div style="flex:1;text-align:center;background:'+(completed?'var(--okbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:'+(completed?'var(--ok)':'var(--t3)')+'">'+completed+'</div><div style="font-size:10px;color:'+(completed?'var(--ok)':'var(--t3)')+';font-weight:600">COMPLETE</div></div>';
-      if(withSess.length) h+='<div style="flex:1;text-align:center;background:var(--goldbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--gold)">'+avgAcc+'%</div><div style="font-size:10px;color:var(--gold);font-weight:600">ACCURACY</div></div>';
-      h+='</div>';
-      h+='</div>';
-    } else {
-      h+='<div class="card" style="border-top:4px solid var(--ok);margin-bottom:10px">';
-      h+='<div style="display:flex;align-items:center;justify-content:space-between">';
-      h+='<div style="font-size:13px;color:var(--t3)">No practice sessions yet</div>';
-      h+='<button class="btn btn-navy btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">Start practising</button>';
-      h+='</div></div>';
     }
+    h+='</div>';
   }catch(e){}
 
-  // ── 5. ROLE-SPECIFIC OFFICER CARDS ───────────────────────────────────
+  // ── 6. OFFICER CARDS ────────────────────────────────────────────────
   if(CU.role==='steward'){
     var ptotal=0;POLLS.forEach(function(p){ptotal+=Object.keys(p.votes).length;});
     h+='<div class="card" style="border-top:4px solid var(--gold)">';
     h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:4px">Meal Polls</div>';
-    h+='<div style="font-size:12px;color:var(--t2);margin-bottom:10px">'+ptotal+' response'+(ptotal!==1?'s':'')+' received across '+POLLS.length+' poll'+(POLLS.length!==1?'s':'')+'.</div>';
-    h+='<button class="btn btn-n btn-sm" data-id="polls" onclick="goTo(this.dataset.id)">Manage polls</button>';
-    h+='</div>';
+    h+='<div style="font-size:12px;color:var(--t2);margin-bottom:10px">'+ptotal+' response'+(ptotal!==1?'s':'')+' across '+POLLS.length+' poll'+(POLLS.length!==1?'s':'')+'</div>';
+    h+='<button class="btn btn-n btn-sm" data-id="polls" onclick="goTo(this.dataset.id)">Manage polls</button></div>';
   }
   if(CU.role==='almoner'){
     var concerns=WELFARE.filter(function(w){return w.status==='Concern'||w.status==='Serious';});
-    var birthdays14=[];var today2=new Date();
-    MEMBERS.forEach(function(m){if(!m.dob)return;var d=new Date(m.dob);var n=new Date(today2.getFullYear(),d.getMonth(),d.getDate());if(n<today2)n.setFullYear(today2.getFullYear()+1);if(Math.round((n-today2)/(86400000))<=14)birthdays14.push(gn(m));});
     h+='<div class="card" style="border-top:4px solid var(--ok)">';
-    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Welfare summary</div>';
-    h+='<div style="display:flex;gap:12px;margin-bottom:10px">';
-    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+(MEMBERS.length-concerns.length)+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">GOOD</div></div>';
-    h+='<div style="flex:1;text-align:center;background:'+(concerns.length?'var(--warnbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:'+(concerns.length?'var(--warn)':'var(--t3)')+'">'+concerns.length+'</div><div style="font-size:10px;color:'+(concerns.length?'var(--warn)':'var(--t3)')+';font-weight:600">CONCERN</div></div>';
-    h+='</div>';
-    if(birthdays14.length)h+='<div style="font-size:12px;color:var(--t2);margin-bottom:8px">&#127874; Birthdays in 14 days: '+birthdays14.join(', ')+'</div>';
-    h+='<button class="btn btn-n btn-sm" data-id="almoner" onclick="goTo(this.dataset.id)">View welfare register</button>';
-    h+='</div>';
-  }
-  if(CU.role==='treasurer'){
-    var arrears=MEMBERS.filter(function(m){return m.sub==='Arrears';});
-    var paid=MEMBERS.filter(function(m){return m.sub==='Paid';});
-    h+='<div class="card" style="border-top:4px solid var(--info)">';
-    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Subscriptions</div>';
-    h+='<div style="display:flex;gap:12px;margin-bottom:10px">';
-    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+paid.length+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">PAID</div></div>';
-    h+='<div style="flex:1;text-align:center;background:'+(arrears.length?'var(--badbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:'+(arrears.length?'var(--bad)':'var(--t3)')+'">'+arrears.length+'</div><div style="font-size:10px;color:'+(arrears.length?'var(--bad)':'var(--t3)')+';font-weight:600">ARREARS</div></div>';
-    h+='</div>';
-    h+='<button class="btn btn-n btn-sm" data-id="members" onclick="goTo(this.dataset.id)">Manage dues</button>';
-    h+='</div>';
-  }
-  if(CU.role==='mentor'){
-    var totalPairs=MENTORING_PAIRS.length;
-    var totalSess2=MENTORING_PAIRS.reduce(function(s,p){return s+p.sessions.length;},0);
-    var unmentored2=MEMBERS.filter(function(m){return (m.deg==='EA'||m.deg==='FC')&&!MENTORING_PAIRS.find(function(p){return p.mentee===m.id;});});
-    h+='<div class="card" style="border-top:4px solid var(--purp)">';
-    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Mentoring programme</div>';
+    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Welfare</div>';
     h+='<div style="display:flex;gap:10px;margin-bottom:10px">';
-    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+totalPairs+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">PAIRS</div></div>';
-    h+='<div style="flex:1;text-align:center;background:var(--infobg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--info)">'+totalSess2+'</div><div style="font-size:10px;color:var(--info);font-weight:600">SESSIONS</div></div>';
-    if(unmentored2.length)h+='<div style="flex:1;text-align:center;background:var(--badbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--bad)">'+unmentored2.length+'</div><div style="font-size:10px;color:var(--bad);font-weight:600">UNASSIGNED</div></div>';
-    h+='</div>';
-    h+='<button class="btn btn-n btn-sm" data-id="mentor" onclick="goTo(this.dataset.id)">Open mentor dashboard</button>';
-    h+='</div>';
+    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+(MEMBERS.length-concerns.length)+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">GOOD</div></div>';
+    h+='<div style="flex:1;text-align:center;background:'+(concerns.length?'var(--warnbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:'+(concerns.length?'var(--warn)':'var(--t3)')+'">'+concerns.length+'</div><div style="font-size:10px;font-weight:600;color:'+(concerns.length?'var(--warn)':'var(--t3)')+'">CONCERN</div></div>';
+    h+='</div><button class="btn btn-n btn-sm" data-id="almoner" onclick="goTo(this.dataset.id)">View register</button></div>';
   }
   if(CU.role==='dc'){
-    var pending=CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Assigned';});
-    var delivered=CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Delivered';});
+    var pending=CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Assigned';}).length;
+    var delivered=CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Delivered';}).length;
     h+='<div class="card" style="border-top:4px solid var(--navy)">';
     h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Ritual assignments</div>';
-    h+='<div style="display:flex;gap:12px;margin-bottom:10px">';
-    h+='<div style="flex:1;text-align:center;background:var(--goldbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--gold)">'+pending.length+'</div><div style="font-size:10px;color:var(--gold);font-weight:600">ASSIGNED</div></div>';
-    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+delivered.length+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">DELIVERED</div></div>';
-    h+='</div>';
-    h+='<div style="display:flex;gap:8px">';
-    h+='<button class="btn btn-n btn-sm" data-id="duties" onclick="goTo(this.dataset.id)">View duties</button>';
-    h+='<button class="btn btn-navy btn-sm" data-id="assignduty" onclick="goTo(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Assign</button>';
-    h+='</div></div>';
-  }
-  // Personal mentee cards
-  var myMenteePairs=MENTORING_PAIRS.filter(function(p){return p.personalMentor===CU.id;});
-  if(myMenteePairs.length&&CU.role!=='mentor'){
-    h+='<div class="stitle">Your mentees</div>';
-    myMenteePairs.forEach(function(pair){
-      var menteeM=gm(pair.mentee);
-      if(!menteeM)return;
-      var isOpen=typeof pmMenteeOpen!=='undefined'&&pmMenteeOpen===pair.id;
-      var ms=pair.milestones||{};
-      h+='<div class="card" style="border-left:4px solid var(--purp);margin-bottom:8px">';
-      h+='<div class="srow" style="margin-bottom:6px">';
-      h+='<div style="flex:1"><div style="font-weight:700;font-size:14px;color:var(--navy)">'+menteeM.name+'</div>';
-      h+='<div style="font-size:11px;color:var(--t3)">'+menteeM.deg+' &middot; '+pair.sessions.length+' session'+(pair.sessions.length!==1?'s':'')+' logged</div></div>';
-      h+='<span class="badge" style="background:'+(ms.raised?'var(--okbg)':ms.passed?'var(--infobg)':'var(--bg2)')+';color:'+(ms.raised?'var(--ok)':ms.passed?'var(--info)':'var(--t3)')+'">'+( ms.raised?'Raised':ms.passed?'Passed':ms.initiated?'Initiated':'Pre-init')+'</span>';
-      h+='<button class="btn btn-n btn-sm" style="margin-left:8px" data-id="'+pair.id+'" onclick="togglePMCard(this.dataset.id)">'+(isOpen?'&#9650;':'&#9660;')+'</button>';
-      h+='</div></div>';
-    });
+    h+='<div style="display:flex;gap:10px;margin-bottom:10px">';
+    h+='<div style="flex:1;text-align:center;background:var(--goldbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--gold)">'+pending+'</div><div style="font-size:10px;color:var(--gold);font-weight:600">ASSIGNED</div></div>';
+    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+delivered+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">DELIVERED</div></div>';
+    h+='</div><button class="btn btn-n btn-sm" data-id="duties" onclick="goTo(this.dataset.id)">View duties</button></div>';
   }
 
-  try{
-    document.getElementById('pane-home').innerHTML='<div style="padding:4px">'+h+'</div>';
-  }catch(e){
-    document.getElementById('pane-home').innerHTML='<div style="padding:20px;color:red">'+e.message+'</div>';
-  }
+  try{document.getElementById('pane-home').innerHTML='<div style="padding:4px">'+h+'</div>';}
+  catch(e){document.getElementById('pane-home').innerHTML='<div style="padding:20px;color:red">'+e.message+'</div>';}
+}
+
+
+function markHomeNoticeRead(nid){
+  var n=NOTICES.find(function(x){return x.id===nid;});
+  if(!n)return;
+  n.read=true;
+  // Persist read state
+  supa('notice_reads',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
+    body:JSON.stringify({notice_id:nid,member_id:CU.id})
+  }).catch(function(e){console.warn('Notice read failed:',e);});
+  buildNav();
+  rHome();
 }
 
 
