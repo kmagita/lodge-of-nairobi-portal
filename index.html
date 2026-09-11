@@ -3001,6 +3001,24 @@ var newPollDraft={fields:[]};
 
 function pmInit(){if(!window._pmLoaded){window._pmLoaded=true;load();}loadVoices&&loadVoices();showTab('library');}
 
+
+// Parse portal catechism text (Q: ... / A: ... format) into PM qnaPairs
+function parsePMCatechism(text){
+  if(!text)return [];
+  var pairs=[];
+  var blocks=text.split(/\n\n+/);
+  blocks.forEach(function(block){
+    var lines=block.trim().split(/\n/);
+    var q='',a='';
+    lines.forEach(function(line){
+      if(/^Q:/i.test(line))q=line.replace(/^Q:\s*/i,'').trim();
+      else if(/^A:/i.test(line))a=line.replace(/^A:\s*/i,'').trim();
+    });
+    if(q&&a)pairs.push({q:q,a:a,qVoiceType:'tts',qVoiceIndex:0,recKey:null});
+  });
+  return pairs;
+}
+
 function rPractice(){
   if(typeof pmInit!=='function')return;
   // Load PM state (localStorage)
@@ -3025,8 +3043,14 @@ function rPractice(){
           if(existingIds.indexOf(l.id)===-1){
             st.passages.push({
               id:l.id, title:l.title, text:l.content,
-              format:l.type==='catechism'?'catechism':'recite',
-              qnaPairs:[], speakers:[], respLines:[]
+              // format: charge/oration supports TTS; catechism for Q&A
+              format:l.type==='catechism'?'catechism':
+                     l.type==='responsive'?'responsive':'charge',
+              refVoiceType:'tts',   // use device voices — no recording needed
+              refVoiceIndex:0,      // first available TTS voice
+              refAudio:null,
+              qnaPairs:l.type==='catechism'?parsePMCatechism(l.content):[],
+              speakers:[], respLines:[]
             });
           }
         });
