@@ -4241,12 +4241,68 @@ function supaUpsertVote(pollId, answers){
 
 function rHome(){
   var meet=nm();
-  var h='<div class="hero"><div style="font-size:11px;color:var(--t3);margin-bottom:6px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Welcome, Brother</div>';
-  // Unread notices banner — compact collapsible
+  var rehearsal=nw();
+  var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  function fmtDate(d){
+    return d?days[d.getDay()]+' '+d.getDate()+' '+months[d.getMonth()]+' '+d.getFullYear():'—';
+  }
+
+  var h='';
+
+  // ── 1. NEXT MEETING + ATTENDANCE ─────────────────────────────────────
+  var activePoll=POLLS.find(function(p){return p.active;});
+  var myV=activePoll?(activePoll.votes[CU.id]||{}):null;
+  var submitted=myV&&myV._submitted===true;
+  var attending=myV&&myV.f1===true;
+  var notAttending=myV&&myV.f1===false;
+
+  h+='<div class="card" style="border-top:4px solid var(--navy);margin-bottom:10px">';
+  h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Next meeting</div>';
+  h+='<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">';
+  h+='<div>';
+  if(meet){
+    h+='<div style="font-size:22px;font-weight:700;color:var(--navy);line-height:1.2">'+meet.getDate()+'</div>';
+    h+='<div style="font-size:13px;color:var(--navy);font-weight:600">'+months[meet.getMonth()]+' '+meet.getFullYear()+'</div>';
+    h+='<div style="font-size:12px;color:var(--t3);margin-top:2px">'+days[meet.getDay()]+'</div>';
+  } else {
+    h+='<div style="font-size:14px;color:var(--t3)">No upcoming meeting</div>';
+  }
+  h+='</div>';
+
+  // Attendance status badge
+  if(activePoll&&submitted){
+    h+='<div style="text-align:right">';
+    h+='<div class="badge" style="background:'+(attending?'var(--okbg)':'var(--badbg)')+';color:'+(attending?'var(--ok)':'var(--bad)')+';font-size:12px;padding:4px 10px">';
+    h+=(attending?'&#10003; Attending':'&#10007; Apology sent')+'</div>';
+    h+='<button class="btn btn-n btn-sm" style="margin-top:6px;font-size:11px" data-id="notices" onclick="goTo(this.dataset.id)">Change</button>';
+    h+='</div>';
+  } else if(activePoll){
+    h+='<div style="text-align:right">';
+    h+='<div style="font-size:11px;color:var(--warn);font-weight:600;margin-bottom:6px">&#9888; Response pending</div>';
+    h+='<button class="btn btn-navy btn-sm" style="font-size:11px" data-id="notices" onclick="goTo(this.dataset.id)">Respond to poll</button>';
+    h+='</div>';
+  } else {
+    h+='<div style="text-align:right">';
+    h+='<div style="font-size:11px;color:var(--t3)">No active poll</div>';
+    h+='</div>';
+  }
+  h+='</div>';
+
+  // Rehearsal line
+  if(rehearsal){
+    h+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bdr);font-size:12px;color:var(--t3)">';
+    h+='Rehearsal &amp; Committee: '+days[rehearsal.getDay()]+' '+rehearsal.getDate()+' '+months[rehearsal.getMonth()];
+    h+='</div>';
+  }
+  h+='</div>';
+
+  // ── 2. UNREAD NOTICES ────────────────────────────────────────────────
   var unread=unreadNotices();
   if(unread.length){
     var expanded=window._noticeExpanded===true;
-    h+='<div style="background:var(--bad);border-radius:10px;margin-bottom:14px;overflow:hidden">';
+    h+='<div style="background:var(--bad);border-radius:10px;margin-bottom:10px;overflow:hidden">';
     h+='<div onclick="window._noticeExpanded=!window._noticeExpanded;rHome()" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer">';
     h+='<span style="background:rgba(255,255,255,.25);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:700;color:#fff">'+unread.length+'</span>';
     h+='<div style="flex:1;font-weight:700;font-size:13px;color:#fff">'+unread.length+' unread notice'+(unread.length!==1?'s':'')+'</div>';
@@ -4263,7 +4319,63 @@ function rHome(){
     }
     h+='</div>';
   }
-    // Role-specific quick action cards
+
+  // ── 3. MY CHARGE ASSIGNMENTS ─────────────────────────────────────────
+  var myCharges=CHARGE_ASSIGNMENTS.filter(function(a){
+    return (a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';
+  });
+  if(myCharges.length){
+    h+='<div class="card" style="border-top:4px solid var(--gold);margin-bottom:10px">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">My charge assignments</div>';
+    myCharges.forEach(function(a){
+      var lib=LIBRARY.find(function(l){return l.id===a.pid;});
+      var isPrimary=a.prim===CU.id;
+      var lib_title = lib ? lib.title : (a.ptitle||'Charge');
+      h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bdr)">';
+      h+='<div style="flex:1">';
+      h+='<div style="font-weight:700;font-size:13px;color:var(--navy)">'+lib_title+'</div>';
+      h+='<div style="font-size:11px;color:var(--t3)">'+a.mdate+' &middot; <span style="color:'+(isPrimary?'var(--navy)':'var(--t3)')+';">'+(isPrimary?'Primary':'Standby')+'</span></div>';
+      h+='</div>';
+      h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">Practice</button>';
+      h+='</div>';
+    });
+    h+='<button class="btn btn-n btn-sm" style="margin-top:8px" data-id="duties" onclick="goTo(this.dataset.id)">View all duties</button>';
+    h+='</div>';
+  }
+
+  // ── 4. POCKET MENTOR PROGRESS SUMMARY ────────────────────────────────
+  try{
+    var pmPassages=JSON.parse(localStorage.getItem('pm_passages')||'[]');
+    var pmProgress=JSON.parse(localStorage.getItem('pm_progress')||'{}');
+    if(pmPassages.length){
+      var totalSess=Object.values(pmProgress).reduce(function(s,p){return s+(p.sessions||0);},0);
+      var completed=Object.values(pmProgress).filter(function(p){return p.completed;}).length;
+      var avgAcc=0;
+      var withSess=Object.values(pmProgress).filter(function(p){return p.sessions>0;});
+      if(withSess.length) avgAcc=Math.round(withSess.reduce(function(s,p){return s+(p.accuracy||0);},0)/withSess.length);
+
+      h+='<div class="card" style="border-top:4px solid var(--ok);margin-bottom:10px">';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+      h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Practice progress</div>';
+      h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">Open practice</button>';
+      h+='</div>';
+      h+='<div style="display:flex;gap:10px">';
+      h+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--navy)">'+pmPassages.length+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">PASSAGES</div></div>';
+      h+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--navy)">'+totalSess+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">SESSIONS</div></div>';
+      h+='<div style="flex:1;text-align:center;background:'+(completed?'var(--okbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:'+(completed?'var(--ok)':'var(--t3)')+'">'+completed+'</div><div style="font-size:10px;color:'+(completed?'var(--ok)':'var(--t3)')+';font-weight:600">COMPLETE</div></div>';
+      if(withSess.length) h+='<div style="flex:1;text-align:center;background:var(--goldbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--gold)">'+avgAcc+'%</div><div style="font-size:10px;color:var(--gold);font-weight:600">ACCURACY</div></div>';
+      h+='</div>';
+      h+='</div>';
+    } else {
+      h+='<div class="card" style="border-top:4px solid var(--ok);margin-bottom:10px">';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between">';
+      h+='<div style="font-size:13px;color:var(--t3)">No practice sessions yet</div>';
+      h+='<button class="btn btn-navy btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">Start practising</button>';
+      h+='</div></div>';
+    }
+  }catch(e){}
+
+  // ── 5. ROLE-SPECIFIC OFFICER CARDS ───────────────────────────────────
   if(CU.role==='steward'){
     var ptotal=0;POLLS.forEach(function(p){ptotal+=Object.keys(p.votes).length;});
     h+='<div class="card" style="border-top:4px solid var(--gold)">';
@@ -4274,15 +4386,15 @@ function rHome(){
   }
   if(CU.role==='almoner'){
     var concerns=WELFARE.filter(function(w){return w.status==='Concern'||w.status==='Serious';});
-    var birthdays30=[];var today2=new Date();
-    MEMBERS.forEach(function(m){if(!m.dob)return;var d=new Date(m.dob);var n=new Date(today2.getFullYear(),d.getMonth(),d.getDate());if(n<today2)n.setFullYear(today2.getFullYear()+1);if(Math.round((n-today2)/(86400000))<=14)birthdays30.push(gn(m));});
+    var birthdays14=[];var today2=new Date();
+    MEMBERS.forEach(function(m){if(!m.dob)return;var d=new Date(m.dob);var n=new Date(today2.getFullYear(),d.getMonth(),d.getDate());if(n<today2)n.setFullYear(today2.getFullYear()+1);if(Math.round((n-today2)/(86400000))<=14)birthdays14.push(gn(m));});
     h+='<div class="card" style="border-top:4px solid var(--ok)">';
     h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Welfare summary</div>';
     h+='<div style="display:flex;gap:12px;margin-bottom:10px">';
     h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+(MEMBERS.length-concerns.length)+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">GOOD</div></div>';
     h+='<div style="flex:1;text-align:center;background:'+(concerns.length?'var(--warnbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:22px;font-weight:700;color:'+(concerns.length?'var(--warn)':'var(--t3)')+'">'+concerns.length+'</div><div style="font-size:10px;color:'+(concerns.length?'var(--warn)':'var(--t3)')+';font-weight:600">CONCERN</div></div>';
     h+='</div>';
-    if(birthdays30.length)h+='<div style="font-size:12px;color:var(--t2);margin-bottom:8px">&#127874; Birthdays in 14 days: '+birthdays30.join(', ')+'</div>';
+    if(birthdays14.length)h+='<div style="font-size:12px;color:var(--t2);margin-bottom:8px">&#127874; Birthdays in 14 days: '+birthdays14.join(', ')+'</div>';
     h+='<button class="btn btn-n btn-sm" data-id="almoner" onclick="goTo(this.dataset.id)">View welfare register</button>';
     h+='</div>';
   }
@@ -4298,66 +4410,19 @@ function rHome(){
     h+='<button class="btn btn-n btn-sm" data-id="members" onclick="goTo(this.dataset.id)">Manage dues</button>';
     h+='</div>';
   }
-  // Lodge mentor dashboard card
   if(CU.role==='mentor'){
     var totalPairs=MENTORING_PAIRS.length;
-    var totalSess=MENTORING_PAIRS.reduce(function(s,p){return s+p.sessions.length;},0);
+    var totalSess2=MENTORING_PAIRS.reduce(function(s,p){return s+p.sessions.length;},0);
     var unmentored2=MEMBERS.filter(function(m){return (m.deg==='EA'||m.deg==='FC')&&!MENTORING_PAIRS.find(function(p){return p.mentee===m.id;});});
     h+='<div class="card" style="border-top:4px solid var(--purp)">';
     h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Mentoring programme</div>';
     h+='<div style="display:flex;gap:10px;margin-bottom:10px">';
     h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+totalPairs+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">PAIRS</div></div>';
-    h+='<div style="flex:1;text-align:center;background:var(--infobg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--info)">'+totalSess+'</div><div style="font-size:10px;color:var(--info);font-weight:600">SESSIONS</div></div>';
+    h+='<div style="flex:1;text-align:center;background:var(--infobg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--info)">'+totalSess2+'</div><div style="font-size:10px;color:var(--info);font-weight:600">SESSIONS</div></div>';
     if(unmentored2.length)h+='<div style="flex:1;text-align:center;background:var(--badbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--bad)">'+unmentored2.length+'</div><div style="font-size:10px;color:var(--bad);font-weight:600">UNASSIGNED</div></div>';
     h+='</div>';
     h+='<button class="btn btn-n btn-sm" data-id="mentor" onclick="goTo(this.dataset.id)">Open mentor dashboard</button>';
     h+='</div>';
-  }
-  // Personal mentor card (any MM brother assigned as personal mentor)
-  var myMenteePairs=MENTORING_PAIRS.filter(function(p){return p.personalMentor===CU.id;});
-  if(myMenteePairs.length&&CU.role!=='mentor'){
-    h+='<div class="stitle">Your mentees</div>';
-    myMenteePairs.forEach(function(pair){
-      var menteeM=gm(pair.mentee);
-      if(!menteeM)return;
-      var isOpen=typeof pmMenteeOpen!=='undefined'&&pmMenteeOpen===pair.id;
-      var ms=pair.milestones||{};
-      h+='<div class="card" style="border-left:4px solid var(--purp);margin-bottom:8px">';
-      h+='<div class="srow" style="margin-bottom:6px">';
-      h+='<div style="flex:1"><div style="font-weight:700;font-size:14px;color:var(--navy)">'+menteeM.name+'</div>';
-      h+='<div style="font-size:11px;color:var(--t3)">'+menteeM.deg+' &middot; '+pair.sessions.length+' session'+(pair.sessions.length!==1?'s':'')+' logged</div></div>';
-      h+='<span class="badge" style="background:'+(ms.passed?'var(--okbg)':ms.initiated?'var(--infobg)':'var(--bg2)')+';color:'+(ms.passed?'var(--ok)':ms.initiated?'var(--info)':'var(--t3)')+'">'+  (ms.raised?'Raised':ms.passed?'Passed':ms.initiated?'Initiated':'Pre-init')+'</span>';
-      h+='<button class="btn btn-n btn-sm" style="margin-left:8px" data-id="'+pair.id+'" onclick="togglePMCard(this.dataset.id)">'+(isOpen?'&#9650;':'&#9660;')+'</button>';
-      h+='</div>';
-      if(isOpen){
-        // Recent sessions
-        if(pair.sessions.length){
-          h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:6px">Recent sessions</div>';
-          pair.sessions.slice(-3).reverse().forEach(function(s){
-            h+='<div style="font-size:12px;padding:5px 8px;background:var(--bg2);border-radius:6px;margin-bottom:4px">';
-            h+='<div style="font-weight:600;color:var(--navy)">'+s.date+' &mdash; '+s.topic+'</div>';
-            if(s.notes)h+='<div style="color:var(--t3);font-style:italic">'+s.notes+'</div>';
-            h+='</div>';
-          });
-        }
-        // Notes
-        h+='<div class="fg" style="margin-bottom:8px"><label class="lbl">Your notes on '+gn(menteeM)+'</label>';
-        h+='<textarea id="pmn-'+pair.id+'" style="min-height:60px">'+pair.notes+'</textarea></div>';
-        h+='<button class="btn btn-n btn-sm" data-id="'+pair.id+'" onclick="savePMNotes(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-device-floppy"/></svg> Save notes</button>';
-        // Log session
-        h+='<div style="border-top:1px solid var(--bdr);margin-top:12px;padding-top:12px">';
-        h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:8px">Log new session</div>';
-        h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-        h+='<div class="fg" style="margin:0"><label class="lbl">Date</label><input type="date" id="pms-date-'+pair.id+'" value="'+new Date().toISOString().split('T')[0]+'"></div>';
-        h+='<div class="fg" style="margin:0"><label class="lbl">Duration (min)</label><input type="number" id="pms-dur-'+pair.id+'" value="60" min="15"></div>';
-        h+='</div>';
-        h+='<div class="fg"><label class="lbl">Topic</label><input id="pms-topic-'+pair.id+'" placeholder="What was covered?"></div>';
-        h+='<div class="fg"><label class="lbl">Notes</label><input id="pms-notes-'+pair.id+'" placeholder="Progress notes"></div>';
-        h+='<button class="btn btn-navy btn-sm" data-id="'+pair.id+'" onclick="logPersonalMentorSession(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Log session</button>';
-        h+='</div>';
-      }
-      h+='</div>';
-    });
   }
   if(CU.role==='dc'){
     var pending=CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Assigned';});
@@ -4373,18 +4438,33 @@ function rHome(){
     h+='<button class="btn btn-navy btn-sm" data-id="assignduty" onclick="goTo(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Assign</button>';
     h+='</div></div>';
   }
-
+  // Personal mentee cards
+  var myMenteePairs=MENTORING_PAIRS.filter(function(p){return p.personalMentor===CU.id;});
+  if(myMenteePairs.length&&CU.role!=='mentor'){
+    h+='<div class="stitle">Your mentees</div>';
+    myMenteePairs.forEach(function(pair){
+      var menteeM=gm(pair.mentee);
+      if(!menteeM)return;
+      var isOpen=typeof pmMenteeOpen!=='undefined'&&pmMenteeOpen===pair.id;
+      var ms=pair.milestones||{};
+      h+='<div class="card" style="border-left:4px solid var(--purp);margin-bottom:8px">';
+      h+='<div class="srow" style="margin-bottom:6px">';
+      h+='<div style="flex:1"><div style="font-weight:700;font-size:14px;color:var(--navy)">'+menteeM.name+'</div>';
+      h+='<div style="font-size:11px;color:var(--t3)">'+menteeM.deg+' &middot; '+pair.sessions.length+' session'+(pair.sessions.length!==1?'s':'')+' logged</div></div>';
+      h+='<span class="badge" style="background:'+(ms.raised?'var(--okbg)':ms.passed?'var(--infobg)':'var(--bg2)')+';color:'+(ms.raised?'var(--ok)':ms.passed?'var(--info)':'var(--t3)')+'">'+( ms.raised?'Raised':ms.passed?'Passed':ms.initiated?'Initiated':'Pre-init')+'</span>';
+      h+='<button class="btn btn-n btn-sm" style="margin-left:8px" data-id="'+pair.id+'" onclick="togglePMCard(this.dataset.id)">'+(isOpen?'&#9650;':'&#9660;')+'</button>';
+      h+='</div></div>';
+    });
+  }
 
   try{
-    document.getElementById('pane-home').innerHTML=h;
+    document.getElementById('pane-home').innerHTML='<div style="padding:4px">'+h+'</div>';
   }catch(e){
     document.getElementById('pane-home').innerHTML='<div style="padding:20px;color:red">'+e.message+'</div>';
   }
 }
 
 
-
-// ── Office → role mapping (drives nav access) ────────────────────────────
 function officeToRole(office){
   var map={
     'Worshipful Master':'master',
