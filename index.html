@@ -4256,39 +4256,40 @@ function rHome(){
   var myV=activePoll?(activePoll.votes[CU.id]||{}):null;
   var submitted=myV&&myV._submitted===true;
   var attending=myV&&myV.f1===true;
-  var notAttending=myV&&myV.f1===false;
 
   h+='<div class="card" style="border-top:4px solid var(--navy);margin-bottom:10px">';
   h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Next meeting</div>';
-  h+='<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">';
-  h+='<div>';
   if(meet){
+    h+='<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:'+(activePoll?'10':'0')+'px">';
+    h+='<div style="flex:1">';
     h+='<div style="font-size:22px;font-weight:700;color:var(--navy);line-height:1.2">'+meet.getDate()+'</div>';
     h+='<div style="font-size:13px;color:var(--navy);font-weight:600">'+months[meet.getMonth()]+' '+meet.getFullYear()+'</div>';
     h+='<div style="font-size:12px;color:var(--t3);margin-top:2px">'+days[meet.getDay()]+'</div>';
+    h+='</div>';
+    // Attendance badge — only when poll exists and submitted
+    if(activePoll&&submitted){
+      h+='<div style="text-align:right">';
+      h+='<div class="badge" style="background:'+(attending?'var(--okbg)':'var(--badbg)')+';color:'+(attending?'var(--ok)':'var(--bad)')+';font-size:12px;padding:4px 10px">';
+      h+=(attending?'&#10003; Attending':'&#10007; Apology sent')+'</div>';
+      h+='</div>';
+    }
+    h+='</div>';
   } else {
-    h+='<div style="font-size:14px;color:var(--t3)">No upcoming meeting</div>';
+    h+='<div style="font-size:14px;color:var(--t3);margin-bottom:8px">No upcoming meeting scheduled</div>';
   }
-  h+='</div>';
 
-  // Attendance status badge
-  if(activePoll&&submitted){
-    h+='<div style="text-align:right">';
-    h+='<div class="badge" style="background:'+(attending?'var(--okbg)':'var(--badbg)')+';color:'+(attending?'var(--ok)':'var(--bad)')+';font-size:12px;padding:4px 10px">';
-    h+=(attending?'&#10003; Attending':'&#10007; Apology sent')+'</div>';
-    h+='<button class="btn btn-n btn-sm" style="margin-top:6px;font-size:11px" data-id="notices" onclick="goTo(this.dataset.id)">Change</button>';
-    h+='</div>';
-  } else if(activePoll){
-    h+='<div style="text-align:right">';
-    h+='<div style="font-size:11px;color:var(--warn);font-weight:600;margin-bottom:6px">&#9888; Response pending</div>';
-    h+='<button class="btn btn-navy btn-sm" style="font-size:11px" data-id="notices" onclick="goTo(this.dataset.id)">Respond to poll</button>';
-    h+='</div>';
-  } else {
-    h+='<div style="text-align:right">';
-    h+='<div style="font-size:11px;color:var(--t3)">No active poll</div>';
+  // Inline poll — only if active poll and not yet submitted
+  if(activePoll&&!submitted){
+    h+='<div style="padding-top:10px;border-top:1px solid var(--bdr)">';
+    h+='<div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">'+activePoll.label+'</div>';
+    h+=renderPollVoter(activePoll,myV||{},false);
     h+='</div>';
   }
-  h+='</div>';
+
+  // Change response button — only when submitted
+  if(activePoll&&submitted){
+    h+='<button class="btn btn-n btn-sm" style="margin-top:8px;font-size:11px" data-pid="'+activePoll.id+'" onclick="changeVote(this.dataset.pid);rHome()">Change response</button>';
+  }
 
   // Rehearsal line
   if(rehearsal){
