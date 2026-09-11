@@ -1224,7 +1224,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
     <div style="margin-bottom:13px"><label class="lbl">Email address</label><input type="email" id="li-email" placeholder="Email address"></div>
     <div style="margin-bottom:13px"><label class="lbl">Password</label><input type="password" id="li-pw" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"></div>
     <div id="li-err" style="display:none;color:var(--bad);font-size:12px;background:var(--badbg);padding:8px 10px;border-radius:6px;margin-bottom:10px">Incorrect email or password.</div>
-    <button class="btn btn-n" id="li-btn" style="width:100%;padding:11px;font-size:14px;justify-content:center" onclick="doLogin()">Sign in</button>
+    <div id="li-btn" onclick="doLogin()" style="display:block;width:100%;padding:13px 0;margin-top:6px;font-size:15px;font-weight:700;background:#0e1f45;color:#fff;border-radius:8px;cursor:pointer;text-align:center;letter-spacing:.03em;-webkit-user-select:none;user-select:none">Sign in</div>
 
   </div>
 </div>
@@ -1644,7 +1644,7 @@ function doLogin() {
   var email = document.getElementById('li-email').value.trim();
   var pw    = document.getElementById('li-pw').value;
   if(!email || !pw) return;
-  document.getElementById('li-btn').disabled = true;
+  document.getElementById('li-btn').style.opacity='0.6';
   document.getElementById('li-btn').textContent = 'Signing in…';
   supaAuth('token?grant_type=password', {email: email, password: pw})
     .then(function(r) { return r.json(); })
@@ -1652,7 +1652,7 @@ function doLogin() {
       if(data.error || !data.access_token) {
         document.getElementById('li-err').style.display = 'block';
         document.getElementById('li-err').textContent = data.error_description || 'Invalid email or password.';
-        document.getElementById('li-btn').disabled = false;
+        document.getElementById('li-btn').style.opacity='1';
         document.getElementById('li-btn').textContent = 'Sign in';
         return;
       }
@@ -1665,7 +1665,7 @@ function doLogin() {
           if(!rows || !rows.length) {
             document.getElementById('li-err').style.display = 'block';
             document.getElementById('li-err').textContent = 'Account found but no member profile. Contact the Secretary.';
-            document.getElementById('li-btn').disabled = false;
+            document.getElementById('li-btn').style.opacity='1';
             document.getElementById('li-btn').textContent = 'Sign in';
             return;
           }
@@ -1709,14 +1709,14 @@ function doLogin() {
               goTo('home');
             }
           });
-          document.getElementById('li-btn').disabled = false;
+          document.getElementById('li-btn').style.opacity='1';
           document.getElementById('li-btn').textContent = 'Sign in';
         });
     })
     .catch(function(err) {
       document.getElementById('li-err').style.display = 'block';
       document.getElementById('li-err').textContent = 'Network error. Check your connection.';
-      document.getElementById('li-btn').disabled = false;
+      document.getElementById('li-btn').style.opacity='1';
       document.getElementById('li-btn').textContent = 'Sign in';
     });
 }
