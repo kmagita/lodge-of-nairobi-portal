@@ -1,3 +1,4 @@
+h+='<button data-nid="'+n.id+'" onclick="event.stopPropagation();window._pollExpanded=(window._pollExpanded===this.dataset.nid?null:this.dataset.nid);rNotices()" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--warnbg);border:none;border-radius:8px;padding:10px 12px;cursor:pointer;touch-action:manipulation">';
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3655,13 +3656,32 @@ function rNotices(){
       h+='<div style="padding:0 14px 14px;border-top:1px solid var(--bdr)">';
       h+='<div style="font-size:13px;color:var(--t2);line-height:1.6;margin-top:12px">'+n.body+'</div>';
 
-      // If this is a poll notice, show the voting form inline
+      // If this is a poll notice, show minimised poll with tap to expand
       if(relPoll&&relPoll.active){
         var myV=relPoll.votes[CU.id]||{};
         var submitted=myV._submitted===true;
-        h+='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr)">';
-        h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">'+relPoll.label+'</div>';
-        h+=renderPollVoter(relPoll,myV,!relPoll.active);
+        var pollExpanded=window._pollExpanded===n.id;
+        h+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--bdr)">';
+        if(submitted){
+          // Already responded — show status only
+          var att=myV.f1===true?'Attending':myV.f1===false?'Not attending':'—';
+          var meal=myV.f2?' &middot; '+myV.f2:'';
+          h+='<div style="background:var(--okbg);border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between">';
+          h+='<div><span style="color:var(--ok);font-weight:700">&#10003; Submitted</span><span style="font-size:12px;color:var(--t2)"> — '+att+meal+'</span></div>';
+          h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-pid="'+relPoll.id+'" onclick="event.stopPropagation();changeVote(this.dataset.pid);rNotices()">Change</button>';
+          h+='</div>';
+        } else {
+          // Not yet responded — show expand toggle
+          h+='<button data-nid="'+n.id+'" onclick="event.stopPropagation();window._pollExpanded=(window._pollExpanded===this.dataset.nid?null:this.dataset.nid);rNotices()" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--warnbg);border:none;border-radius:8px;padding:10px 12px;cursor:pointer;touch-action:manipulation">';
+          h+='<span style="font-size:13px;font-weight:700;color:var(--warn)">&#9888; Respond to this poll</span>';
+          h+='<span style="font-size:12px;color:var(--warn)">'+(pollExpanded?'&#9650;':'&#9660;')+'</span>';
+          h+='</button>';
+          if(pollExpanded){
+            h+='<div style="margin-top:10px">';
+            h+=renderPollVoter(relPoll,myV,false);
+            h+='</div>';
+          }
+        }
         h+='</div>';
       }
       h+='</div>';
@@ -4278,11 +4298,17 @@ function rHome(){
     h+='<div style="font-size:14px;color:var(--t3);margin-bottom:8px">No upcoming meeting scheduled</div>';
   }
 
-  // Inline poll — only if active poll and not yet submitted
+  // Inline poll — minimised with tap to expand
   if(activePoll&&!submitted){
+    var pollExpHome=window._homePollExpanded===true;
     h+='<div style="padding-top:10px;border-top:1px solid var(--bdr)">';
-    h+='<div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">'+activePoll.label+'</div>';
-    h+=renderPollVoter(activePoll,myV||{},false);
+    h+='<button onclick="window._homePollExpanded=!window._homePollExpanded;rHome()" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--warnbg);border:none;border-radius:8px;padding:10px 12px;cursor:pointer;touch-action:manipulation;margin-bottom:'+(pollExpHome?'10':'0')+'px">';
+    h+='<span style="font-size:13px;font-weight:700;color:var(--warn)">&#9888; Respond to poll</span>';
+    h+='<span style="font-size:12px;color:var(--warn)">'+(pollExpHome?'&#9650;':'&#9660;')+'</span>';
+    h+='</button>';
+    if(pollExpHome){
+      h+=renderPollVoter(activePoll,myV||{},false);
+    }
     h+='</div>';
   }
 
@@ -5637,8 +5663,8 @@ function renderPollVoter(poll,myV,isClosed){
     if(field.type==='yesno'){
       [{lbl:'Yes',val:true},{lbl:'No',val:false}].forEach(function(o){
         var active=myV[field.id]===o.val;
-        h+='<div data-pid="'+poll.id+'" data-fid="'+field.id+'" data-bval="'+o.val+'" onclick="castVote(this.dataset.pid,this.dataset.fid,JSON.parse(this.dataset.bval))"';
-        h+=' style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border-radius:8px;border:2px solid '+(active?'var(--navy)':'var(--bdr)')+';background:'+(active?'var(--goldbg)':'var(--white)')+';cursor:pointer">';
+        h+='<button data-pid="'+poll.id+'" data-fid="'+field.id+'" data-bval="'+o.val+'" onclick="castVote(this.dataset.pid,this.dataset.fid,JSON.parse(this.dataset.bval))"';
+        h+=' style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border-radius:8px;border:2px solid '+(active?'var(--navy)':'var(--bdr)')+';background:'+(active?'var(--goldbg)':'var(--white)')+';cursor:pointer;width:100%;touch-action:manipulation">';
         h+='<div style="width:20px;height:20px;border-radius:50%;border:2px solid '+(active?'var(--navy)':'var(--t3)')+';display:flex;align-items:center;justify-content:center;flex-shrink:0">';
         if(active)h+='<div style="width:10px;height:10px;border-radius:50%;background:var(--navy)"></div>';
         h+='</div>';
@@ -5648,8 +5674,8 @@ function renderPollVoter(poll,myV,isClosed){
     } else if(field.type==='choice'){
       (field.options||[]).forEach(function(opt){
         var active=myV[field.id]===opt;
-        h+='<div data-pid="'+poll.id+'" data-fid="'+field.id+'" data-opt="'+opt+'" onclick="castVote(this.dataset.pid,this.dataset.fid,this.dataset.opt)"';
-        h+=' style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border-radius:8px;border:2px solid '+(active?'var(--navy)':'var(--bdr)')+';background:'+(active?'var(--goldbg)':'var(--white)')+';cursor:pointer">';
+        h+='<button data-pid="'+poll.id+'" data-fid="'+field.id+'" data-opt="'+opt+'" onclick="castVote(this.dataset.pid,this.dataset.fid,this.dataset.opt)"';
+        h+=' style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border-radius:8px;border:2px solid '+(active?'var(--navy)':'var(--bdr)')+';background:'+(active?'var(--goldbg)':'var(--white)')+';cursor:pointer;width:100%;touch-action:manipulation">';
         h+='<div style="width:20px;height:20px;border-radius:4px;border:2px solid '+(active?'var(--navy)':'var(--t3)')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;background:'+(active?'var(--navy)':'transparent')+'">';
         if(active)h+='<svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" fill="none"/></svg>';
         h+='</div>';
