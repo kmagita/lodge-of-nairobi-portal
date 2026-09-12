@@ -2781,11 +2781,8 @@ function castVote(pid,fid,val){
   p.votes[CU.id][fid]=val;
   supaUpsertVote(pid,p.votes[CU.id]);
   // Re-render whichever pane is currently active
-  var active=document.querySelector('.pane.on');
-  var id=active?active.id.replace('pane-',''):'';
-  if(id==='notices')rNotices();
-  else if(id==='polls'&&CU.role==='steward')rPolls();
-  else rHome();
+  // After submitting, move to Notices tab where poll response lives
+  goTo('notices');
 }
 
 function castVoteText(pid,fid,val){
@@ -3752,8 +3749,8 @@ function rNotices(){
       h+='<div style="padding:0 14px 14px;border-top:1px solid var(--bdr)">';
       h+='<div style="font-size:13px;color:var(--t2);line-height:1.6;margin-top:12px">'+n.body+'</div>';
 
-      // If this is a poll notice, show minimised poll with tap to expand
-      if(relPoll&&relPoll.active){
+      // Poll notice — show submitted state or voting form
+      if(relPoll){
         var myV=relPoll.votes[CU.id]||{};
         var submitted=myV._submitted===true;
         var pollExpanded=window._pollExpanded===n.id;
@@ -4416,7 +4413,7 @@ function rHome(){
   }
   h+='</div>';
 
-  // ── 2. POLL — only if active and not yet submitted ───────────────────
+  // ── 2. POLL — show only if not yet submitted; moves to Notices after voting ─
   var activePoll=POLLS.find(function(p){return p.active;});
   var myV=activePoll?(activePoll.votes[CU.id]||{}):null;
   var submitted=myV&&myV._submitted===true;
@@ -4428,7 +4425,7 @@ function rHome(){
     h+='<button onclick="window._homePollExpanded=!window._homePollExpanded;rHome()" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--warnbg);border:none;border-radius:8px;padding:10px 12px;cursor:pointer;touch-action:manipulation">';
     h+='<span style="font-size:13px;font-weight:700;color:var(--warn)">&#9888; Respond to poll</span>';
     h+='<span style="font-size:12px;color:var(--warn)">'+(pollExpHome?'&#9650;':'&#9660;')+'</span></button>';
-    if(pollExpHome){h+='<div style="margin-top:10px">'+renderPollVoter(activePoll,myV,false)+'</div>';}
+    if(pollExpHome){h+='<div style="margin-top:10px">'+renderPollVoter(activePoll,myV||{},false)+'</div>';}
     h+='</div>';
   }
 
@@ -5776,7 +5773,11 @@ function submitVote(pollId){
   poll.votes[CU.id]._submitted = true;
   poll.votes[CU.id]._submittedAt = new Date().toISOString();
   supaUpsertVote(pollId, poll.votes[CU.id]);
-  rPolls();
+  var active=document.querySelector('.pane.on');
+  var id=active?active.id.replace('pane-',''):'';
+  if(id==='notices')rNotices();
+  else if(id==='polls'&&CU.role==='steward')rPolls();
+  else rHome();
 }
 
 function changeVote(pollId){
