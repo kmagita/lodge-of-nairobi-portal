@@ -2780,7 +2780,12 @@ function castVote(pid,fid,val){
   if(!p.votes[CU.id])p.votes[CU.id]={};
   p.votes[CU.id][fid]=val;
   supaUpsertVote(pid,p.votes[CU.id]);
-  rPolls();
+  // Re-render whichever pane is currently active
+  var active=document.querySelector('.pane.on');
+  var id=active?active.id.replace('pane-',''):'';
+  if(id==='notices')rNotices();
+  else if(id==='polls'&&CU.role==='steward')rPolls();
+  else rHome();
 }
 
 function castVoteText(pid,fid,val){
@@ -2789,6 +2794,11 @@ function castVoteText(pid,fid,val){
   if(!p.votes[CU.id])p.votes[CU.id]={};
   p.votes[CU.id][fid]=val;
   supaUpsertVote(pid,p.votes[CU.id]);
+  var active=document.querySelector('.pane.on');
+  var id=active?active.id.replace('pane-',''):'';
+  if(id==='notices')rNotices();
+  else if(id==='polls'&&CU.role==='steward')rPolls();
+  else rHome();
 }
 
 function createPoll(){
