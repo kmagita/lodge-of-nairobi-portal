@@ -79,11 +79,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 
 
 @media (min-width: 768px) {
-  /* Sidebar: fixed left column */
+  /* Fixed sidebar */
   .bnav {
-    position: fixed;
+    position: fixed !important;
     top: 0; left: 0; bottom: 0; right: auto;
-    width: 220px;
+    width: 224px;
     border-top: none;
     border-right: 2px solid var(--gb);
     border-bottom: none;
@@ -91,19 +91,22 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
     justify-content: flex-start;
     align-items: stretch;
     padding: 70px 0 12px;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow-y: auto; overflow-x: hidden;
     transform: none;
     scrollbar-width: none;
+    background: var(--white);
   }
   .bnav::-webkit-scrollbar { display: none; }
 
-  /* Content: offset right of sidebar */
-  .shell { margin-left: 226px; }
-  .pane  { padding: 24px 32px 48px; }
-  #pane-practice { max-width: none; padding: 0; }
+  /* Push ALL app content right of sidebar using padding on pg-app */
+  #pg-app {
+    padding-left: 226px;
+  }
 
-  /* Nav items: sidebar row */
+  /* Shell and topbar need no extra margin — pg-app padding handles it */
+  .shell { margin-left: 0; }
+
+  /* Nav items */
   .nb {
     flex-direction: row;
     justify-content: flex-start;
@@ -123,10 +126,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
   .card { border-radius: 10px; }
   .fg   { margin-bottom: 14px; }
 }
+
 @media (min-width: 1100px) {
-  .bnav  { width: 240px; }
-  .shell { margin-left: 246px; }
-  .pane  { padding: 28px 40px 52px; }
+  .bnav  { width: 244px; }
+  #pg-app { padding-left: 246px; }
 }
 </style>
 <style id="pm-styles">
@@ -2207,10 +2210,10 @@ function buildNav(){
   var isDesktop=window.innerWidth>=768;
   var topbar=document.querySelector('.topbar');
   if(topbar){
-    topbar.style.marginLeft=isDesktop?'226px':'';
+    // CSS handles topbar offset via #pg-app padding
   }
   if(shell){
-    shell.style.marginLeft=isDesktop?'226px':'';
+    // CSS handles shell offset via #pg-app padding
   }
   if(bnav){
     if(isDesktop){
@@ -3198,7 +3201,6 @@ function rDuties(){
 
 function rLibrary(){
   if(!CU)return;
-  buildNav();
   console.log('rLibrary called, LIBRARY.length=',LIBRARY.length,'CU.role=',CU.role,'libContentId=',libContentId);
   var isDC=CU.role==='dc';
   var DEG={EA:1,FC:2,MM:3};
