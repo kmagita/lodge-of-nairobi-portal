@@ -99,7 +99,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
   .bnav::-webkit-scrollbar { display: none; }
 
   /* Content: offset right of sidebar */
-  .shell { margin-left: 220px; }
+  .shell { margin-left: 226px; }
   .pane  { padding: 24px 32px 48px; }
   #pane-practice { max-width: none; padding: 0; }
 
@@ -3198,6 +3198,7 @@ function rDuties(){
 
 function rLibrary(){
   if(!CU)return;
+  buildNav();
   console.log('rLibrary called, LIBRARY.length=',LIBRARY.length,'CU.role=',CU.role,'libContentId=',libContentId);
   var isDC=CU.role==='dc';
   var DEG={EA:1,FC:2,MM:3};
