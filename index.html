@@ -2530,6 +2530,30 @@ function rMembers(){
     h+='</div></div>';
   });
   h+='</div>';
+  // ── Historical subscription payment (Treasurer) ──────────────────────
+  if(CU.role==='treasurer'||CU.role==='secretary'||CU.role==='master'){
+    var hSubOpen=window._histSubOpen===true;
+    h+='<div class="stitle" style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">';
+    h+='<span>Historical subscription payment</span>';
+    h+='<button class="btn btn-n btn-sm" onclick="window._histSubOpen=!window._histSubOpen;rMembers()">'+(hSubOpen?'&#9650; Hide':'&#9660; Add record')+'</button></div>';
+    if(hSubOpen){
+      h+='<div class="card">';
+      h+='<div class="fg"><label class="lbl">Member</label><select id="hsp-member"><option value="">— Select —</option>';
+      MEMBERS.forEach(function(m){h+='<option value="'+m.id+'">'+gn(m)+'</option>';});
+      h+='</select></div>';
+      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+      h+='<div class="fg" style="margin:0"><label class="lbl">Year</label><input id="hsp-year" type="number" placeholder="e.g. 2024"></div>';
+      h+='<div class="fg" style="margin:0"><label class="lbl">Amount (KES)</label><input id="hsp-amount" type="number" placeholder="e.g. 5000"></div>';
+      h+='</div>';
+      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">';
+      h+='<div class="fg" style="margin:0"><label class="lbl">Payment date</label><input type="date" id="hsp-date"></div>';
+      h+='<div class="fg" style="margin:0"><label class="lbl">Method</label><select id="hsp-method"><option value="">—</option><option>Bank transfer</option><option>M-Pesa</option><option>Cash</option><option>Cheque</option></select></div>';
+      h+='</div>';
+      h+='<div class="fg" style="margin-top:10px"><label class="lbl">Reference</label><input id="hsp-ref" placeholder="Optional ref number"></div>';
+      h+='<button class="btn btn-navy" style="width:100%;justify-content:center;margin-top:4px" onclick="addHistoricalSubPayment()">Save payment record</button>';
+      h+='</div>';
+    }
+  }
   document.getElementById('pane-members').innerHTML=h;
 }
 
@@ -3195,6 +3219,28 @@ function rDuties(){
       h+='<div style="font-size:10px;color:var(--t3);margin-top:4px">Confirmed by '+(cby?cby.name:'')+'  &middot;  '+dl.confirmedDate+'</div>';
       h+='</div>';
     });
+  }
+  // ── Historical charge entry (DC) ─────────────────────────────────────
+  if(CU.role==='dc'){
+    var hOpen=window._histDutiesOpen===true;
+    h+='<div class="stitle" style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">';
+    h+='<span>Historical charge delivery</span>';
+    h+='<button class="btn btn-n btn-sm" onclick="window._histDutiesOpen=!window._histDutiesOpen;rDuties()">'+(hOpen?'&#9650; Hide':'&#9660; Add record')+'</button></div>';
+    if(hOpen){
+      h+='<div class="card">';
+      h+='<div class="fg"><label class="lbl">Passage</label><select id="hist-passage"><option value="">— Select —</option>';
+      LIBRARY.forEach(function(l){h+='<option value="'+l.id+'">'+l.title+'</option>';});
+      h+='</select></div>';
+      h+='<div class="fg"><label class="lbl">Meeting date</label><input type="date" id="hist-date"></div>';
+      h+='<div class="fg"><label class="lbl">Assigned to (primary)</label><select id="hist-primary"><option value="">— Select —</option>';
+      MEMBERS.forEach(function(m){h+='<option value="'+m.id+'">'+gn(m)+'</option>';});
+      h+='</select></div>';
+      h+='<div class="fg"><label class="lbl">Delivered by</label><select id="hist-delivered-by"><option value="">— Select —</option>';
+      MEMBERS.forEach(function(m){h+='<option value="'+m.id+'">'+gn(m)+'</option>';});
+      h+='</select></div>';
+      h+='<button class="btn btn-navy" style="width:100%;justify-content:center" onclick="addHistoricalDelivery()">Save historical record</button>';
+      h+='</div>';
+    }
   }
   document.getElementById('pane-duties').innerHTML=h;
 }
@@ -3872,6 +3918,26 @@ function rMentor(){
       h+='</div>';
     });
   }
+  // Historical session entry
+  if(CU.role==='mentor'){
+    h+='<div class="stitle" style="margin-top:16px">Add historical mentoring session</div>';
+    h+='<div class="card">';
+    h+='<div class="fg"><label class="lbl">Mentee</label><select id="hist-mentee"><option value="">— Select —</option>';
+    h+='<option value="">— Select —</option>';
+    MENTORING_PAIRS.forEach(function(pair){
+      var m=gm(pair.mentee); if(!m)return;
+      h+='<option value="'+pair.id+'">'+gn(m)+'</option>';
+    });
+    h+='</select></div>';
+    h+='<div class="fg"><label class="lbl">Topic</label><input id="hist-sess-topic" placeholder="e.g. First Degree catechism"></div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+    h+='<div class="fg" style="margin:0"><label class="lbl">Date</label><input type="date" id="hist-sess-date"></div>';
+    h+='<div class="fg" style="margin:0"><label class="lbl">Duration (mins)</label><input type="number" id="hist-sess-dur" placeholder="e.g. 45"></div>';
+    h+='</div>';
+    h+='<div class="fg" style="margin-top:10px"><label class="lbl">Notes</label><input id="hist-sess-notes" placeholder="Optional"></div>';
+    h+='<button class="btn btn-navy" style="width:100%;justify-content:center;margin-top:4px" onclick="saveHistoricalSession()">Save session</button>';
+    h+='</div>';
+  }
   document.getElementById('pane-mentor').innerHTML=h;
 }
 
@@ -4451,9 +4517,10 @@ function markHomeNoticeRead(nid){
   if(!n)return;
   n.read=true;
   // Persist read state
-  supa('notice_reads',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
+  // notice_reads table optional — skip if not exists
+  try{supa('notice_reads',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
     body:JSON.stringify({notice_id:nid,member_id:CU.id})
-  }).catch(function(e){console.warn('Notice read failed:',e);});
+  }).catch(function(e){console.warn('Notice read failed:',e);})}catch(e){}
   buildNav();
   rHome();
 }
@@ -5160,6 +5227,17 @@ function rAlmoner(){
     h+='<button class="btn btn-ok" style="flex:1" onclick="publishAlmonerReport(true)"><svg class="ico" width="16" height="16"><use href="#ico-bell"/></svg> Notify all</button>';
     h+='</div></div>';
   }
+  // Historical welfare contact
+  h+='<div class="stitle" style="margin-top:16px">Add historical welfare contact</div>';
+  h+='<div class="card">';
+  h+='<div class="fg"><label class="lbl">Member</label><select id="hist-welf-member"><option value="">— Select —</option>';
+  MEMBERS.forEach(function(m){h+='<option value="'+m.id+'">'+gn(m)+'</option>';});
+  h+='</select></div>';
+  h+='<div class="fg"><label class="lbl">Contact method</label><select id="hist-welf-method"><option value="">—</option><option>Visit</option><option>Phone</option><option>WhatsApp</option><option>Email</option><option>Card</option></select></div>';
+  h+='<div class="fg"><label class="lbl">Date of contact</label><input type="date" id="hist-welf-date"></div>';
+  h+='<div class="fg"><label class="lbl">Notes</label><input id="hist-welf-notes" placeholder="Optional"></div>';
+  h+='<button class="btn btn-navy" style="width:100%;justify-content:center" onclick="saveHistoricalWelfareContact()">Save contact record</button>';
+  h+='</div>';
   document.getElementById('pane-almoner').innerHTML=h;
 }
 
@@ -5640,7 +5718,7 @@ function renderPollVoter(poll,myV,isClosed){
         if(active)h+='<div style="width:10px;height:10px;border-radius:50%;background:var(--navy)"></div>';
         h+='</div>';
         h+='<span style="font-size:14px;font-weight:'+(active?'700':'400')+';color:'+(active?'var(--navy)':'var(--t2)')+'">'+o.lbl+'</span>';
-        h+='</div>';
+        h+='</button>';
       });
     } else if(field.type==='choice'){
       (field.options||[]).forEach(function(opt){
@@ -5651,7 +5729,7 @@ function renderPollVoter(poll,myV,isClosed){
         if(active)h+='<svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" fill="none"/></svg>';
         h+='</div>';
         h+='<span style="font-size:14px;font-weight:'+(active?'700':'400')+';color:'+(active?'var(--navy)':'var(--t2)')+'">'+opt+'</span>';
-        h+='</div>';
+        h+='</button>';
       });
     } else if(field.type==='text'){
       h+='<input value="'+(myV[field.id]||'')+'" placeholder="Enter name" style="width:100%"';
@@ -5767,6 +5845,191 @@ function correctDeliveryAny(aid){
   var m=MEMBERS.find(function(x){return gn(x).toLowerCase().indexOf(name.toLowerCase())>-1;});
   if(!m){alert('Member not found. Try a partial name.');return;}
   applyDeliveryCorrection(aid,m.id);
+}
+
+
+// ── Historical record entry ────────────────────────────────────────────────
+
+function addHistoricalDelivery(){
+  var pid=document.getElementById('hist-passage');
+  var prim=document.getElementById('hist-primary');
+  var dby=document.getElementById('hist-delivered-by');
+  var mdate=document.getElementById('hist-date');
+  if(!pid||!pid.value){alert('Select a passage.');return;}
+  if(!prim||!prim.value){alert('Select the assigned speaker.');return;}
+  if(!dby||!dby.value){alert('Select who delivered.');return;}
+  if(!mdate||!mdate.value){alert('Enter the meeting date.');return;}
+  var lib=LIBRARY.find(function(l){return l.id===pid.value;});
+  var asgn={id:'hist-'+Date.now(),pid:pid.value,
+    ptitle:lib?lib.title:'',mdate:mdate.value,
+    prim:prim.value,back:'',by:CU.id,
+    status:'Delivered',dby:dby.value};
+  CHARGE_ASSIGNMENTS.push(asgn);
+  supa('charge_assignments',{method:'POST',
+    body:JSON.stringify({passage_id:pid.value,meeting_date:mdate.value,
+      primary_id:prim.value,backup_id:null,
+      assigned_by:CU.id,status:'Delivered',delivered_by:dby.value})
+  }).then(function(r){return r.json();})
+  .then(function(d){if(d&&d[0])asgn.id=d[0].id;})
+  .catch(function(e){console.warn('Historical delivery save failed:',e);});
+  pid.value='';prim.value='';dby.value='';
+  alert('Historical delivery recorded.');
+  window._histDutiesOpen=false;
+  rDuties();
+}
+
+function addHistoricalWelfareContact(mid){
+  var method=document.getElementById('hwc-method-'+mid);
+  var date=document.getElementById('hwc-date-'+mid);
+  var notes=document.getElementById('hwc-notes-'+mid);
+  if(!method||!method.value){alert('Select contact method.');return;}
+  if(!date||!date.value){alert('Enter date of contact.');return;}
+  var w=WELFARE.find(function(x){return x.memberId===mid;});
+  if(!w){alert('No welfare record. Save a welfare status for this member first.');return;}
+  var entry={date:date.value,method:method.value,
+    notes:notes?notes.value:'',by:CU.id};
+  w.contacts=w.contacts||[];
+  w.contacts.unshift(entry);
+  if(w.lastContact<date.value)w.lastContact=date.value;
+  if(w.id){
+    supa('welfare_contacts',{method:'POST',
+      body:JSON.stringify({welfare_id:w.id,date:date.value,
+        method:entry.method,notes:entry.notes,logged_by:CU.id})
+    }).catch(function(e){console.warn('Welfare contact failed:',e);});
+    supa('welfare?member_id=eq.'+mid,{method:'PATCH',
+      body:JSON.stringify({last_contact:w.lastContact})
+    }).catch(function(e){console.warn('Welfare update failed:',e);});
+  }
+  window['_hwcOpen'+mid]=false;
+  rAlmoner();
+}
+
+function addHistoricalMentoringSession(pid){
+  var pair=MENTORING_PAIRS.find(function(p){return p.id===pid;});
+  if(!pair)return;
+  var topic=document.getElementById('hms-topic-'+pid);
+  var date=document.getElementById('hms-date-'+pid);
+  var dur=document.getElementById('hms-dur-'+pid);
+  var notes=document.getElementById('hms-notes-'+pid);
+  if(!topic||!topic.value.trim()){alert('Enter session topic.');return;}
+  if(!date||!date.value){alert('Enter session date.');return;}
+  var sess={date:date.value,topic:topic.value.trim(),
+    duration:dur&&dur.value?parseInt(dur.value):null,
+    notes:notes?notes.value:'',by:CU.id};
+  pair.sessions=pair.sessions||[];
+  pair.sessions.push(sess);
+  pair.sessions.sort(function(a,b){return b.date.localeCompare(a.date);});
+  supa('mentoring_sessions',{method:'POST',
+    body:JSON.stringify({pair_id:pid,date:date.value,topic:sess.topic,
+      duration:sess.duration,notes:sess.notes,logged_by:CU.id})
+  }).catch(function(e){console.warn('Session save failed:',e);});
+  window['_hmsOpen'+pid]=false;
+  rMentor();
+}
+
+function addHistoricalSubPayment(){
+  var mid=document.getElementById('hsp-member');
+  var year=document.getElementById('hsp-year');
+  var amount=document.getElementById('hsp-amount');
+  var date=document.getElementById('hsp-date');
+  var method=document.getElementById('hsp-method');
+  var ref=document.getElementById('hsp-ref');
+  if(!mid||!mid.value){alert('Select member.');return;}
+  if(!year||!year.value){alert('Enter subscription year.');return;}
+  if(!amount||!parseFloat(amount.value)){alert('Enter amount.');return;}
+  if(!date||!date.value){alert('Enter payment date.');return;}
+  if(!method||!method.value){alert('Select payment method.');return;}
+  var rec={memberId:mid.value,year:year.value,
+    amount:parseFloat(amount.value),date:date.value,
+    method:method.value,reference:ref?ref.value:'',
+    recordedBy:CU.id};
+  SUB_PAYMENTS.push(rec);
+  var m=gm(mid.value);
+  if(m){m.sub='Paid';
+    supa('members?id=eq.'+mid.value,{method:'PATCH',
+      body:JSON.stringify({sub:'Paid'})
+    }).catch(function(e){});
+  }
+  supa('sub_payments',{method:'POST',
+    body:JSON.stringify({member_id:mid.value,year:rec.year,
+      amount:rec.amount,date:rec.date,method:rec.method,
+      reference:rec.reference,recorded_by:CU.id})
+  }).then(function(r){return r.json();})
+  .then(function(d){if(d&&d[0])rec.id=d[0].id;})
+  .catch(function(e){console.warn('Sub payment failed:',e);});
+  mid.value='';year.value='';amount.value='';
+  alert('Historical subscription payment recorded.');
+  window._histSubOpen=false;
+  rMembers();
+}
+
+var _histDutiesOpen=false;
+var _histSubOpen=false;
+
+
+function saveHistoricalSession(){
+  var pid=document.getElementById('hist-mentee');
+  var topic=document.getElementById('hist-sess-topic');
+  var date=document.getElementById('hist-sess-date');
+  var dur=document.getElementById('hist-sess-dur');
+  var notes=document.getElementById('hist-sess-notes');
+  if(!pid||!pid.value){alert('Select a mentee.');return;}
+  if(!topic||!topic.value.trim()){alert('Enter session topic.');return;}
+  if(!date||!date.value){alert('Enter session date.');return;}
+  var pair=MENTORING_PAIRS.find(function(p){return p.id===pid.value;});
+  if(!pair){alert('Pair not found.');return;}
+  var sess={date:date.value,topic:topic.value.trim(),
+    duration:dur&&dur.value?parseInt(dur.value):null,
+    notes:notes?notes.value:''};
+  pair.sessions=pair.sessions||[];
+  pair.sessions.push(sess);
+  pair.sessions.sort(function(a,b){return b.date.localeCompare(a.date);});
+  supa('mentoring_sessions',{method:'POST',
+    body:JSON.stringify({pair_id:pid.value,date:sess.date,topic:sess.topic,
+      duration:sess.duration,notes:sess.notes,logged_by:CU.id})
+  }).catch(function(e){console.warn(e);});
+  alert('Session recorded.');
+  topic.value='';date.value='';if(dur)dur.value='';if(notes)notes.value='';
+  rMentor();
+}
+
+
+function saveHistoricalWelfareContact(){
+  var mid=document.getElementById('hist-welf-member');
+  var method=document.getElementById('hist-welf-method');
+  var date=document.getElementById('hist-welf-date');
+  var notes=document.getElementById('hist-welf-notes');
+  if(!mid||!mid.value){alert('Select a member.');return;}
+  if(!method||!method.value){alert('Select contact method.');return;}
+  if(!date||!date.value){alert('Enter contact date.');return;}
+  // Find or create welfare record
+  var w=WELFARE.find(function(x){return x.memberId===mid.value;});
+  var entry={date:date.value,method:method.value,notes:notes?notes.value:'',by:CU.id};
+  if(w){
+    w.contacts=w.contacts||[];w.contacts.unshift(entry);
+    if(!w.lastContact||w.lastContact<date.value)w.lastContact=date.value;
+    supa('welfare_contacts',{method:'POST',
+      body:JSON.stringify({welfare_id:w.id,date:date.value,
+        method:entry.method,notes:entry.notes,logged_by:CU.id})
+    }).catch(function(e){console.warn(e);});
+  } else {
+    // Create welfare record first
+    supa('welfare',{method:'POST',
+      body:JSON.stringify({member_id:mid.value,status:'Good',last_contact:date.value})
+    }).then(function(r){return r.json();})
+    .then(function(d){
+      if(d&&d[0]){
+        WELFARE.push({id:d[0].id,memberId:mid.value,status:'Good',lastContact:date.value,contacts:[entry]});
+        supa('welfare_contacts',{method:'POST',
+          body:JSON.stringify({welfare_id:d[0].id,date:date.value,
+            method:entry.method,notes:entry.notes,logged_by:CU.id})
+        }).catch(function(e){});
+      }
+    });
+  }
+  alert('Welfare contact recorded.');
+  mid.value='';method.value='';date.value='';if(notes)notes.value='';
+  rAlmoner();
 }
 
 
