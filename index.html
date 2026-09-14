@@ -1813,6 +1813,13 @@ function loadAppData() {
                 degree:l.degree||'EA', type:l.type||'charge', qa:l.qa||[]};
       });
     }),
+    safeFetch('event_rsvp?select=*', function(d){
+      RSVP_DATA={};
+      d.forEach(function(r){
+        if(!RSVP_DATA[r.event_id])RSVP_DATA[r.event_id]={};
+        RSVP_DATA[r.event_id][r.member_id]=r.status;
+      });
+    }),
     safeFetch('charge_assignments?select=*', function(d) {
       CHARGE_ASSIGNMENTS = d.map(function(a) {
         return {id:a.id, pid:a.passage_id, ptitle:'', mdate:a.meeting_date,
@@ -3674,6 +3681,39 @@ function rReports(){
     }
   }
 
+  // ── Attendance / RSVP report (Secretary + Master) ───────────────────
+  if(CU.role==='secretary'||CU.role==='master'){
+    h+='<div class="stitle">Attendance &amp; apologies</div>';
+    var now2=new Date();
+    var upcoming2=CALENDAR_EVENTS.filter(function(e){
+      return !e.cancelled&&(e.type==='meeting'||e.type==='rehearsal'||e.type==='installation')&&
+             new Date(e.date)>=new Date(now2.toDateString());
+    }).sort(function(a,b){return a.date.localeCompare(b.date);}).slice(0,6);
+    if(!upcoming2.length){
+      h+='<div class="card" style="text-align:center;color:var(--t3);padding:20px">No upcoming events</div>';
+    }
+    upcoming2.forEach(function(e){
+      var rsvps=RSVP_DATA[e.id]||{};
+      var attending=MEMBERS.filter(function(m){return rsvps[m.id]==='attending';});
+      var apologies=MEMBERS.filter(function(m){return rsvps[m.id]==='apologies';});
+      var noReply=MEMBERS.filter(function(m){return !rsvps[m.id];});
+      var d=new Date(e.date);
+      var months2=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      h+='<div class="card" style="margin-bottom:10px">';
+      h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:2px">'+e.title+'</div>';
+      h+='<div style="font-size:11px;color:var(--t3);margin-bottom:10px">'+d.getDate()+' '+months2[d.getMonth()]+' '+d.getFullYear()+'</div>';
+      h+='<div style="display:flex;gap:8px;margin-bottom:10px">';
+      h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+attending.length+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">ATTENDING</div></div>';
+      h+='<div style="flex:1;text-align:center;background:var(--badbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--bad)">'+apologies.length+'</div><div style="font-size:10px;color:var(--bad);font-weight:600">APOLOGIES</div></div>';
+      h+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--t3)">'+noReply.length+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">NO REPLY</div></div>';
+      h+='</div>';
+      if(attending.length){h+='<div style="font-size:12px;color:var(--ok);margin-bottom:4px"><strong>Attending:</strong> '+attending.map(gn).join(', ')+'</div>';}
+      if(apologies.length){h+='<div style="font-size:12px;color:var(--bad);margin-bottom:4px"><strong>Apologies:</strong> '+apologies.map(gn).join(', ')+'</div>';}
+      if(noReply.length){h+='<div style="font-size:12px;color:var(--t3)"><strong>No reply:</strong> '+noReply.map(gn).join(', ')+'</div>';}
+      h+='</div>';
+    });
+  }
+
   document.getElementById('pane-reports').innerHTML=h;
 }
 
@@ -4378,76 +4418,108 @@ function supaUpsertVote(pollId, answers){
 
 function rHome(){
   if(!CU)return;
-  var meet=nm(),rehearsal=nw();
-  var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  var months=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  function fd(d){return d?days[d.getDay()]+' '+d.getDate()+' '+months[d.getMonth()]+' '+d.getFullYear():'—';}
+  var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var h='';
 
-  // ── 1. UPCOMING EVENTS ───────────────────────────────────────────────
+  // ── 1. WELCOME BANNER ────────────────────────────────────────────────
   h+='<div class="card" style="border-top:4px solid var(--navy);margin-bottom:10px">';
-  h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Upcoming</div>';
-  if(!meet&&!rehearsal){
-    h+='<div style="font-size:13px;color:var(--t3)">No upcoming meetings scheduled</div>';
-  }
-  if(rehearsal){
-    h+='<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--bdr)">';
-    h+='<div style="text-align:center;min-width:40px"><div style="font-size:22px;font-weight:700;color:var(--navy);line-height:1">'+rehearsal.getDate()+'</div>';
-    h+='<div style="font-size:10px;color:var(--t3);font-weight:700">'+months[rehearsal.getMonth()].slice(0,3).toUpperCase()+'</div></div>';
-    h+='<div><div style="font-size:13px;font-weight:600;color:var(--navy)">Rehearsal &amp; Committee</div>';
-    h+='<div style="font-size:11px;color:var(--t3)">'+days[rehearsal.getDay()]+'</div></div></div>';
-  }
-  if(meet){
-    h+='<div style="display:flex;align-items:center;gap:12px;padding:8px 0">';
-    h+='<div style="text-align:center;min-width:40px"><div style="font-size:22px;font-weight:700;color:var(--navy);line-height:1">'+meet.getDate()+'</div>';
-    h+='<div style="font-size:10px;color:var(--t3);font-weight:700">'+months[meet.getMonth()].slice(0,3).toUpperCase()+'</div></div>';
-    h+='<div><div style="font-size:13px;font-weight:600;color:var(--navy)">Regular Lodge Meeting</div>';
-    h+='<div style="font-size:11px;color:var(--t3)">'+days[meet.getDay()]+'</div></div></div>';
-  }
-  h+='</div>';
-
-  // ── 2. POLL — show only if not yet submitted; moves to Notices after voting ─
+  h+='<div style="display:flex;align-items:center;justify-content:space-between">';
+  h+='<div>';
+  h+='<div style="font-size:18px;font-weight:700;color:var(--navy)">'+gn(CU)+'</div>';
+  h+='<div style="font-size:12px;color:var(--t3);margin-top:2px">';
+  h+=(CU.office||'Member')+' &middot; '+(CU.deg==='EA'?'First Degree':CU.deg==='FC'?'Fellow Craft':'Master Mason');
+  h+='</div></div>';
+  // Notification bubbles
+  var mine=NOTICES.filter(function(n){
+    var to=n.to;if(!to)return false;
+    if(typeof to==='string')return to==='all'||to===CU.id;
+    return to.indexOf('all')>-1||to.indexOf(CU.id)>-1;
+  });
+  var unread=mine.filter(function(n){return !n.read;}).length;
   var activePoll=POLLS.find(function(p){return p.active;});
-  var unread=mine.filter(function(n){return !n.read;});
-  if(unread.length){
+  var pollPending=activePoll&&!(activePoll.votes[CU.id]&&activePoll.votes[CU.id]._submitted);
+  var bubbles=unread+(pollPending?1:0);
+  if(bubbles>0){
+    h+='<button data-id="notices" onclick="goTo(this.dataset.id)" style="display:flex;align-items:center;gap:8px;background:var(--badbg);border:none;border-radius:10px;padding:8px 12px;cursor:pointer;touch-action:manipulation">';
+    if(unread>0)h+='<span style="background:var(--bad);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">'+unread+'</span>';
+    if(pollPending)h+='<span style="font-size:11px;font-weight:700;color:var(--bad)">&#9888; Poll</span>';
+    h+='</button>';
+  }
+  h+='</div></div>';
+
+  // ── 2. UPCOMING EVENTS + ATTENDANCE ─────────────────────────────────
+  var now=new Date();
+  var cutoff=new Date(now);cutoff.setDate(cutoff.getDate()+31);
+  var isOfficer=['master','secretary','dc','mentor','almoner','treasurer','steward'].indexOf(CU.role)>-1;
+  var upcoming=CALENDAR_EVENTS.filter(function(e){
+    var d=new Date(e.date);
+    if(!d||isNaN(d)||e.cancelled)return false;
+    if(d<new Date(now.toDateString())||d>cutoff)return false;
+    if(e.type==='committee'&&!isOfficer)return false;
+    // Degree filter: if event specifies a degree, member must meet it
+    if(e.degree&&e.degree!=='all'){
+      var DEG={EA:1,FC:2,MM:3};
+      if((DEG[CU.deg]||0)<(DEG[e.degree]||0))return false;
+    }
+    return true;
+  }).sort(function(a,b){return a.date.localeCompare(b.date);});
+
+  if(upcoming.length){
     h+='<div class="card" style="margin-bottom:10px">';
-    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">New notices ('+unread.length+')</div>';
-    unread.slice(0,5).forEach(function(n){
-      h+='<button data-nid="'+n.id+'" onclick="markHomeNoticeRead(this.dataset.nid)" style="display:flex;align-items:center;width:100%;background:none;border:none;border-top:1px solid var(--bdr);padding:8px 0;cursor:pointer;touch-action:manipulation;text-align:left;gap:10px">';
-      h+='<div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--navy)">'+n.title+'</div>';
-      h+='<div style="font-size:11px;color:var(--t3);margin-top:1px">'+n.date+'</div></div>';
-      h+='<div style="width:8px;height:8px;border-radius:50%;background:var(--bad);flex-shrink:0"></div>';
-      h+='</button>';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Upcoming</div>';
+    upcoming.forEach(function(e){
+      var d=new Date(e.date);
+      var myRsvp=(RSVP_DATA[e.id]&&RSVP_DATA[e.id][CU.id])||null;
+      var typeC={rehearsal:'var(--gold)',meeting:'var(--navy)',committee:'var(--t3)',installation:'var(--ok)'};
+      h+='<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-bottom:1px solid var(--bdr)">';
+      h+='<div style="text-align:center;min-width:36px;flex-shrink:0">';
+      h+='<div style="font-size:18px;font-weight:700;color:'+(typeC[e.type]||'var(--navy)')+'">'+d.getDate()+'</div>';
+      h+='<div style="font-size:10px;color:var(--t3)">'+months[d.getMonth()]+'</div>';
+      h+='</div>';
+      h+='<div style="flex:1;min-width:0">';
+      h+='<div style="font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e.title+'</div>';
+      h+='<div style="font-size:11px;color:var(--t3)">'+days[d.getDay()]+(e.venue?' &middot; '+e.venue:'')+'</div>';
+      // RSVP buttons — only for meetings and rehearsals
+      if(e.type==='meeting'||e.type==='rehearsal'||e.type==='installation'){
+        h+='<div style="display:flex;gap:6px;margin-top:6px">';
+        h+='<button class="btn btn-sm" data-eid="'+e.id+'" data-status="attending" onclick="rsvpEvent(this.dataset.eid,this.dataset.status)" style="font-size:11px;'+(myRsvp==='attending'?'background:var(--ok);color:#fff;border-color:var(--ok)':'')+'">';
+        h+=(myRsvp==='attending'?'&#10003; ':'')+'Attending</button>';
+        h+='<button class="btn btn-sm" data-eid="'+e.id+'" data-status="apologies" onclick="rsvpEvent(this.dataset.eid,this.dataset.status)" style="font-size:11px;'+(myRsvp==='apologies'?'background:var(--bad);color:#fff;border-color:var(--bad)':'')+'">';
+        h+=(myRsvp==='apologies'?'&#10003; ':'')+'Apologies</button>';
+        h+='</div>';
+      }
+      h+='</div></div>';
     });
-    if(unread.length>5)h+='<div style="font-size:12px;color:var(--t3);padding:6px 0;text-align:center;border-top:1px solid var(--bdr)">'+(unread.length-5)+' more in Notices tab</div>';
     h+='</div>';
   }
 
-  // ── 4. MY CHARGES ───────────────────────────────────────────────────
-  var myCharges=CHARGE_ASSIGNMENTS.filter(function(a){return(a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';});
+  // ── 3. MY CHARGES ───────────────────────────────────────────────────
+  var myCharges=CHARGE_ASSIGNMENTS.filter(function(a){
+    return(a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';
+  });
   if(myCharges.length){
     h+='<div class="card" style="border-top:4px solid var(--gold);margin-bottom:10px">';
-    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">My charge assignments</div>';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">My charge assignments</div>';
     myCharges.forEach(function(a){
       var lib=LIBRARY.find(function(l){return l.id===a.pid;});
-      var isPrimary=a.prim===CU.id;
-      h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bdr)">';
-      h+='<div style="flex:1"><div style="font-weight:700;font-size:13px;color:var(--navy)">'+(lib?lib.title:a.ptitle||'Charge')+'</div>';
-      h+='<div style="font-size:11px;color:var(--t3)">'+a.mdate+' &middot; '+(isPrimary?'Primary':'Standby')+'</div></div>';
+      h+='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--bdr)">';
+      h+='<div style="flex:1"><div style="font-weight:600;font-size:13px;color:var(--navy)">'+(lib?lib.title:a.ptitle||'Charge')+'</div>';
+      h+='<div style="font-size:11px;color:var(--t3)">'+a.mdate+' &middot; '+(a.prim===CU.id?'Primary':'Standby')+'</div></div>';
       h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">Practice</button>';
       h+='</div>';
     });
     h+='</div>';
   }
 
-  // ── 5. PRACTICE PROGRESS ────────────────────────────────────────────
+  // ── 4. PRACTICE PROGRESS ────────────────────────────────────────────
   try{
     var pmP=JSON.parse(localStorage.getItem('pm_passages')||'[]');
     var pmPr=JSON.parse(localStorage.getItem('pm_progress')||'{}');
     h+='<div class="card" style="border-top:4px solid var(--ok);margin-bottom:10px">';
     h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:'+(pmP.length?'10':'0')+'px">';
     h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Practice progress</div>';
-    h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">'+(pmP.length?'Open':'Start practising')+'</button></div>';
+    h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">'+(pmP.length?'Open':'Start')+'</button></div>';
     if(pmP.length){
       var ts=Object.values(pmPr).reduce(function(s,p){return s+(p.sessions||0);},0);
       var cp=Object.values(pmPr).filter(function(p){return p.completed;}).length;
@@ -4463,32 +4535,49 @@ function rHome(){
     h+='</div>';
   }catch(e){}
 
-  // ── 6. OFFICER CARDS ────────────────────────────────────────────────
-  if(CU.role==='steward'){
-    var ptotal=0;POLLS.forEach(function(p){ptotal+=Object.keys(p.votes).length;});
-    h+='<div class="card" style="border-top:4px solid var(--gold)">';
-    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:4px">Meal Polls</div>';
-    h+='<div style="font-size:12px;color:var(--t2);margin-bottom:10px">'+ptotal+' response'+(ptotal!==1?'s':'')+' across '+POLLS.length+' poll'+(POLLS.length!==1?'s':'')+'</div>';
-    h+='<button class="btn btn-n btn-sm" data-id="polls" onclick="goTo(this.dataset.id)">Manage polls</button></div>';
-  }
-  if(CU.role==='almoner'){
-    var concerns=WELFARE.filter(function(w){return w.status==='Concern'||w.status==='Serious';});
-    h+='<div class="card" style="border-top:4px solid var(--ok)">';
-    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Welfare</div>';
-    h+='<div style="display:flex;gap:10px;margin-bottom:10px">';
-    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+(MEMBERS.length-concerns.length)+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">GOOD</div></div>';
-    h+='<div style="flex:1;text-align:center;background:'+(concerns.length?'var(--warnbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:'+(concerns.length?'var(--warn)':'var(--t3)')+'">'+concerns.length+'</div><div style="font-size:10px;font-weight:600;color:'+(concerns.length?'var(--warn)':'var(--t3)')+'">CONCERN</div></div>';
-    h+='</div><button class="btn btn-n btn-sm" data-id="almoner" onclick="goTo(this.dataset.id)">View register</button></div>';
-  }
+  // ── 5. OFFICER QUICK CARDS ───────────────────────────────────────────
   if(CU.role==='dc'){
     var pending=CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Assigned';}).length;
     var delivered=CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Delivered';}).length;
-    h+='<div class="card" style="border-top:4px solid var(--navy)">';
-    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">Ritual assignments</div>';
-    h+='<div style="display:flex;gap:10px;margin-bottom:10px">';
+    h+='<div class="card" style="border-top:4px solid var(--navy);margin-bottom:10px">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Ritual assignments</div>';
+    h+='<div style="display:flex;gap:10px;margin-bottom:8px">';
     h+='<div style="flex:1;text-align:center;background:var(--goldbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--gold)">'+pending+'</div><div style="font-size:10px;color:var(--gold);font-weight:600">ASSIGNED</div></div>';
     h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+delivered+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">DELIVERED</div></div>';
-    h+='</div><button class="btn btn-n btn-sm" data-id="duties" onclick="goTo(this.dataset.id)">View duties</button></div>';
+    h+='</div>';
+    h+='<button class="btn btn-n btn-sm" data-id="duties" onclick="goTo(this.dataset.id)">Duties</button>';
+    h+='</div>';
+  }
+  if(CU.role==='almoner'){
+    var concerns=WELFARE.filter(function(w){return w.status==='Concern'||w.status==='Serious';}).length;
+    h+='<div class="card" style="border-top:4px solid var(--ok);margin-bottom:10px">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Welfare</div>';
+    h+='<div style="display:flex;gap:10px;margin-bottom:8px">';
+    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+(MEMBERS.length-concerns)+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">GOOD</div></div>';
+    h+='<div style="flex:1;text-align:center;background:'+(concerns?'var(--warnbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:'+(concerns?'var(--warn)':'var(--t3)')+'">'+concerns+'</div><div style="font-size:10px;font-weight:600;color:'+(concerns?'var(--warn)':'var(--t3)')+'">CONCERN</div></div>';
+    h+='</div>';
+    h+='<button class="btn btn-n btn-sm" data-id="almoner" onclick="goTo(this.dataset.id)">Welfare register</button>';
+    h+='</div>';
+  }
+  if(CU.role==='treasurer'){
+    var arrears=MEMBERS.filter(function(m){return m.sub==='Arrears';}).length;
+    var paid=MEMBERS.filter(function(m){return m.sub==='Paid';}).length;
+    h+='<div class="card" style="border-top:4px solid var(--info);margin-bottom:10px">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Subscriptions</div>';
+    h+='<div style="display:flex;gap:10px;margin-bottom:8px">';
+    h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+paid+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">PAID</div></div>';
+    h+='<div style="flex:1;text-align:center;background:'+(arrears?'var(--badbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:'+(arrears?'var(--bad)':'var(--t3)')+'">'+arrears+'</div><div style="font-size:10px;font-weight:600;color:'+(arrears?'var(--bad)':'var(--t3)')+'">ARREARS</div></div>';
+    h+='</div>';
+    h+='<button class="btn btn-n btn-sm" data-id="members" onclick="goTo(this.dataset.id)">Manage dues</button>';
+    h+='</div>';
+  }
+  if(CU.role==='steward'){
+    var ptotal=0;POLLS.forEach(function(p){ptotal+=Object.keys(p.votes).length;});
+    h+='<div class="card" style="border-top:4px solid var(--gold);margin-bottom:10px">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Polls</div>';
+    h+='<div style="font-size:13px;color:var(--t2);margin-bottom:8px">'+ptotal+' response'+(ptotal!==1?'s':'')+' across '+POLLS.length+' poll'+(POLLS.length!==1?'s':'')+'</div>';
+    h+='<button class="btn btn-n btn-sm" data-id="polls" onclick="goTo(this.dataset.id)">Manage polls</button>';
+    h+='</div>';
   }
 
   try{document.getElementById('pane-home').innerHTML='<div style="padding:4px">'+h+'</div>';}
@@ -5420,6 +5509,7 @@ function addCalEvent(){
   var title=document.getElementById('cal-title');
   var type=document.getElementById('cal-type');
   var venue=document.getElementById('cal-venue');
+  var degree=document.getElementById('cal-degree');
   if(!date||!date.value){alert('Select a date.');return;}
   if(!title||!title.value.trim()){alert('Enter a title.');return;}
   var ev={id:'ev'+Date.now(),date:date.value,title:title.value.trim(),
@@ -6087,11 +6177,22 @@ function _rtTick(){
     if(pane==='notices') rNotices();
   });
 
+  // Refresh RSVP data
+  _fetchIfChanged('rsvp','event_rsvp?select=*',function(d){
+    RSVP_DATA={};
+    d.forEach(function(r){
+      if(!RSVP_DATA[r.event_id])RSVP_DATA[r.event_id]={};
+      RSVP_DATA[r.event_id][r.member_id]=r.status;
+    });
+    if(pane==='home')rHome();
+  });
+
   // Refresh calendar events (less often — skip if timestamp same)
   _fetchIfChanged('calendar', 'calendar_events?select=*&order=date', function(d){
     CALENDAR_EVENTS = d.map(function(e){
       return {id:e.id, date:e.date, title:e.title, type:e.event_type||e.type||'meeting',
-              venue:e.venue||'', cancelled:e.cancelled||false};
+              venue:e.venue||'', cancelled:e.cancelled||false,
+              degree:e.degree||'all'};
     });
     if(pane==='calendar') rCalendar();
   });
@@ -6119,6 +6220,19 @@ function startRealtime(){
 
 function stopRealtime(){
   if(_rtInterval){clearInterval(_rtInterval);_rtInterval=null;}
+}
+
+
+var RSVP_DATA={};  // keyed by event_id → {member_id: 'attending'|'apologies'}
+
+function rsvpEvent(eid,status){
+  if(!RSVP_DATA[eid])RSVP_DATA[eid]={};
+  RSVP_DATA[eid][CU.id]=status;
+  supa('event_rsvp',{method:'POST',
+    headers:{'Prefer':'resolution=merge-duplicates'},
+    body:JSON.stringify({event_id:eid,member_id:CU.id,status:status})
+  }).catch(function(e){console.warn('RSVP save failed:',e);});
+  rHome();
 }
 
 
