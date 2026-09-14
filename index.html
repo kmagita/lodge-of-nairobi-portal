@@ -1720,6 +1720,20 @@ function doLogin() {
             } else {
               goTo('home');
             }
+            // Auto-generate in-memory notice for any active poll with no DB notice
+            POLLS.forEach(function(p){
+              if(!p.active)return;
+              var exists=NOTICES.find(function(n){return n.type==='poll'&&n.title.indexOf(p.label)>-1;});
+              if(!exists){
+                NOTICES.unshift({id:'auto-'+p.id,type:'poll',
+                  title:'Poll: '+p.label,
+                  body:'An active poll is open for '+p.label+'. Please respond.',
+                  to:'all',
+                  date:p.createdAt?p.createdAt.split('T')[0]:new Date().toISOString().split('T')[0],
+                  read:false});
+              }
+            });
+            startRealtime();
           });
           document.getElementById('li-btn').style.opacity='1';
           document.getElementById('li-btn').textContent = 'Sign in';
