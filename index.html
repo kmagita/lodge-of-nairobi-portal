@@ -2911,11 +2911,9 @@ function createPoll(){
     } else if(data&&data[0]){
       poll.id=data[0].id;
     }
-    var allIds=MEMBERS.map(function(m){return m.id;});
-    if(allIds.length){
-      pushNotice('poll','New poll — '+poll.label,
-        'A poll has been created. Please respond.',allIds);
-    }
+    // Send notice to all — saves directly to DB with to_all=true
+    pushNotice('poll','Poll: '+poll.label,
+      'A poll has been created for '+poll.label+'. Please respond in your Notices tab.','all');
     hidePollForm();
     alert('Poll created.');
     rPolls();
