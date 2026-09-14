@@ -3685,7 +3685,9 @@ function pushNotice(type,title,body,toIds){
 }
 
 function rNotices(){
-  if(!CU)return (function(to){return (function(to){return !to?false:typeof to==='string'?to==='all'||to===CU.id:to.indexOf('all')>-1||to.indexOf(CU.id)>-1;})(n.to);
+  if(!CU)return;
+  var mine=NOTICES.filter(function(n){
+    return (function(to){return !to?false:typeof to==='string'?to==='all'||to===CU.id:to.indexOf('all')>-1||to.indexOf(CU.id)>-1;})(n.to);
   }).sort(function(a,b){return b.date.localeCompare(a.date);});
 
   var typeC={
@@ -4405,7 +4407,7 @@ function rHome(){
   h+='</div>';
 
   // ── 2. POLL — show only if not yet submitted; moves to Notices after voting ─
-  var activePoll=POLLS.find(function(p){return (function(to){return !to?false:typeof to==='string'?to==='all'||to===CU.id:to.indexOf('all')>-1||to.indexOf(CU.id)>-1;})(n.to);});
+  var activePoll=POLLS.find(function(p){return p.active;});
   var unread=mine.filter(function(n){return !n.read;});
   if(unread.length){
     h+='<div class="card" style="margin-bottom:10px">';
