@@ -3143,8 +3143,26 @@ function rPractice(){
   if(!CU)return;
   if(typeof pmInit!=='function')return;
   // Load PM state (localStorage)
+  // Load this member's practice data into PM's standard keys
+  var _uid=CU?CU.id:'';
+  if(_uid){
+    var _myP=localStorage.getItem('pm_passages_'+_uid);
+    var _myPr=localStorage.getItem('pm_progress_'+_uid);
+    if(_myP)localStorage.setItem('pm_passages',_myP);
+    if(_myPr)localStorage.setItem('pm_progress',_myPr);
+  }
   pmInit();
   setTimeout(function(){
+    // Override persist() to also save to user-specific keys
+    if(_uid&&typeof persist==='function'&&!window._persistPatched){
+      var _origPersist=persist;
+      window.persist=function(){
+        _origPersist();
+        localStorage.setItem('pm_passages_'+_uid,localStorage.getItem('pm_passages')||'[]');
+        localStorage.setItem('pm_progress_'+_uid,localStorage.getItem('pm_progress')||'{}');
+      };
+      window._persistPatched=true;
+    }
     // Patch openPractice to allow TTS passages without recording
     if(typeof openPractice==='function'&&!window._pmPatched){
       var _origOpen=openPractice;
@@ -4578,8 +4596,8 @@ function rHome(){
 
   // ── 4. PRACTICE PROGRESS ────────────────────────────────────────────
   try{
-    var pmP=JSON.parse(localStorage.getItem('pm_passages')||'[]');
-    var pmPr=JSON.parse(localStorage.getItem('pm_progress')||'{}');
+    var pmP=JSON.parse(localStorage.getItem('pm_passages_'+(CU?CU.id:''))||localStorage.getItem('pm_passages')||'[]');
+    var pmPr=JSON.parse(localStorage.getItem('pm_progress_'+(CU?CU.id:''))||localStorage.getItem('pm_progress')||'{}');
     h+='<div class="card" style="border-top:4px solid var(--ok);margin-bottom:10px">';
     h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:'+(pmP.length?'10':'0')+'px">';
     h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Practice progress</div>';
@@ -5498,6 +5516,31 @@ function rCalendar(){
       }
       h2+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad);padding:4px 10px;font-size:11px" data-id="'+ev.id+'" onclick="removeCalEvent(this.dataset.id)">Delete</button>';
       h2+='</div>';
+      // Inline edit form
+      if(window._editCalId===ev.id){
+        h2+='<div style="border-top:1px solid var(--bdr);padding:14px;background:var(--bg2)">';
+        h2+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+        h2+='<div class="fg" style="margin:0"><label class="lbl">Title</label><input id="ed-title" value="'+ev.title+'"></div>';
+        h2+='<div class="fg" style="margin:0"><label class="lbl">Date</label><input type="date" id="ed-date" value="'+ev.date+'"></div>';
+        h2+='<div class="fg" style="margin:0"><label class="lbl">Time</label><input type="time" id="ed-time" value="'+(ev.time||'')+'"></div>';
+        h2+='<div class="fg" style="margin:0"><label class="lbl">Type</label><select id="ed-type">';
+        ['meeting','rehearsal','committee','installation','special'].forEach(function(t){
+          h2+='<option value="'+t+'"'+(ev.type===t?' selected':'')+'>'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>';
+        });
+        h2+='</select></div>';
+        h2+='</div>';
+        h2+='<div class="fg" style="margin-bottom:10px"><label class="lbl">Location / Venue</label><input id="ed-venue" value="'+(ev.venue||'')+'"></div>';
+        h2+='<div class="fg" style="margin-bottom:12px"><label class="lbl">Open to</label><select id="ed-degree">';
+        ['all','EA','FC','MM'].forEach(function(d){
+          var lbl={all:'All brethren',EA:'First Degree and above',FC:'Second Degree and above',MM:'Master Masons only'};
+          h2+='<option value="'+d+'"'+((ev.degree||'all')===d?' selected':'')+'>'+lbl[d]+'</option>';
+        });
+        h2+='</select></div>';
+        h2+='<div style="display:flex;gap:8px">';
+        h2+='<button class="btn btn-navy btn-sm" style="flex:1;justify-content:center" onclick="saveCalEventEdit()">Save changes</button>';
+        h2+='<button class="btn btn-n btn-sm" onclick="window._editCalId=null;rCalendar()">Cancel</button>';
+        h2+='</div></div>';
+      }
     }
     h2+='</div></div>';
     return h2;
@@ -5541,19 +5584,30 @@ function rCalendar(){
 }
 
 function editCalEvent(id){
+  window._editCalId = (window._editCalId===id)?null:id;
+  rCalendar();
+}
+
+function saveCalEventEdit(){
+  var id=window._editCalId;
   var ev=CALENDAR_EVENTS.find(function(e){return e.id===id;});
   if(!ev)return;
-  var newTitle=prompt('Edit event title:',ev.title);
-  if(newTitle===null)return;
-  newTitle=newTitle.trim();
-  if(!newTitle){alert('Title cannot be empty.');return;}
-  ev.title=newTitle;
-  // Supabase update
+  var get=function(fid){var el=document.getElementById(fid);return el?el.value:'';};
+  ev.title  = get('ed-title')  || ev.title;
+  ev.date   = get('ed-date')   || ev.date;
+  ev.type   = get('ed-type')   || ev.type;
+  ev.time   = get('ed-time')   || '';
+  ev.venue  = get('ed-venue')  || ev.venue;
+  ev.degree = get('ed-degree') || 'all';
   supa('calendar_events?id=eq.'+id,{
     method:'PATCH',
-    body:JSON.stringify({title:newTitle})
-  }).catch(function(e){console.warn('Calendar update failed:',e);});
-  rCalendar();
+    body:JSON.stringify({title:ev.title,date:ev.date,
+      event_type:ev.type,time:ev.time,
+      venue:ev.venue,degree:ev.degree})
+  }).then(function(r){
+    if(r.ok){window._editCalId=null;rCalendar();}
+    else r.json().then(function(e){alert('Save failed: '+(e.message||'Check your connection'));});
+  }).catch(function(e){alert('Network error saving event.');});
 }
 
 function cancelCalEvent(id){
