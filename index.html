@@ -4846,7 +4846,9 @@ function saveMemberDetail(){
   m.pass_ = get('nm-pass');
   m.raise = get('nm-raise');
   m.deg   = degreeFromDates(m.init, m.pass_, m.raise);
-  m.sub   = get('nm-sub')||m.sub;
+  m.sub    = get('nm-sub')||m.sub;
+  m.office = get('nm-office');
+  m.role   = officeToRole(m.office);
 
   // Persist to Supabase
   supa('members?id=eq.'+mid,{
@@ -4854,7 +4856,7 @@ function saveMemberDetail(){
     body:JSON.stringify({
       name:m.name, email:m.email, ugle:m.ugle, phone:m.phone,
       dob:m.dob||null, init:m.init||null, pass_:m.pass_||null,
-      raise:m.raise||null, deg:m.deg, sub:m.sub
+      raise:m.raise||null, deg:m.deg, sub:m.sub, office:m.office
     })
   }).then(function(r){
     if(r.ok){ alert('Member record saved.'); goTo('members'); }
