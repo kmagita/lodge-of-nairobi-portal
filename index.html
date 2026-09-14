@@ -1766,6 +1766,9 @@ function loadAppData() {
     safeFetch('calendar_events?select=*&order=date', function(d) {
       CALENDAR_EVENTS = d;
     }),
+    safeFetch('notice_reads?member_id=eq.'+CU.id, function(d){
+      d.forEach(function(r){ _readIds[r.notice_id]=true; });
+    }),
     safeFetch('notices?select=*&order=created_at.desc', function(d) {
       NOTICES = d.map(function(n) {
         return {id:n.id, type:n.type||'info',
@@ -4599,7 +4602,16 @@ function rHome(){
 function markHomeNoticeRead(nid){
   var n=NOTICES.find(function(x){return x.id===nid;});
   if(!n)return;
-  n.read=true;
+  if(!n.read){
+    n.read=true;
+    if(!_readIds[nid]){
+      _readIds[nid]=true;
+      supa('notice_reads',{method:'POST',
+        headers:{'Prefer':'resolution=merge-duplicates'},
+        body:JSON.stringify({notice_id:nid,member_id:CU.id})
+      }).catch(function(){});
+    }
+  }
   // Persist read state
   // notice_reads table optional — skip if not exists
   try{supa('notice_reads',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
@@ -6053,6 +6065,7 @@ function addHistoricalSubPayment(){
 }
 
 var _histDutiesOpen=false;
+var _readIds={};  // session cache — backed by Supabase notice_reads table
 var _histSubOpen=false;
 
 
@@ -6166,7 +6179,8 @@ function _rtTick(){
     NOTICES = d.map(function(n){
       return {id:n.id, type:n.type||'info', title:n.title||'Notice', body:n.body||'',
               to:n.to_all?['all']:(n.to_ids||[]),
-              date:(n.created_at||new Date().toISOString()).split('T')[0], read:false};
+              date:(n.created_at||new Date().toISOString()).split('T')[0],
+              read:_readIds[n.id]===true};
     });
     // Always ensure active polls have a notice entry
     POLLS.forEach(function(p){
@@ -6178,9 +6192,14 @@ function _rtTick(){
           body:'An active poll is open for '+p.label+'. Please respond.',
           to:'all',
           date:p.createdAt?p.createdAt.split('T')[0]:new Date().toISOString().split('T')[0],
-          read:false});
+          read:_readIds['auto-'+p.id]===true});
       }
     });
+    // Sync read status from Supabase
+    supa('notice_reads?member_id=eq.'+CU.id,{method:'GET'})
+      .then(function(r){return r.json();})
+      .then(function(d){if(Array.isArray(d))d.forEach(function(r){_readIds[r.notice_id]=true;});})
+      .catch(function(){});
     buildNav();
     if(pane==='notices') rNotices();
     if(pane==='home') rHome();
