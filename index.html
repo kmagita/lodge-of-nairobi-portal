@@ -1942,21 +1942,25 @@ function pushNotice(type,title,body,toIds){
   var toAll=toIds.indexOf('all')>-1||toIds.length>=MEMBERS.length;
   var payload={type:type,title:title,body:body,
     to_all:toAll,to_ids:toAll?[]:toIds,created_by:CU.id};
-  supa('notices',{method:'POST',body:JSON.stringify(payload)})
-    .then(function(r){return r.json();})
+  supa('notices',{method:'POST',
+    headers:{'Prefer':'return=representation'},
+    body:JSON.stringify(payload)})
+    .then(function(r){
+      if(!r.ok){r.text().then(function(t){console.warn('Notice save failed:',r.status,t);alert('Notice could not be saved to the server ('+r.status+'). Check your connection and try again.');});return null;}
+      return r.json();
+    })
     .then(function(data){
+      if(!data)return;
       var row=Array.isArray(data)?data[0]:data;
       if(row&&row.id){
         NOTICES.unshift({id:row.id,type:type,title:title,body:body,
           to:toIds,date:new Date().toISOString().split('T')[0],read:false});
         buildNav();
-        notifyUser();
+        if(typeof notifyUser==='function')notifyUser();
       }
     }).catch(function(e){
-      // fallback: add in-memory even if DB write fails
-      NOTICES.unshift({id:'n'+(++noticeCounter),type:type,title:title,body:body,
-        to:toIds,date:new Date().toISOString().split('T')[0],read:false});
-      buildNav();
+      console.warn('pushNotice error:',e);
+      alert('Notice could not be sent. Please check your connection.');
     });
 }
 
@@ -2578,6 +2582,29 @@ function rMembers(){
       h+='</div>';
     }
   }
+  // ── Add new member (Secretary only) ──────────────────────────────────
+  if(CU.role==='secretary'||CU.role==='master'){
+    var addOpen=window._addMemberOpen===true;
+    h+='<div class="stitle" style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">';
+    h+='<span>Add new member</span>';
+    h+='<button class="btn btn-navy btn-sm" onclick="window._addMemberOpen=!window._addMemberOpen;rMembers()">'+(addOpen?'&#9650; Cancel':'+ Add member')+'</button>';
+    h+='</div>';
+    if(addOpen){
+      h+='<div class="card">';
+      h+='<div style="font-size:12px;color:var(--t3);margin-bottom:12px">Enter the new member details. They will receive an email invitation to set their password.</div>';
+      h+='<div class="fg"><label class="lbl">Email address</label><input type="email" id="nm-email" placeholder="their@email.com"></div>';
+      h+='<div class="fg"><label class="lbl">Full name</label><input id="nm-name" placeholder="e.g. John Smith"></div>';
+      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+      h+='<div class="fg" style="margin:0"><label class="lbl">Degree</label><select id="nm-deg"><option value="EA">First Degree (EA)</option><option value="FC">Second Degree (FC)</option><option value="MM">Third Degree (MM)</option></select></div>';
+      h+='<div class="fg" style="margin:0"><label class="lbl">Office (optional)</label><select id="nm-office">';
+      ['','Worshipful Master','Secretary','Director of Ceremonies','Mentor','Almoner','Treasurer','Chief Steward','Assistant DC'].forEach(function(o){
+        h+='<option value="'+o+'">'+(o||'— None (Brother)')+'</option>';
+      });
+      h+='</select></div></div>';
+      h+='<button id="nm-btn" class="btn btn-navy" style="width:100%;justify-content:center;margin-top:12px" onclick="createMemberProfile()">Invite member</button>';
+      h+='</div>';
+    }
+  }
   document.getElementById('pane-members').innerHTML=h;
 }
 
@@ -2817,6 +2844,29 @@ function castVoteText(pid,fid,val){
   p.votes[CU.id][fid]=val;
   supaUpsertVote(pid,p.votes[CU.id]);
   // Navigate to Notices tab — poll response lives there
+  // Mark the poll notice as read since user has responded
+  POLLS.forEach(function(p){
+    if(p.id===pollId){
+      var autoId='auto-'+p.id;
+      if(!_readIds[autoId]){
+        _readIds[autoId]=true;
+        supa('notice_reads',{method:'POST',
+          headers:{'Prefer':'resolution=merge-duplicates'},
+          body:JSON.stringify({notice_id:autoId,member_id:CU.id})
+        }).catch(function(){});
+      }
+      // Also mark any real DB notice for this poll as read
+      NOTICES.forEach(function(n){
+        if(n.type==='poll'&&n.title.indexOf(p.label)>-1&&!_readIds[n.id]){
+          _readIds[n.id]=true;
+          supa('notice_reads',{method:'POST',
+            headers:{'Prefer':'resolution=merge-duplicates'},
+            body:JSON.stringify({notice_id:n.id,member_id:CU.id})
+          }).catch(function(){});
+        }
+      });
+    }
+  });
   window._pollJustSubmitted = true;
   goTo('notices');
 }
@@ -6279,11 +6329,66 @@ function rsvpEvent(eid,status){
 }
 
 
-function resendPollNotice(label, dayLabel){
+function resendPollNotice(label){
+  var poll=POLLS.find(function(p){return p.label===label&&p.active;});
+  if(!poll){alert('Poll not found.');return;}
+  // Find members who have NOT submitted
+  var pending=MEMBERS.filter(function(m){
+    var v=poll.votes[m.id];
+    return !v||!v._submitted;
+  });
+  if(!pending.length){alert('All members have already responded.');return;}
   var title='Poll: '+label;
-  var body='An active poll is open'+(dayLabel?' for '+dayLabel:'')+'. Please respond in the Notices tab.';
-  pushNotice('poll', title, body, 'all');
-  alert('Notice sent to all members.');
+  var body='A response is still needed from you for the poll: '+label+'. Please respond in the Notices tab.';
+  var ids=pending.map(function(m){return m.id;});
+  pushNotice('poll', title, body, ids);
+  alert('Notice sent to '+pending.length+' member'+(pending.length!==1?'s':'')+' who have not yet responded.');
+}
+
+
+function createMemberProfile(){
+  var email  = document.getElementById('nm-email');
+  var name   = document.getElementById('nm-name');
+  var deg    = document.getElementById('nm-deg');
+  var office = document.getElementById('nm-office');
+  if(!email||!email.value.trim()){alert('Enter the email address.');return;}
+  if(!name||!name.value.trim()){alert("Enter the member's full name.");return;}
+  var btn = document.getElementById('nm-btn');
+  if(btn){btn.textContent='Sending invite…';btn.disabled=true;}
+
+  // Call the Edge Function — creates auth account + member profile + sends invite email
+  var session = supabase&&supabase.auth&&supabase.auth.session?supabase.auth.session():null;
+  var token = session&&session.access_token ? session.access_token : '';
+
+  fetch(SUPA_URL.replace('/rest/v1','') + '/functions/v1/invite-member', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token,
+      'apikey': SUPA_KEY
+    },
+    body: JSON.stringify({
+      email:  email.value.trim(),
+      name:   name.value.trim(),
+      deg:    deg    ? deg.value    : 'EA',
+      office: office ? office.value : ''
+    })
+  }).then(function(r){return r.json();})
+  .then(function(d){
+    if(btn){btn.textContent='Invite member';btn.disabled=false;}
+    if(d.error){alert('Error: '+d.error);return;}
+    MEMBERS.push({id:d.id, name:name.value.trim(),
+      email:email.value.trim(), office:office?office.value:'',
+      deg:deg?deg.value:'EA', sub:'Unpaid', first_login:true});
+    MEMBERS.sort(function(a,b){return a.name.localeCompare(b.name);});
+    email.value=''; name.value=''; if(office)office.value='';
+    window._addMemberOpen=false;
+    alert(d.name+' has been invited. They will receive an email to set their password.');
+    rMembers();
+  }).catch(function(e){
+    if(btn){btn.textContent='Invite member';btn.disabled=false;}
+    alert('Failed to send invite. Check your connection.');
+  });
 }
 
 
