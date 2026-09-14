@@ -2176,7 +2176,7 @@ function syncAllDegrees(){
 function unreadNotices(){
   if(!CU||!NOTICES)return[];
   return NOTICES.filter(function(n){
-    return !n.read&&(n.to.indexOf('all')>-1||n.to.indexOf(CU.id)>-1);
+    return !n.read&&(function(to){return !to?false:typeof to==='string'?to==='all'||to===CU.id:to.indexOf('all')>-1||to.indexOf(CU.id)>-1;})(n.to);
   });
 }
 
@@ -2779,8 +2779,7 @@ function castVote(pid,fid,val){
   if(!p)return;
   if(!p.votes[CU.id])p.votes[CU.id]={};
   p.votes[CU.id][fid]=val;
-  supaUpsertVote(pid,p.votes[CU.id]);
-  // Re-render the active pane to show selection
+  // Save only on Submit — no Supabase call here to avoid race conditions
   var active=document.querySelector('.pane.on');
   var id=active?active.id.replace('pane-',''):'home';
   if(id==='notices')rNotices();
@@ -3686,15 +3685,7 @@ function pushNotice(type,title,body,toIds){
 }
 
 function rNotices(){
-  if(!CU)return;
-  // Mark all as read
-  NOTICES.forEach(function(n){
-    if(n.to.indexOf('all')>-1||n.to.indexOf(CU.id)>-1)n.read=true;
-  });
-  buildNav();
-
-  var mine=NOTICES.filter(function(n){
-    return n.to.indexOf('all')>-1||n.to.indexOf(CU.id)>-1;
+  if(!CU)return (function(to){return (function(to){return !to?false:typeof to==='string'?to==='all'||to===CU.id:to.indexOf('all')>-1||to.indexOf(CU.id)>-1;})(n.to);
   }).sort(function(a,b){return b.date.localeCompare(a.date);});
 
   var typeC={
@@ -4414,23 +4405,7 @@ function rHome(){
   h+='</div>';
 
   // ── 2. POLL — show only if not yet submitted; moves to Notices after voting ─
-  var activePoll=POLLS.find(function(p){return p.active;});
-  var myV=activePoll?(activePoll.votes[CU.id]||{}):null;
-  var submitted=myV&&myV._submitted===true;
-  if(activePoll&&!submitted){
-    var pollExpHome=window._homePollExpanded===true;
-    h+='<div class="card" style="margin-bottom:10px">';
-    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Poll</div>';
-    h+='<div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:8px">'+activePoll.label+'</div>';
-    h+='<button onclick="window._homePollExpanded=!window._homePollExpanded;rHome()" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--warnbg);border:none;border-radius:8px;padding:10px 12px;cursor:pointer;touch-action:manipulation">';
-    h+='<span style="font-size:13px;font-weight:700;color:var(--warn)">&#9888; Respond to poll</span>';
-    h+='<span style="font-size:12px;color:var(--warn)">'+(pollExpHome?'&#9650;':'&#9660;')+'</span></button>';
-    if(pollExpHome){h+='<div style="margin-top:10px">'+renderPollVoter(activePoll,myV||{},false)+'</div>';}
-    h+='</div>';
-  }
-
-  // ── 3. NEW NOTICES — unread only; tap to mark read and move to Notices ─
-  var mine=NOTICES.filter(function(n){return n.to.indexOf('all')>-1||n.to.indexOf(CU.id)>-1;});
+  var activePoll=POLLS.find(function(p){return (function(to){return !to?false:typeof to==='string'?to==='all'||to===CU.id:to.indexOf('all')>-1||to.indexOf(CU.id)>-1;})(n.to);});
   var unread=mine.filter(function(n){return !n.read;});
   if(unread.length){
     h+='<div class="card" style="margin-bottom:10px">';
@@ -6041,6 +6016,24 @@ function saveHistoricalWelfareContact(){
   alert('Welfare contact recorded.');
   mid.value='';method.value='';date.value='';if(notes)notes.value='';
   rAlmoner();
+}
+
+
+function refreshApp(){
+  var btn=document.getElementById('refresh-btn');
+  if(btn){btn.style.opacity='0.4';btn.style.pointerEvents='none';}
+  loadAppData().then(function(){
+    var active=document.querySelector('.pane.on');
+    var id=active?active.id.replace('pane-',''):'home';
+    var map={home:rHome,members:rMembers,duties:rDuties,library:rLibrary,
+             notices:rNotices,calendar:rCalendar,reports:rReports,
+             mentor:rMentor,almoner:rAlmoner,polls:rPolls};
+    if(map[id])map[id]();
+    buildNav();
+    if(btn){btn.style.opacity='1';btn.style.pointerEvents='';}
+  }).catch(function(){
+    if(btn){btn.style.opacity='1';btn.style.pointerEvents='';}
+  });
 }
 
 
