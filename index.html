@@ -2814,6 +2814,7 @@ function castVoteText(pid,fid,val){
   p.votes[CU.id][fid]=val;
   supaUpsertVote(pid,p.votes[CU.id]);
   // Navigate to Notices tab — poll response lives there
+  window._pollJustSubmitted = true;
   goTo('notices');
 }
 
@@ -4432,6 +4433,7 @@ function supaUpsertVote(pollId, answers){
 
 function rHome(){
   if(!CU)return;
+  if(window._pollJustSubmitted){window._pollJustSubmitted=false;}
   var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   var h='';
@@ -4446,7 +4448,8 @@ function rHome(){
   });
   var unread=mine.filter(function(n){return !n.read;}).length;
   var activePoll=POLLS.find(function(p){return p.active;});
-  var pollPending=activePoll&&!(activePoll.votes[CU.id]&&activePoll.votes[CU.id]._submitted);
+  var myVote=activePoll?(activePoll.votes[CU.id]||{}):null;
+  var pollPending=activePoll&&!(myVote&&myVote._submitted===true);
   var bubbles=unread+(pollPending?1:0);
   if(bubbles>0){
     h+='<button data-id="notices" onclick="goTo(this.dataset.id)" style="display:flex;align-items:center;gap:8px;background:var(--badbg);border:none;border-radius:10px;padding:8px 12px;cursor:pointer;touch-action:manipulation">';
@@ -6254,6 +6257,14 @@ function rsvpEvent(eid,status){
     body:JSON.stringify({event_id:eid,member_id:CU.id,status:status})
   }).catch(function(e){console.warn('RSVP save failed:',e);});
   rHome();
+}
+
+
+function resendPollNotice(label, dayLabel){
+  var title='Poll: '+label;
+  var body='An active poll is open'+(dayLabel?' for '+dayLabel:'')+'. Please respond in the Notices tab.';
+  pushNotice('poll', title, body, 'all');
+  alert('Notice sent to all members.');
 }
 
 
