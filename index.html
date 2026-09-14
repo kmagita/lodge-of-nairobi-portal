@@ -3146,10 +3146,9 @@ function rPractice(){
   // Load this member's practice data into PM's standard keys
   var _uid=CU?CU.id:'';
   if(_uid){
-    var _myP=localStorage.getItem('pm_passages_'+_uid);
-    var _myPr=localStorage.getItem('pm_progress_'+_uid);
-    if(_myP)localStorage.setItem('pm_passages',_myP);
-    if(_myPr)localStorage.setItem('pm_progress',_myPr);
+    // Always overwrite with user-specific data (even if empty) to isolate accounts
+    localStorage.setItem('pm_passages', localStorage.getItem('pm_passages_'+_uid)||'[]');
+    localStorage.setItem('pm_progress', localStorage.getItem('pm_progress_'+_uid)||'{}');
   }
   pmInit();
   setTimeout(function(){
@@ -3158,8 +3157,11 @@ function rPractice(){
       var _origPersist=persist;
       window.persist=function(){
         _origPersist();
-        localStorage.setItem('pm_passages_'+_uid,localStorage.getItem('pm_passages')||'[]');
-        localStorage.setItem('pm_progress_'+_uid,localStorage.getItem('pm_progress')||'{}');
+        var _saveId=CU?CU.id:'';
+        if(_saveId){
+          localStorage.setItem('pm_passages_'+_saveId,localStorage.getItem('pm_passages')||'[]');
+          localStorage.setItem('pm_progress_'+_saveId,localStorage.getItem('pm_progress')||'{}');
+        }
       };
       window._persistPatched=true;
     }
