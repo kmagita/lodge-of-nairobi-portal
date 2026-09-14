@@ -5906,8 +5906,8 @@ function isPollLocked(poll){
 function submitVote(pollId){
   var poll = POLLS.find(function(p){return p.id===pollId;});
   if(!poll) return;
-  if(!poll.votes[CU.id] || !poll.votes[CU.id].f1){
-    alert('Please indicate whether you are attending before submitting.');
+  if(!poll.votes[CU.id] || poll.votes[CU.id].f1===undefined){
+    alert('Please select Yes or No for attendance before submitting.');
     return;
   }
   poll.votes[CU.id]._submitted = true;
@@ -6357,8 +6357,7 @@ function createMemberProfile(){
   if(btn){btn.textContent='Sending invite…';btn.disabled=true;}
 
   // Call the Edge Function — creates auth account + member profile + sends invite email
-  var session = supabase&&supabase.auth&&supabase.auth.session?supabase.auth.session():null;
-  var token = session&&session.access_token ? session.access_token : '';
+  var token = window._authToken || '';
 
   fetch(SUPA_URL.replace('/rest/v1','') + '/functions/v1/invite-member', {
     method: 'POST',
