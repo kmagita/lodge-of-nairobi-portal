@@ -6165,6 +6165,19 @@ function _rtTick(){
               to:n.to_all?['all']:(n.to_ids||[]),
               date:(n.created_at||new Date().toISOString()).split('T')[0], read:false};
     });
+    // Always ensure active polls have a notice entry
+    POLLS.forEach(function(p){
+      if(!p.active)return;
+      var exists=NOTICES.find(function(n){return n.type==='poll'&&n.title.indexOf(p.label)>-1;});
+      if(!exists){
+        NOTICES.unshift({id:'auto-'+p.id,type:'poll',
+          title:'Poll: '+p.label,
+          body:'An active poll is open for '+p.label+'. Please respond.',
+          to:'all',
+          date:p.createdAt?p.createdAt.split('T')[0]:new Date().toISOString().split('T')[0],
+          read:false});
+      }
+    });
     buildNav();
     if(pane==='notices') rNotices();
     if(pane==='home') rHome();
