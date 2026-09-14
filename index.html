@@ -6037,6 +6037,89 @@ function refreshApp(){
 }
 
 
+// ── Real-time auto-refresh ────────────────────────────────────────────────
+var _rtInterval = null;
+var _lastFetch = {};
+
+function _fetchIfChanged(table, query, callback){
+  supa(query, {method:'GET'}).then(function(r){return r.json();})
+    .then(function(d){
+      if(!Array.isArray(d))return;
+      var sig = JSON.stringify(d.slice(0,3).map(function(r){return r.updated_at||r.created_at||r.id;}));
+      if(sig !== _lastFetch[table]){
+        _lastFetch[table] = sig;
+        callback(d);
+      }
+    }).catch(function(){});
+}
+
+function _rtTick(){
+  if(!CU)return;
+  var active = document.querySelector('.pane.on');
+  var pane = active ? active.id.replace('pane-','') : 'home';
+
+  // Always refresh notices (lightweight, most time-sensitive)
+  _fetchIfChanged('notices', 'notices?select=*&order=created_at.desc', function(d){
+    NOTICES = d.map(function(n){
+      return {id:n.id, type:n.type||'info', title:n.title||'Notice', body:n.body||'',
+              to:n.to_all?['all']:(n.to_ids||[]),
+              date:(n.created_at||new Date().toISOString()).split('T')[0], read:false};
+    });
+    buildNav();
+    if(pane==='notices') rNotices();
+    if(pane==='home') rHome();
+  });
+
+  // Refresh polls
+  _fetchIfChanged('polls', 'polls?select=*,poll_votes(*)&order=created_at.desc', function(d){
+    POLLS = d.map(function(p){
+      var votes={};
+      (p.poll_votes||[]).forEach(function(v){votes[v.member_id]=v.answers;});
+      return {id:p.id, label:p.label, dayLabel:p.day_label||'', type:p.type||'rehearsal',
+              active:p.active, fields:p.fields||[], votes:votes,
+              mealOptions:(p.meal_options||'').split(',').map(function(s){return s.trim();}).filter(Boolean),
+              createdAt:p.created_at};
+    });
+    if(pane==='polls') rPolls();
+    if(pane==='home') rHome();
+    if(pane==='notices') rNotices();
+  });
+
+  // Refresh calendar events (less often — skip if timestamp same)
+  _fetchIfChanged('calendar', 'calendar_events?select=*&order=date', function(d){
+    CALENDAR_EVENTS = d.map(function(e){
+      return {id:e.id, date:e.date, title:e.title, type:e.event_type||e.type||'meeting',
+              venue:e.venue||'', cancelled:e.cancelled||false};
+    });
+    if(pane==='calendar') rCalendar();
+  });
+
+  // Refresh charge assignments when on duties/home
+  if(pane==='duties'||pane==='home'){
+    _fetchIfChanged('charge_assignments', 'charge_assignments?select=*', function(d){
+      CHARGE_ASSIGNMENTS = d.map(function(a){
+        return {id:a.id, pid:a.passage_id, ptitle:'', mdate:a.meeting_date,
+                prim:a.primary_id, back:a.backup_id, by:a.assigned_by,
+                status:a.status, dby:a.delivered_by};
+      });
+      if(pane==='duties') rDuties();
+      if(pane==='home') rHome();
+    });
+  }
+}
+
+function startRealtime(){
+  if(_rtInterval)clearInterval(_rtInterval);
+  _rtInterval = setInterval(_rtTick, 30000); // every 30 seconds
+  // Also run once after 3 seconds for initial fresh data
+  setTimeout(_rtTick, 3000);
+}
+
+function stopRealtime(){
+  if(_rtInterval){clearInterval(_rtInterval);_rtInterval=null;}
+}
+
+
 
 // ════════════════════════════════
 // POCKET MENTOR — embedded
