@@ -6310,14 +6310,22 @@ function _rtTick(){
           read:_readIds['auto-'+p.id]===true});
       }
     });
-    // Sync read status from Supabase
+    // Sync read status then apply to NOTICES
     supa('notice_reads?member_id=eq.'+CU.id,{method:'GET'})
       .then(function(r){return r.json();})
-      .then(function(d){if(Array.isArray(d))d.forEach(function(r){_readIds[r.notice_id]=true;});})
-      .catch(function(){});
-    buildNav();
-    if(pane==='notices') rNotices();
-    if(pane==='home') rHome();
+      .then(function(d){
+        if(Array.isArray(d))d.forEach(function(r){_readIds[r.notice_id]=true;});
+        // Apply read states after sync
+        NOTICES.forEach(function(n){ n.read=_readIds[n.id]===true; });
+        buildNav();
+        if(pane==='notices') rNotices();
+        if(pane==='home') rHome();
+      })
+      .catch(function(){
+        buildNav();
+        if(pane==='notices') rNotices();
+        if(pane==='home') rHome();
+      });
   });
 
   // Refresh polls
