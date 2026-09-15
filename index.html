@@ -2856,8 +2856,10 @@ function castVoteText(pid,fid,val){
       if(!_readIds[autoId]){
         _readIds[autoId]=true;
         supa('notice_reads',{method:'POST',
-          headers:{'Prefer':'resolution=merge-duplicates'},
+          headers:{'Prefer':'resolution=merge-duplicates,return=representation'},
           body:JSON.stringify({notice_id:autoId,member_id:CU.id})
+        }).then(function(r){
+          if(!r.ok)r.text().then(function(t){console.warn('poll notice_read failed:',r.status,t);});
         }).catch(function(){});
       }
       // Also mark any real DB notice for this poll as read
@@ -4680,9 +4682,11 @@ function markHomeNoticeRead(nid){
     if(!_readIds[nid]){
       _readIds[nid]=true;
       supa('notice_reads',{method:'POST',
-        headers:{'Prefer':'resolution=merge-duplicates'},
+        headers:{'Prefer':'resolution=merge-duplicates,return=representation'},
         body:JSON.stringify({notice_id:nid,member_id:CU.id})
-      }).catch(function(){});
+      }).then(function(r){
+        if(!r.ok)r.text().then(function(t){console.warn('notice_reads home save failed:',r.status,t);});
+      }).catch(function(e){console.warn('notice_reads error:',e);});
     }
   }
   // Persist read state
