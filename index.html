@@ -1766,9 +1766,7 @@ function loadAppData() {
     safeFetch('calendar_events?select=*&order=date', function(d) {
       CALENDAR_EVENTS = d;
     }),
-    safeFetch('notice_reads?member_id=eq.'+CU.id, function(d){
-      d.forEach(function(r){ _readIds[r.notice_id]=true; });
-    }),
+    // notice_reads loaded from localStorage (see loadReadIds)
     safeFetch('notices?select=*&order=created_at.desc', function(d) {
       NOTICES = d.map(function(n) {
         return {id:n.id, type:n.type||'info',
@@ -2855,12 +2853,7 @@ function castVoteText(pid,fid,val){
       var autoId='auto-'+p.id;
       if(!_readIds[autoId]){
         _readIds[autoId]=true;
-        supa('notice_reads',{method:'POST',
-          headers:{'Prefer':'resolution=merge-duplicates,return=representation'},
-          body:JSON.stringify({notice_id:autoId,member_id:CU.id})
-        }).then(function(r){
-          if(!r.ok)r.text().then(function(t){console.warn('poll notice_read failed:',r.status,t);});
-        }).catch(function(){});
+        saveReadIds();
       }
       // Also mark any real DB notice for this poll as read
       NOTICES.forEach(function(n){
@@ -4681,12 +4674,7 @@ function markHomeNoticeRead(nid){
     n.read=true;
     if(!_readIds[nid]){
       _readIds[nid]=true;
-      supa('notice_reads',{method:'POST',
-        headers:{'Prefer':'resolution=merge-duplicates,return=representation'},
-        body:JSON.stringify({notice_id:nid,member_id:CU.id})
-      }).then(function(r){
-        if(!r.ok)r.text().then(function(t){console.warn('notice_reads home save failed:',r.status,t);});
-      }).catch(function(e){console.warn('notice_reads error:',e);});
+      saveReadIds();
     }
   }
   // Persist read state
@@ -6310,22 +6298,10 @@ function _rtTick(){
           read:_readIds['auto-'+p.id]===true});
       }
     });
-    // Sync read status then apply to NOTICES
-    supa('notice_reads?member_id=eq.'+CU.id,{method:'GET'})
-      .then(function(r){return r.json();})
-      .then(function(d){
-        if(Array.isArray(d))d.forEach(function(r){_readIds[r.notice_id]=true;});
-        // Apply read states after sync
-        NOTICES.forEach(function(n){ n.read=_readIds[n.id]===true; });
-        buildNav();
-        if(pane==='notices') rNotices();
-        if(pane==='home') rHome();
-      })
-      .catch(function(){
-        buildNav();
-        if(pane==='notices') rNotices();
-        if(pane==='home') rHome();
-      });
+    NOTICES.forEach(function(n){ n.read=_readIds[n.id]===true; });
+    buildNav();
+    if(pane==='notices') rNotices();
+    if(pane==='home') rHome();
   });
 
   // Refresh polls
@@ -6461,6 +6437,21 @@ function createMemberProfile(){
     if(btn){btn.textContent='Invite member';btn.disabled=false;}
     alert('Failed to send invite. Check your connection.');
   });
+}
+
+
+function loadReadIds(){
+  if(!CU)return;
+  try{
+    var stored=localStorage.getItem('readIds_'+CU.id);
+    if(stored)Object.assign(_readIds, JSON.parse(stored));
+  }catch(e){}
+}
+
+function saveReadIds(){
+  if(!CU)return;
+  try{ localStorage.setItem('readIds_'+CU.id, JSON.stringify(_readIds)); }
+  catch(e){}
 }
 
 
