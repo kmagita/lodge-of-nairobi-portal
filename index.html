@@ -1734,6 +1734,7 @@ function doLogin() {
               }
             });
             startRealtime();
+            keepAlive();
           });
           document.getElementById('li-btn').style.opacity='1';
           document.getElementById('li-btn').textContent = 'Sign in';
@@ -1760,7 +1761,7 @@ function safeFetch(path, transform) {
 
 function loadAppData() {
   var queries = [
-    safeFetch('members?select=*&order=name', function(d) {
+    safeFetch('members?select=*,last_seen_notices&order=name', function(d) {
       MEMBERS = d.map(dbMember);
     }),
     safeFetch('calendar_events?select=*&order=date', function(d) {
@@ -6361,6 +6362,17 @@ function _rtTick(){
       if(pane==='duties') rDuties();
       if(pane==='home') rHome();
     });
+  }
+}
+
+function keepAlive(){
+  var key='supa_ping_'+( (typeof CU!=='undefined'&&CU)?CU.id:'anon');
+  var last=parseInt(localStorage.getItem(key)||'0');
+  var now=Date.now();
+  if(now-last>345600000){  // 4 days in ms
+    supa('members?select=id&limit=1',{method:'GET'})
+      .then(function(){localStorage.setItem(key,now.toString());})
+      .catch(function(){});
   }
 }
 
