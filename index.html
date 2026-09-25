@@ -2611,7 +2611,9 @@ function rMembers(){
         h+='<option value="'+o+'">'+(o||'— None (Brother)')+'</option>';
       });
       h+='</select></div></div>';
-      h+='<button id="nm-btn" class="btn btn-navy" style="width:100%;justify-content:center;margin-top:12px" onclick="createMemberProfile()">Invite member</button>';
+      h+='<div class="fg" style="margin-top:10px"><label class="lbl">Temporary password</label><input type="password" id="nm-pw" placeholder="e.g. Lodge7187" autocomplete="new-password"></div>';
+      h+='<div style="font-size:11px;color:var(--t3);margin-bottom:8px">Share this with the member so they can log in. They can change it from their profile.</div>';
+      h+='<button id="nm-btn" class="btn btn-navy" style="width:100%;justify-content:center;margin-top:4px" onclick="createMemberProfile()">Add member</button>';
       h+='</div>';
     }
   }
@@ -6423,68 +6425,48 @@ function createMemberProfile(){
   var name   = document.getElementById('nm-name');
   var deg    = document.getElementById('nm-deg');
   var office = document.getElementById('nm-office');
+  var tmpPw  = document.getElementById('nm-pw');
   if(!email||!email.value.trim()){alert('Enter the email address.');return;}
-  if(!name||!name.value.trim()){alert("Enter the member's full name.");return;}
-  var btn = document.getElementById('nm-btn');
-  if(btn){btn.textContent='Sending invite…';btn.disabled=true;}
+  if(!name||!name.value.trim()){alert('Enter the full name.');return;}
+  if(!tmpPw||!tmpPw.value.trim()){alert('Enter a temporary password for the member.');return;}
+  var btn=document.getElementById('nm-btn');
+  if(btn){btn.textContent='Creating…';btn.disabled=true;}
 
-  // Call the Edge Function — creates auth account + member profile + sends invite email
-  var token = window._authToken || '';
+  var reset = function(){if(btn){btn.textContent='Add member';btn.disabled=false;}};
 
-  fetch(SUPA_URL.replace('/rest/v1','') + '/functions/v1/invite-member', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + token,
-      'apikey': SUPA_KEY
-    },
-    body: JSON.stringify({
-      email:  email.value.trim(),
-      name:   name.value.trim(),
-      deg:    deg    ? deg.value    : 'EA',
-      office: office ? office.value : ''
-    })
+  // Step 1: create Supabase auth account using public signup
+  fetch(SUPA_URL+'/auth/v1/signup',{
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({email:email.value.trim().toLowerCase(),password:tmpPw.value.trim()})
   }).then(function(r){return r.json();})
   .then(function(d){
-    if(btn){btn.textContent='Invite member';btn.disabled=false;}
-    if(d.error){alert('Error: '+d.error);return;}
-    MEMBERS.push({id:d.id, name:name.value.trim(),
-      email:email.value.trim(), office:office?office.value:'',
-      deg:deg?deg.value:'EA', sub:'Unpaid', first_login:true});
-    MEMBERS.sort(function(a,b){return a.name.localeCompare(b.name);});
-    email.value=''; name.value=''; if(office)office.value='';
-    window._addMemberOpen=false;
-    alert(d.name+' has been invited. They will receive an email to set their password.');
-    rMembers();
-  }).catch(function(e){
-    if(btn){btn.textContent='Invite member';btn.disabled=false;}
-    alert('Failed to send invite. Check your connection.');
-  });
+    if(d.error){reset();alert('Could not create account: '+d.error.message||d.error);return;}
+    var uid=d.user&&d.user.id;
+    if(!uid){reset();alert('Account creation failed — no user ID returned.');return;}
+    // Step 2: create member profile via RPC
+    return supa('rpc/create_member_profile',{
+      method:'POST',
+      body:JSON.stringify({p_email:email.value.trim().toLowerCase(),
+        p_name:name.value.trim(),
+        p_deg:deg?deg.value:'EA',
+        p_office:office?office.value:''})
+    }).then(function(r){return r.json();})
+    .then(function(p){
+      reset();
+      if(p&&p.error){alert('Account created but profile failed: '+p.error);return;}
+      MEMBERS.push({id:uid,name:name.value.trim(),
+        email:email.value.trim(),office:office?office.value:'',
+        deg:deg?deg.value:'EA',sub:'Unpaid',first_login:true,
+        role:officeToRole(office?office.value:'')});
+      MEMBERS.sort(function(a,b){return a.name.localeCompare(b.name);});
+      email.value='';name.value='';if(tmpPw)tmpPw.value='';if(office)office.value='';
+      window._addMemberOpen=false;
+      alert(name.value||'Member'+' added. They can log in with the temporary password you set.');
+      rMembers();
+    });
+  }).catch(function(e){reset();alert('Network error: '+e.message);});
 }
-
-
-
-
-
-// ════════════════════════════════
-// POCKET MENTOR — embedded
-// ════════════════════════════════
-
-// ═══════════════════════════════════════════════════════
-// MASONIC DICTIONARY
-// ═══════════════════════════════════════════════════════
-const MASONIC_MAP = {
-  'boas':'boaz','boase':'boaz','bows':'boaz','bowes':'boaz',
-  'jachin':'jachin','jakin':'jachin','jaken':'jachin','jaykin':'jachin',
-  'shibboleth':'shibboleth','shiboleth':'shibboleth',
-  'tubalcain':'tubal-cain','tubulcain':'tubal-cain',
-  'hiram':'hiram','hyram':'hiram','abiff':'abiff','abif':'abiff',
-  'fellowcraft':'fellowcraft','worshipful':'worshipful',
-  'brethren':'brethren','breathren':'brethren','brethen':'brethren',
-  'deacon':'deacon','warden':'warden','trowel':'trowel','plumb':'plumb',
-  'ashlar':'ashlar','acacia':'acacia','hoodwink':'hoodwink',
-  'cabletow':'cable-tow','cable tow':'cable-tow',
-};
 function applyMasonicMap(w){ return MASONIC_MAP[w.toLowerCase()]||w; }
 
 // ═══════════════════════════════════════════════════════
