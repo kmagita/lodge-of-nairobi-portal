@@ -2592,31 +2592,6 @@ function rMembers(){
       h+='</div>';
     }
   }
-  // ── Add new member (Secretary only) ──────────────────────────────────
-  if(CU.role==='secretary'||CU.role==='master'){
-    var addOpen=window._addMemberOpen===true;
-    h+='<div class="stitle" style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">';
-    h+='<span>Add new member</span>';
-    h+='<button class="btn btn-navy btn-sm" onclick="window._addMemberOpen=!window._addMemberOpen;rMembers()">'+(addOpen?'&#9650; Cancel':'+ Add member')+'</button>';
-    h+='</div>';
-    if(addOpen){
-      h+='<div class="card">';
-      h+='<div style="font-size:12px;color:var(--t3);margin-bottom:12px">Enter the new member details. They will receive an email invitation to set their password.</div>';
-      h+='<div class="fg"><label class="lbl">Email address</label><input type="email" id="nm-email" placeholder="their@email.com"></div>';
-      h+='<div class="fg"><label class="lbl">Full name</label><input id="nm-name" placeholder="e.g. John Smith"></div>';
-      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
-      h+='<div class="fg" style="margin:0"><label class="lbl">Degree</label><select id="nm-deg"><option value="EA">First Degree (EA)</option><option value="FC">Second Degree (FC)</option><option value="MM">Third Degree (MM)</option></select></div>';
-      h+='<div class="fg" style="margin:0"><label class="lbl">Office (optional)</label><select id="nm-office">';
-      ['','Worshipful Master','Secretary','Director of Ceremonies','Mentor','Almoner','Treasurer','Chief Steward','Assistant DC'].forEach(function(o){
-        h+='<option value="'+o+'">'+(o||'— None (Brother)')+'</option>';
-      });
-      h+='</select></div></div>';
-      h+='<div class="fg" style="margin-top:10px"><label class="lbl">Temporary password</label><input type="password" id="nm-pw" placeholder="e.g. Lodge7187" autocomplete="new-password"></div>';
-      h+='<div style="font-size:11px;color:var(--t3);margin-bottom:8px">Share this with the member so they can log in. They can change it from their profile.</div>';
-      h+='<button id="nm-btn" class="btn btn-navy" style="width:100%;justify-content:center;margin-top:4px" onclick="createMemberProfile()">Add member</button>';
-      h+='</div>';
-    }
-  }
   document.getElementById('pane-members').innerHTML=h;
 }
 
@@ -6442,8 +6417,8 @@ function createMemberProfile(){
   }).then(function(r){return r.json();})
   .then(function(d){
     if(d.error){reset();alert('Could not create account: '+d.error.message||d.error);return;}
-    var uid=d.user&&d.user.id;
-    if(!uid){reset();alert('Account creation failed — no user ID returned.');return;}
+    var uid=(d.user&&d.user.id)||d.id||null;
+    if(!uid){reset();alert('Could not create account: '+(d.error_description||d.error_code||(d.error&&d.error.message)||'Check Supabase Auth settings — Allow signups must be enabled.'));return;}
     // Step 2: create member profile via RPC
     return supa('rpc/create_member_profile',{
       method:'POST',
