@@ -4385,9 +4385,12 @@ function rMembersAdmin(){
     h+='</div>';
     h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
     h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">UGLE number</label><input id="nm-ugle" placeholder="GL000000"></div>';
+    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Mother Lodge</label><input id="nm-mother" placeholder="e.g. Lodge of Nairobi No. 7187"></div>';
     h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Phone</label><input id="nm-phone" placeholder="07700 900000"></div>';
     h+='</div>';
     h+='<div class="fg"><label class="lbl">Date of birth</label><input type="date" id="nm-dob"></div>';
+    h+='<div class="fg"><label class="lbl">Temporary password</label><input type="password" id="nm-tmpPw" placeholder="e.g. Lodge7187" autocomplete="new-password"></div>';
+    h+='<div style="font-size:11px;color:var(--t3);margin-bottom:10px">Share this with the member — they can change it after logging in.</div>';
     h+='<button class="btn btn-navy" style="width:100%;justify-content:center" onclick="addNewMember()"><svg class="ico" width="16" height="16"><use href="#ico-plus"/></svg> Add member</button>';
     h+='</div>';
   }
@@ -4421,35 +4424,47 @@ function addNewMember(){
   var raise = document.getElementById('nm-raise');
   var office= document.getElementById('nm-office');
   var ugle  = document.getElementById('nm-ugle');
+  var dob   = document.getElementById('nm-dob');
+  var phone = document.getElementById('nm-phone');
+  var tmpPw = document.getElementById('nm-tmpPw');
   if(!name||!name.value.trim()){alert('Enter a name.');return;}
   if(!email||!email.value.trim()){alert('Enter an email address.');return;}
+  if(!tmpPw||!tmpPw.value.trim()){alert('Enter a temporary password for the member.');return;}
 
-  var initV  = init?init.value:'';
-  var passV  = pass_?pass_.value:'';
-  var raiseV = raise?raise.value:'';
-  var deg    = degreeFromDates(initV,passV,raiseV);
+  var initV=init?init.value:'', passV=pass_?pass_.value:'', raiseV=raise?raise.value:'';
+  var deg=degreeFromDates(initV,passV,raiseV);
+  var em=email.value.trim().toLowerCase(), nm=name.value.trim();
+  var btn=document.getElementById('nm-add-btn');
+  if(btn){btn.textContent='Creating…';btn.disabled=true;}
+  var reset=function(){if(btn){btn.textContent='+ Add member';btn.disabled=false;}};
 
-  // Step 1: create auth user via Supabase admin invite
-  // (Uses the anon key — Secretary creates with a temporary password)
-  // For now: insert member row directly; auth account created separately
-  var payload = {
-    name:   name.value.trim(),
-    email:  email.value.trim().toLowerCase(),
-    office: office?office.value:'',
-    deg:    deg,
-    ugle:   ugle?ugle.value:'',
-    init:   initV||null,
-    pass_:  passV||null,
-    raise:  raiseV||null,
-    sub:    'Unpaid',
-    first_login: true
-  };
-
-  // Note: id must come from auth.users — Secretary needs to create
-  // the auth user in Supabase dashboard first, then the member row
-  // is inserted automatically via loadAppData on that user's first login.
-  // For bulk add: Secretary uses Admin → Import CSV or Supabase dashboard.
-  alert('To add a new member: go to Supabase Dashboard → Authentication → Users → Invite user. Their profile is set up on first login. For bulk adds use Admin → Import CSV.');
+  // Step 1: create the Supabase auth account
+  fetch(SUPA_URL+'/auth/v1/signup',{
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({email:em,password:tmpPw.value.trim()})
+  }).then(function(r){return r.json();})
+  .then(function(d){
+    var uid=(d.user&&d.user.id)||d.id||null;
+    if(!uid){reset();alert('Could not create account: '+(d.error_description||d.msg||(d.error&&d.error.message)||'Email may already be registered, or signups are disabled in Supabase Auth settings.'));return;}
+    // Step 2: insert the member profile
+    return supa('members',{method:'POST',
+      headers:{'Prefer':'return=representation'},
+      body:JSON.stringify({id:uid,name:nm,email:em,
+        office:office?office.value:'',deg:deg,ugle:ugle?ugle.value:'',mother_lodge:(document.getElementById('nm-mother')||{}).value||'',
+        init:initV||null,pass_:passV||null,raise:raiseV||null,
+        dob:dob&&dob.value?dob.value:null,phone:phone?phone.value:'',
+        sub:'Unpaid',first_login:true})
+    }).then(function(r){
+      reset();
+      if(!r.ok){r.text().then(function(t){alert('Profile insert failed: '+t);});return;}
+      MEMBERS.push({id:uid,name:nm,email:em,office:office?office.value:'',
+        deg:deg,sub:'Unpaid',first_login:true,role:officeToRole(office?office.value:'')});
+      MEMBERS.sort(function(a,b){return a.name.localeCompare(b.name);});
+      alert(nm+' added. They can log in with the temporary password.');
+      adminTab='register'; rMembersAdmin();
+    });
+  }).catch(function(e){reset();alert('Network error: '+e.message);});
 }
 
 
