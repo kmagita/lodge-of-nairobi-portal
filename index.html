@@ -1836,6 +1836,13 @@ function loadAppData() {
         RSVP_DATA[r.event_id][r.member_id]=r.status;
       });
     }),
+    safeFetch('event_attendance?select=*', function(d){
+      ATTENDANCE_DATA={};
+      d.forEach(function(r){
+        if(!ATTENDANCE_DATA[r.event_id])ATTENDANCE_DATA[r.event_id]={};
+        ATTENDANCE_DATA[r.event_id][r.member_id]=true;
+      });
+    }),
     safeFetch('charge_assignments?select=*', function(d) {
       CHARGE_ASSIGNMENTS = d.map(function(a) {
         return {id:a.id, pid:a.passage_id, ptitle:'', mdate:a.meeting_date,
@@ -3193,7 +3200,7 @@ function rDuties(){
 
   // ── My assignment card (for brothers) ─────────────────────────────────
   if(!isOfficer){
-    var myAssign=CHARGE_ASSIGNMENTS.filter(function(a){return(a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';});
+    var myAssign=CHARGE_ASSIGNMENTS.filter(function(a){return a.prim===CU.id||a.back===CU.id;});
     if(myAssign.length){
       h+='<div class="stitle">My assignments</div>';
       myAssign.forEach(function(a){
@@ -3211,7 +3218,17 @@ function rDuties(){
     }
   }
 
-  // ── All assignments ────────────────────────────────────────────────────
+  // ── All assignments — officers only ────────────────────────────────────
+  var canSeeAll=(CU.role==='dc'||CU.role==='secretary'||CU.role==='master');
+  if(!canSeeAll){
+    // Brother: only their own assignments were shown above. If none, say so.
+    var mine=CHARGE_ASSIGNMENTS.filter(function(a){return a.prim===CU.id||a.back===CU.id;});
+    if(!mine.length){
+      h+='<div class="card" style="text-align:center;padding:20px;color:var(--t3)">You have no charge assignments at present.</div>';
+    }
+    document.getElementById('pane-duties').innerHTML=h;
+    return;
+  }
   h+='<div class="stitle">Charge assignments</div>';
   if(!CHARGE_ASSIGNMENTS.length){
     h+='<div class="card" style="text-align:center;padding:20px;color:var(--t3)">No assignments yet.</div>';
@@ -3733,6 +3750,106 @@ function rReports(){
   if(CU.role==='secretary'||CU.role==='master'){
     h+='<div class="stitle">Attendance &amp; apologies</div>';
     var now2=new Date();
+    var today2=new Date(now2.toDateString());
+    var isRsvpEvent=function(e){return !e.cancelled&&(e.type==='meeting'||e.type==='rehearsal'||e.type==='installation');};
+    // Current-month upcoming events only
+    var upcoming2=CALENDAR_EVENTS.filter(function(e){
+      if(!isRsvpEvent(e))return false;
+      var d=new Date(e.date);
+      return d>=today2 && d.getMonth()===now2.getMonth() && d.getFullYear()===now2.getFullYear();
+    }).sort(function(a,b){return a.date.localeCompare(b.date);});
+    // Past events → history
+    var pastEvents=CALENDAR_EVENTS.filter(function(e){
+      return isRsvpEvent(e) && new Date(e.date) < today2;
+    }).sort(function(a,b){return b.date.localeCompare(a.date);});
+
+    var renderAtt=function(e){
+      var rsvps=RSVP_DATA[e.id]||{};
+      var attending=MEMBERS.filter(function(m){return rsvps[m.id]==='attending';});
+      var apologies=MEMBERS.filter(function(m){return rsvps[m.id]==='apologies';});
+      var noReply=MEMBERS.filter(function(m){return !rsvps[m.id];});
+      var d=new Date(e.date);
+      var months2=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var hh='<div class="card" style="margin-bottom:10px">';
+      hh+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:2px">'+e.title+'</div>';
+      hh+='<div style="font-size:11px;color:var(--t3);margin-bottom:10px">'+d.getDate()+' '+months2[d.getMonth()]+' '+d.getFullYear()+'</div>';
+      hh+='<div style="display:flex;gap:8px;margin-bottom:10px">';
+      hh+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+attending.length+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">ATTENDING</div></div>';
+      hh+='<div style="flex:1;text-align:center;background:var(--badbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--bad)">'+apologies.length+'</div><div style="font-size:10px;color:var(--bad);font-weight:600">APOLOGIES</div></div>';
+      hh+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--t3)">'+noReply.length+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">NO REPLY</div></div>';
+      hh+='</div>';
+      if(attending.length)hh+='<div style="font-size:12px;color:var(--ok);margin-bottom:4px"><strong>Attending:</strong> '+attending.map(gn).join(', ')+'</div>';
+      if(apologies.length)hh+='<div style="font-size:12px;color:var(--bad);margin-bottom:4px"><strong>Apologies:</strong> '+apologies.map(gn).join(', ')+'</div>';
+      if(noReply.length)hh+='<div style="font-size:12px;color:var(--t3);margin-bottom:8px"><strong>No reply:</strong> '+noReply.map(gn).join(', ')+'</div>';
+      // Actual attendance / close (Secretary only)
+      if(CU.role==='secretary'){
+        if(e.closed){
+          var reg2=ATTENDANCE_DATA[e.id]||{};
+          var present=MEMBERS.filter(function(m){return reg2[m.id];});
+          hh+='<div style="border-top:1px solid var(--bdr);margin-top:8px;padding-top:10px">';
+          hh+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+          hh+='<div><span style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase">Present</span> ';
+          hh+='<span style="font-size:18px;font-weight:700;color:var(--navy)">'+present.length+'</span>';
+          if(e.actual_visitors)hh+='<span style="font-size:12px;color:var(--t3)"> + '+e.actual_visitors+' visitor'+(e.actual_visitors!=1?'s':'')+'</span>';
+          hh+='</div>';
+          hh+='<div><span class="badge" style="background:var(--bg2);color:var(--t3)">Closed</span>';
+          if(CU.role==='secretary')hh+='<button class="btn btn-n btn-sm" style="font-size:11px;margin-left:6px" data-eid="'+e.id+'" onclick="reopenEvent(this.dataset.eid)">Reopen</button>';
+          hh+='</div></div>';
+          if(present.length)hh+='<div style="font-size:12px;color:var(--navy)">'+present.map(gn).join(', ')+'</div>';
+          hh+='</div>';
+        } else {
+          var eo=window._attRecordOpen===e.id;
+          hh+='<div style="border-top:1px solid var(--bdr);margin-top:8px;padding-top:10px">';
+          hh+='<button class="btn btn-navy btn-sm" data-eid="'+e.id+'" onclick="window._attRecordOpen=(window._attRecordOpen===this.dataset.eid?null:this.dataset.eid);rReports()">'+(eo?'&#9650; Cancel':'Take attendance register')+'</button>';
+          if(eo){
+            var reg=ATTENDANCE_DATA[e.id]||{};
+            hh+='<div style="margin-top:10px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase">Tick who attended</div>';
+            hh+='<div style="font-size:11px;color:var(--t3);margin-bottom:8px">Pre-ticked from RSVP replies. Adjust to who was actually present.</div>';
+            hh+='<div style="max-height:280px;overflow-y:auto;border:1px solid var(--bdr);border-radius:8px;padding:4px 8px;margin-bottom:10px">';
+            MEMBERS.forEach(function(m){
+              // pre-tick: if register has a value use it, otherwise use RSVP attending
+              var checked;
+              if(reg[m.id]!==undefined)checked=reg[m.id];
+              else checked=(RSVP_DATA[e.id]&&RSVP_DATA[e.id][m.id]==='attending');
+              hh+='<label style="display:flex;align-items:center;gap:10px;padding:6px 4px;cursor:pointer;border-bottom:1px solid var(--bg2)">';
+              hh+='<input type="checkbox" class="att-chk-'+e.id+'" data-mid="'+m.id+'"'+(checked?' checked':'')+' style="width:18px;height:18px">';
+              hh+='<span style="font-size:13px;color:var(--navy)">'+gn(m)+'</span>';
+              hh+='<span style="font-size:11px;color:var(--t3);margin-left:auto">'+m.deg+'</span>';
+              hh+='</label>';
+            });
+            hh+='</div>';
+            hh+='<div class="fg" style="margin-bottom:10px"><label class="lbl">Visitors (non-members)</label><input type="number" id="att-vis-'+e.id+'" min="0" value="'+(e.actual_visitors||0)+'"></div>';
+            hh+='<button class="btn btn-navy btn-sm" style="width:100%;justify-content:center" data-eid="'+e.id+'" onclick="closeEventAttendance(this.dataset.eid)">Save register &amp; close event</button>';
+          }
+          hh+='</div>';
+        }
+      } else if(e.closed && e.actual_attendance!=null){
+        hh+='<div style="border-top:1px solid var(--bdr);margin-top:8px;padding-top:10px"><span style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase">Actual attendance</span> <span style="font-size:16px;font-weight:700;color:var(--navy)">'+e.actual_attendance+'</span></div>';
+      }
+      hh+='</div>';
+      return hh;
+    };
+
+    if(!upcoming2.length){
+      h+='<div class="card" style="text-align:center;color:var(--t3);padding:20px">No events this month</div>';
+    } else {
+      upcoming2.forEach(function(e){ h+=renderAtt(e); });
+    }
+
+    // History section — collapsible
+    if(pastEvents.length){
+      var histOpen=window._attHistOpen===true;
+      h+='<div class="stitle" style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">';
+      h+='<span>Past events</span>';
+      h+='<button class="btn btn-n btn-sm" onclick="window._attHistOpen=!window._attHistOpen;rReports()">'+(histOpen?'&#9650; Hide':'&#9660; Show ('+pastEvents.length+')')+'</button></div>';
+      if(histOpen){
+        pastEvents.forEach(function(e){ h+=renderAtt(e); });
+      }
+    }
+  }
+
+  var _unused_rsvp_old=function(){
+    var now2=new Date();
     var upcoming2=CALENDAR_EVENTS.filter(function(e){
       return !e.cancelled&&(e.type==='meeting'||e.type==='rehearsal'||e.type==='installation')&&
              new Date(e.date)>=new Date(now2.toDateString());
@@ -3760,7 +3877,7 @@ function rReports(){
       if(noReply.length){h+='<div style="font-size:12px;color:var(--t3)"><strong>No reply:</strong> '+noReply.map(gn).join(', ')+'</div>';}
       h+='</div>';
     });
-  }
+  }; // end _unused_rsvp_old
 
   document.getElementById('pane-reports').innerHTML=h;
 }
@@ -4803,6 +4920,30 @@ function rMemberDetail(){
   }
 
   h+='</div>';
+  // ── Attendance history ────────────────────────────────────────────────
+  var attended=CALENDAR_EVENTS.filter(function(e){
+    return e.closed && ATTENDANCE_DATA[e.id] && ATTENDANCE_DATA[e.id][m.id];
+  }).sort(function(a,b){return b.date.localeCompare(a.date);});
+  var closedEvents=CALENDAR_EVENTS.filter(function(e){return e.closed;});
+  h+='<div class="stitle" style="margin-top:16px">Attendance record</div>';
+  h+='<div class="card">';
+  if(closedEvents.length){
+    var rate=Math.round(attended.length/closedEvents.length*100);
+    h+='<div style="display:flex;gap:10px;margin-bottom:'+(attended.length?'12':'0')+'px">';
+    h+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:8px;padding:10px"><div style="font-size:22px;font-weight:700;color:var(--navy)">'+attended.length+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">ATTENDED</div></div>';
+    h+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:8px;padding:10px"><div style="font-size:22px;font-weight:700;color:var(--navy)">'+closedEvents.length+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">RECORDED</div></div>';
+    h+='<div style="flex:1;text-align:center;background:'+(rate>=50?'var(--okbg)':'var(--warnbg)')+';border-radius:8px;padding:10px"><div style="font-size:22px;font-weight:700;color:'+(rate>=50?'var(--ok)':'var(--warn)')+'">'+rate+'%</div><div style="font-size:10px;color:'+(rate>=50?'var(--ok)':'var(--warn)')+';font-weight:600">RATE</div></div>';
+    h+='</div>';
+    var months3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    attended.slice(0,8).forEach(function(e){
+      var d=new Date(e.date);
+      h+='<div style="font-size:12px;color:var(--t2);padding:4px 0;border-bottom:1px solid var(--bg2)">&#10003; '+e.title+' &middot; <span style="color:var(--t3)">'+d.getDate()+' '+months3[d.getMonth()]+' '+d.getFullYear()+'</span></div>';
+    });
+  } else {
+    h+='<div style="font-size:12px;color:var(--t3);text-align:center;padding:8px">No attendance recorded yet.</div>';
+  }
+  h+='</div>';
+
   document.getElementById('pane-memberdetail').innerHTML=h;
 
   // Run degree preview on load if editing
@@ -6317,7 +6458,9 @@ function _rtTick(){
     CALENDAR_EVENTS = d.map(function(e){
       return {id:e.id, date:e.date, title:e.title, type:e.event_type||e.type||'meeting',
               venue:e.venue||'', cancelled:e.cancelled||false,
-              degree:e.degree||'all'};
+              degree:e.degree||'all', time:e.time||'',
+              closed:e.closed||false, actual_attendance:e.actual_attendance,
+              actual_visitors:e.actual_visitors||0};
     });
     if(pane==='calendar') rCalendar();
   });
@@ -6359,7 +6502,8 @@ function stopRealtime(){
 }
 
 
-var RSVP_DATA={};  // keyed by event_id → {member_id: 'attending'|'apologies'}
+var RSVP_DATA={};
+var ATTENDANCE_DATA={};  // event_id → {member_id: true} — actual attendance register  // keyed by event_id → {member_id: 'attending'|'apologies'}
 
 function rsvpEvent(eid,status){
   if(!RSVP_DATA[eid])RSVP_DATA[eid]={};
@@ -7705,6 +7849,48 @@ function pmInit(){
   if(!window._pmLoaded){window._pmLoaded=true;load();}
   loadVoices&&loadVoices();
   showTab('library');
+}
+
+
+function closeEventAttendance(eid){
+  var e=CALENDAR_EVENTS.find(function(x){return x.id===eid;});
+  if(!e)return;
+  var vis=document.getElementById('att-vis-'+eid);
+  var visitors=vis&&vis.value!==''?parseInt(vis.value):0;
+  // Collect ticked members
+  var boxes=document.querySelectorAll('.att-chk-'+eid);
+  var present=[];
+  boxes.forEach(function(b){ if(b.checked)present.push(b.dataset.mid); });
+  // Update local register
+  ATTENDANCE_DATA[eid]={};
+  present.forEach(function(mid){ATTENDANCE_DATA[eid][mid]=true;});
+  e.actual_attendance=present.length;
+  e.actual_visitors=visitors;
+  e.closed=true;
+  // Save: delete existing rows for this event, then insert the ticked set
+  supa('event_attendance?event_id=eq.'+eid,{method:'DELETE'}).then(function(){
+    if(present.length){
+      var rows=present.map(function(mid){return {event_id:eid,member_id:mid};});
+      return supa('event_attendance',{method:'POST',body:JSON.stringify(rows)});
+    }
+  }).then(function(){
+    return supa('calendar_events?id=eq.'+eid,{method:'PATCH',
+      body:JSON.stringify({actual_attendance:present.length,actual_visitors:visitors,closed:true})});
+  }).then(function(r){
+    if(r&&!r.ok)r.text().then(function(t){alert('Save issue: '+t);});
+  }).catch(function(e){alert('Network error saving register.');});
+  window._attRecordOpen=null;
+  rReports();
+}
+
+function reopenEvent(eid){
+  var e=CALENDAR_EVENTS.find(function(x){return x.id===eid;});
+  if(!e)return;
+  e.closed=false;
+  supa('calendar_events?id=eq.'+eid,{method:'PATCH',
+    body:JSON.stringify({closed:false})
+  }).catch(function(){});
+  rReports();
 }
 
 </script>
