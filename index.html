@@ -2302,7 +2302,7 @@ function goTo(id){
   var el=document.getElementById('pane-'+id);if(el)el.className='pane on';
   document.querySelectorAll('.nb').forEach(function(b){b.className='nb';});
   var nb=document.getElementById('nb-'+id);if(nb)nb.className='nb on';
-  var map={home:rHome,members:rMembers,duties:rDuties,library:rLibrary,summons:rSummons,notices:rNotices,profile:rProfile,calendar:rCalendar,almoner:rAlmoner,reports:rReports,polls:rPolls,practice:rPractice,assignduty:rAssignForm,memberdetail:rMemberDetail,mentor:rMentor,agenda:rAgenda,admin:rAdmin};
+  var map={home:rHome,members:rMembers,duties:rDuties,library:rLibrary,summons:rSummons,notices:rNotices,profile:rProfile,calendar:rCalendar,almoner:rAlmoner,reports:rReports,polls:rPolls,practice:rPractice,assignduty:rAssignForm,memberdetail:rMemberDetail,mentor:rMentor,agenda:rAgenda};
   if(map[id])map[id]();
 }
 
@@ -2484,6 +2484,12 @@ function rMembers(){
   if(!CU)return;
   var isSec=(CU.role==='secretary');
   var isTreas=CU.role==='treasurer';
+  // Secretary and Master get the full admin view (Register / Add member / Import CSV)
+  if(isSec||CU.role==='master'){
+    rMembersAdmin();
+    return;
+  }
+  // Treasurer gets subscription view
   if(isTreas){
     var paid=MEMBERS.filter(function(m){return m.sub==='Paid';});
     var arrears=MEMBERS.filter(function(m){return m.sub==='Arrears';});
@@ -2553,66 +2559,18 @@ function rMembers(){
     document.getElementById('pane-members').innerHTML=h;
     return;
   }
-
-  var ao=window._addMemberOpen===true;
-  var h='';
-  if(isSec)h+='<div style="text-align:right;margin-bottom:10px"><button class="btn btn-navy btn-sm" onclick="window._addMemberOpen=!window._addMemberOpen;rMembers()">'+(ao?'&#9650; Cancel':'+ Add member')+'</button></div>';
-  if(isSec&&ao){
-    h+='<div class="card" style="margin-bottom:14px">';
-    h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">New member</div>';
-    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-    h+='<div class="fg" style="margin:0 0 8px"><label class="lbl">Full name</label><input id="nm-name" placeholder="Bro. First Last"></div>';
-    h+='<div class="fg" style="margin:0 0 8px"><label class="lbl">Email</label><input type="email" id="nm-email" placeholder="email@example.com"></div>';
-    h+='</div>';
-    h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
-    h+='<div class="fg" style="margin:0 0 8px"><label class="lbl">Initiation (EA)</label><input type="date" id="nm-init"></div>';
-    h+='<div class="fg" style="margin:0 0 8px"><label class="lbl">Passing (FC)</label><input type="date" id="nm-pass"></div>';
-    h+='<div class="fg" style="margin:0 0 8px"><label class="lbl">Raising (MM)</label><input type="date" id="nm-raise"></div>';
-    h+='</div>';
-    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-    h+='<div class="fg" style="margin:0 0 8px"><label class="lbl">Office</label><select id="nm-office">';
-    ['','Worshipful Master','Secretary','Director of Ceremonies','Mentor','Almoner','Treasurer','Chief Steward','Assistant DC'].forEach(function(o){h+='<option value="'+o+'">'+(o||'\u2014 None (Brother)')+'</option>';});
-    h+='</select></div>';
-    h+='<div class="fg" style="margin:0 0 8px"><label class="lbl">Temporary password</label><input type="password" id="nm-tmpPw" placeholder="e.g. Lodge7187"></div>';
-    h+='</div>';
-    h+='<button id="nm-add-btn" class="btn btn-navy" style="width:100%;justify-content:center;margin-top:4px" onclick="addNewMember()">+ Add member</button>';
-    h+='</div>';
-  }
+  // Everyone else — simple read-only list
+  var h='<div class="sf" style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px">Members</div>';
+  h+='<div style="font-size:12px;color:var(--t3);margin-bottom:14px">'+MEMBERS.length+' members</div>';
   h+='<input id="mem-search" placeholder="Search..." oninput="filterMembers(this.value)" style="width:100%;margin-bottom:14px">';
   h+='<div id="mem-list">';
   MEMBERS.forEach(function(m){
     h+='<div class="card" style="margin-bottom:6px;padding:12px 14px"><div class="srow">';
     h+='<div style="flex:1"><div style="font-weight:600;font-size:14px;color:var(--navy)">'+m.name+'</div>';
     h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">'+m.deg+(m.office?' &middot; '+m.office:'')+'</div></div>';
-    h+='<span class="badge" style="font-size:10px;background:'+({'Paid':'var(--okbg)','Arrears':'var(--badbg)','Honorary':'var(--infobg)'}[m.sub]||'var(--bg2)')+';color:'+({'Paid':'var(--ok)','Arrears':'var(--bad)','Honorary':'var(--info)'}[m.sub]||'var(--t3)')+'">'+m.sub+'</span>';
-    if(isSec)h+='<button class="btn btn-n btn-sm" style="margin-left:6px" data-mid="'+m.id+'" data-dest="memberdetail" onclick="window._detailId=this.dataset.mid;goTo(this.dataset.dest)"><svg class="ico" width="14" height="14"><use href="#ico-edit"/></svg></button>';
     h+='</div></div>';
   });
   h+='</div>';
-  // ── Historical subscription payment (Treasurer) ──────────────────────
-  if(CU.role==='treasurer'||CU.role==='secretary'||CU.role==='master'){
-    var hSubOpen=window._histSubOpen===true;
-    h+='<div class="stitle" style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">';
-    h+='<span>Historical subscription payment</span>';
-    h+='<button class="btn btn-n btn-sm" onclick="window._histSubOpen=!window._histSubOpen;rMembers()">'+(hSubOpen?'&#9650; Hide':'&#9660; Add record')+'</button></div>';
-    if(hSubOpen){
-      h+='<div class="card">';
-      h+='<div class="fg"><label class="lbl">Member</label><select id="hsp-member"><option value="">— Select —</option>';
-      MEMBERS.forEach(function(m){h+='<option value="'+m.id+'">'+gn(m)+'</option>';});
-      h+='</select></div>';
-      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
-      h+='<div class="fg" style="margin:0"><label class="lbl">Year</label><input id="hsp-year" type="number" placeholder="e.g. 2024"></div>';
-      h+='<div class="fg" style="margin:0"><label class="lbl">Amount (KES)</label><input id="hsp-amount" type="number" placeholder="e.g. 5000"></div>';
-      h+='</div>';
-      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">';
-      h+='<div class="fg" style="margin:0"><label class="lbl">Payment date</label><input type="date" id="hsp-date"></div>';
-      h+='<div class="fg" style="margin:0"><label class="lbl">Method</label><select id="hsp-method"><option value="">—</option><option>Bank transfer</option><option>M-Pesa</option><option>Cash</option><option>Cheque</option></select></div>';
-      h+='</div>';
-      h+='<div class="fg" style="margin-top:10px"><label class="lbl">Reference</label><input id="hsp-ref" placeholder="Optional ref number"></div>';
-      h+='<button class="btn btn-navy" style="width:100%;justify-content:center;margin-top:4px" onclick="addHistoricalSubPayment()">Save payment record</button>';
-      h+='</div>';
-    }
-  }
   document.getElementById('pane-members').innerHTML=h;
 }
 
@@ -4372,7 +4330,7 @@ function saveMinutes(){
   alert('Minutes saved and brethren notified.');
   rAgenda();
 }
-function rAdmin(){
+function rMembersAdmin(){
   if(!CU)return;
   var tab=typeof adminTab!=='undefined'?adminTab:'register';
   var h='<div class="sf" style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:14px">Administration</div>';
@@ -4382,14 +4340,14 @@ function rAdmin(){
   h+='<div style="display:flex;gap:4px;margin-bottom:16px;background:var(--bg2);border-radius:10px;padding:4px">';
   tabs.forEach(function(t){
     var active=tab===t[0];
-    h+='<button style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;background:'+(active?'var(--white)':'transparent')+';color:'+(active?'var(--navy)':'var(--t3)')+';box-shadow:'+(active?'0 1px 4px rgba(0,0,0,.1)':'')+'" data-t="'+t[0]+'" onclick="adminTab=this.dataset.t;rAdmin()">'+t[1]+'</button>';
+    h+='<button style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;background:'+(active?'var(--white)':'transparent')+';color:'+(active?'var(--navy)':'var(--t3)')+';box-shadow:'+(active?'0 1px 4px rgba(0,0,0,.1)':'')+'" data-t="'+t[0]+'" onclick="adminTab=this.dataset.t;rMembersAdmin()">'+t[1]+'</button>';
   });
   h+='</div>';
 
   // ── REGISTER tab ───────────────────────────────────────────────────
   if(tab==='register'){
     var q=(document.getElementById('reg-search')||{value:''}).value.toLowerCase();
-    h+='<div class="fg" style="margin-bottom:12px"><input id="reg-search" placeholder="Search name, email or office..." oninput="rAdmin()" value="'+q+'" style="width:100%"></div>';
+    h+='<div class="fg" style="margin-bottom:12px"><input id="reg-search" placeholder="Search name, email or office..." oninput="rMembersAdmin()" value="'+q+'" style="width:100%"></div>';
     h+='<div class="card" style="padding:0;overflow:hidden">';
     var shown=0;
     MEMBERS.filter(function(m){
@@ -4447,7 +4405,7 @@ function rAdmin(){
     h+='</div></div>';
   }
 
-  document.getElementById('pane-admin').innerHTML=h;
+  document.getElementById('pane-members').innerHTML=h;
   if(tab==='register'){var s=document.getElementById('reg-search');if(s&&s.value==='')s.focus();}
 }
 
@@ -5127,7 +5085,7 @@ function removeMember(mid){
     .then(function(r){
       if(r.ok||r.status===204){
         MEMBERS=MEMBERS.filter(function(x){return x.id!==mid;});
-        rAdmin();
+        rMembersAdmin();
       } else {
         alert('Delete failed — check Supabase permissions.');
       }
@@ -5222,7 +5180,7 @@ function importCSV(){
   if(skipped)msg+=' '+skipped+' skipped (already exist or missing email).';
   alert(msg);
   adminTab='register';
-  rAdmin();
+  rMembersAdmin();
 }
 
 
@@ -5323,7 +5281,7 @@ function saveOffices(){
   if(!updates.length){alert('No changes to save.');return;}
   Promise.all(updates).then(function(){
     alert('Office assignments saved.');
-    buildNav(); rAdmin();
+    buildNav(); rMembersAdmin();
   }).catch(function(e){alert('Save failed: '+e.message);});
 }
 
@@ -6438,8 +6396,8 @@ function createMemberProfile(){
   }).then(function(r){return r.json();})
   .then(function(d){
     if(d.error){reset();alert('Could not create account: '+d.error.message||d.error);return;}
-    var uid=(d.user&&d.user.id)||d.id||null;
-    if(!uid){reset();alert('Could not create account: '+(d.error_description||d.error_code||(d.error&&d.error.message)||'Check Supabase Auth settings — Allow signups must be enabled.'));return;}
+    var uid=d.user&&d.user.id;
+    if(!uid){reset();alert('Account creation failed — no user ID returned.');return;}
     // Step 2: create member profile via RPC
     return supa('rpc/create_member_profile',{
       method:'POST',
