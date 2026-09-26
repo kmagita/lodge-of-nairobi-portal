@@ -8273,7 +8273,7 @@ function forgotPassword(){
     if(!email)return;
     email=email.trim();
   }
-  fetch(SUPA_URL+'/auth/v1/recover',{
+  fetch(SUPA_URL+'/auth/v1/recover?redirect_to='+encodeURIComponent('https://kmagita.github.io/lodge-of-nairobi-portal/'),{
     method:'POST',
     headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
     body:JSON.stringify({email:email.toLowerCase()})
