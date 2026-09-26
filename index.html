@@ -1072,7 +1072,34 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 #pane-practice .erase-confirm p{font-size:13px;color:var(--danger);margin-bottom:0.75rem;line-height:1.5;}
 #pane-practice .feedback-msg{min-height:18px;margin-top:0.75rem;font-size:13px;}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+function checkSubsReminder(){
+  if(!CU)return;
+  // Only officers who can post lodge-wide notices trigger this
+  if(CU.role!=='treasurer'&&CU.role!=='secretary'&&CU.role!=='master')return;
+  var subYear=SUB_YEAR;  // computed with the Dec-installation rollover
+  var reminderTitle='Subscriptions due — '+subYear;
+  // Already sent for this year?
+  var exists=NOTICES.find(function(n){return n.title===reminderTitle;});
+  if(exists)return;
+  // Are we actually past the rollover (i.e. is it the new year)? computeSubYear
+  // already reflects that; we only send once we're in the new period AND it's on
+  // or after the day after installation. computeSubYear handles the date logic,
+  // so if SUB_YEAR has advanced to the new pair and no reminder exists, send it.
+  // Guard: only send from December onward (avoids sending mid-year if data resets)
+  var now=new Date();
+  var yr=now.getFullYear();
+  var dec=new Date(yr,11,1); while(dec.getDay()!==4){dec.setDate(dec.getDate()+1);}
+  var rollover=new Date(dec); rollover.setDate(rollover.getDate()+1);
+  // Also allow January (subs are paid in January)
+  var inWindow=(now>=rollover)||(now.getMonth()===0); // Dec after install, or any January
+  if(!inWindow)return;
+  pushNotice('info', reminderTitle,
+    'Subscriptions for the '+subYear+' lodge year are now due. Please arrange payment with the Treasurer. Thank you, Brethren.',
+    'all');
+}
+
+</script>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
@@ -1736,6 +1763,7 @@ function doLogin() {
                   read:false});
               }
             });
+            checkSubsReminder();
             startRealtime();
             keepAlive();
           });
@@ -1934,7 +1962,24 @@ function changePassword() {
 }
 
 // ── Subscription config ───────────────────────────────────────────────────
-var SUB_YEAR = '2025–2026';
+// Subscription year rolls over the day AFTER the last regular meeting of the year
+// (the December installation = first Thursday of December).
+function computeSubYear(ref){
+  var now=ref||new Date();
+  var yr=now.getFullYear();
+  // First Thursday of December this year
+  var dec=new Date(yr,11,1);
+  while(dec.getDay()!==4){dec.setDate(dec.getDate()+1);}
+  // Rollover happens the day after the installation
+  var rollover=new Date(dec); rollover.setDate(rollover.getDate()+1);
+  if(now>=rollover){
+    return yr+'\u2013'+(yr+1);       // e.g. after Dec install 2026 → 2026–2027
+  } else {
+    return (yr-1)+'\u2013'+yr;        // e.g. before Dec 2026 install → 2025–2026
+  }
+}
+var SUB_YEAR = computeSubYear();
+var SUB_YEAR_VIEW = null;  // treasurer's selected view period (null = default SUB_YEAR)
 var SUB_AMOUNT = 300;
 var MEAL_COSTS = {rehearsal:15, guest_surcharge:25};
 
@@ -2589,23 +2634,32 @@ function rMembers(){
     var paid=MEMBERS.filter(function(m){return m.sub==='Paid';});
     var arrears=MEMBERS.filter(function(m){return m.sub==='Arrears';});
     var honorary=MEMBERS.filter(function(m){return m.sub==='Honorary';});
-    var totalCollected=SUB_PAYMENTS.filter(function(p){return p.year===SUB_YEAR;}).reduce(function(s,p){return s+p.amount;},0);
+    var totalCollected=SUB_PAYMENTS.filter(function(p){return p.year===(SUB_YEAR_VIEW||SUB_YEAR);}).reduce(function(s,p){return s+p.amount;},0);
     var expected=(MEMBERS.length-honorary.length)*SUB_AMOUNT;
+    var viewYear=SUB_YEAR_VIEW||SUB_YEAR;
+    // Build list of available periods from payments + the default
+    var yearsSet={}; yearsSet[SUB_YEAR]=true;
+    SUB_PAYMENTS.forEach(function(p){if(p.year)yearsSet[p.year]=true;});
+    var years=Object.keys(yearsSet).sort().reverse();
     var h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div class="sf" style="font-size:20px;font-weight:700;color:var(--navy)">Subscriptions</div>';
     h+='<button class="btn btn-navy btn-sm" onclick="treasurerAllReport()">&#128196; Export PDF</button></div>';
-    h+='<div style="font-size:12px;color:var(--t3);margin-bottom:14px">Lodge year '+SUB_YEAR+'</div>';
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">';
+    h+='<span style="font-size:12px;color:var(--t3)">Lodge year</span>';
+    h+='<select onchange="SUB_YEAR_VIEW=this.value;rMembers()" style="font-size:12px;padding:4px 8px;border:1px solid var(--bdr);border-radius:6px">';
+    years.forEach(function(y){h+='<option value="'+y+'"'+(y===viewYear?' selected':'')+'>'+y+'</option>';});
+    h+='</select></div>';
     h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">';
     h+='<div style="background:var(--okbg);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+paid.length+'</div><div style="font-size:10px;color:var(--ok);font-weight:700">PAID</div></div>';
     h+='<div style="background:'+(arrears.length?'var(--badbg)':'var(--bg2)')+';border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:700;color:'+(arrears.length?'var(--bad)':'var(--t3)')+'">'+arrears.length+'</div><div style="font-size:10px;color:'+(arrears.length?'var(--bad)':'var(--t3)')+';font-weight:700">IN ARREARS</div></div>';
     h+='</div>';
     h+='<div class="card" style="padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">';
-    h+='<div><div style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase">Collected '+SUB_YEAR+'</div><div style="font-size:20px;font-weight:700;color:var(--navy)">'+totalCollected.toLocaleString()+'</div></div>';
+    h+='<div><div style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase">Collected '+(SUB_YEAR_VIEW||SUB_YEAR)+'</div><div style="font-size:20px;font-weight:700;color:var(--navy)">'+totalCollected.toLocaleString()+'</div></div>';
     h+='<div style="text-align:right"><div style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase">Expected</div><div style="font-size:20px;font-weight:700;color:var(--t3)">'+expected.toLocaleString()+'</div></div>';
     h+='<div style="text-align:right"><div style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase">Outstanding</div><div style="font-size:20px;font-weight:700;color:'+(expected-totalCollected>0?'var(--bad)':'var(--ok)')+'">'+Math.max(0,expected-totalCollected).toLocaleString()+'</div></div>';
     h+='</div>';
     h+='<div class="stitle">Member subscriptions</div>';
     MEMBERS.forEach(function(m){
-      var mPayments=SUB_PAYMENTS.filter(function(p){return p.memberId===m.id&&p.year===SUB_YEAR;});
+      var mPayments=SUB_PAYMENTS.filter(function(p){return p.memberId===m.id&&p.year===(SUB_YEAR_VIEW||SUB_YEAR);});
       var totalPaid=mPayments.reduce(function(s,p){return s+p.amount;},0);
       var isOpen=typeof treasOpen!=='undefined'&&treasOpen===m.id;
       var statusC={'Paid':'var(--ok)','Arrears':'var(--bad)','Honorary':'var(--info)'}[m.sub]||'var(--t3)';
