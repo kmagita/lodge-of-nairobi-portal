@@ -2221,9 +2221,12 @@ function unreadNotices(){
     var mine=!to?false:typeof to==='string'?to==='all'||to===CU.id:to.indexOf('all')>-1||to.indexOf(CU.id)>-1;
     if(!mine)return false;
     if(!seen)return true;  // never opened notices — all unread
-    // Compare full timestamps. n.ts is the notice's created_at ISO string.
+    // Compare as timestamps (DB uses space, JS uses T — parse both to Date)
     var nts=n.ts||n.date||'';
-    return nts>seen;  // unread only if created strictly after last seen
+    var nMs=Date.parse(nts.replace(' ','T'));
+    var sMs=Date.parse(seen.replace(' ','T'));
+    if(isNaN(nMs)||isNaN(sMs))return false;
+    return nMs>sMs;
   });
 }
 
@@ -3895,11 +3898,13 @@ function rNotices(){
   if(!CU)return;
   // Mark all notices as "read" by updating the last_seen timestamp
   var nowIso=new Date().toISOString();
-  if(!CU.lastSeenNotices||nowIso>CU.lastSeenNotices){
+  if(!CU.lastSeenNotices||Date.parse(nowIso)>Date.parse(CU.lastSeenNotices.replace(' ','T'))){
     CU.lastSeenNotices=nowIso;
     supa('members?id=eq.'+CU.id,{method:'PATCH',
       body:JSON.stringify({last_seen_notices:nowIso})
-    }).catch(function(e){console.warn('last_seen update failed:',e);});
+    }).then(function(r){
+      if(!r.ok)r.text().then(function(t){console.warn('last_seen save failed:',r.status,t);});
+    }).catch(function(e){console.warn('last_seen error:',e);});
     buildNav();
   }
   var mine=NOTICES.filter(function(n){
