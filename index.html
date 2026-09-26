@@ -2206,16 +2206,24 @@ function nw(){
 
 // ── Password recovery handling ──────────────────────────────────────────────
 (function(){
-  // Supabase puts recovery token in the URL hash: #access_token=...&type=recovery
-  var hash=window.location.hash||'';
-  if(hash.indexOf('type=recovery')>-1 || hash.indexOf('access_token=')>-1){
+  // Recovery link may arrive as:
+  //  #access_token=...&type=recovery   (implicit)  OR
+  //  #access_token=<TokenHash>&type=recovery  (our template)  OR
+  //  ?token_hash=...&type=recovery   (PKCE-style)
+  var hash=(window.location.hash||'').replace(/^#/,'');
+  var query=(window.location.search||'').replace(/^\?/,'');
+  var all=hash+'&'+query;
+  if(all.indexOf('type=recovery')>-1 || all.indexOf('access_token=')>-1 || all.indexOf('token_hash=')>-1){
     var params={};
-    hash.replace(/^#/,'').split('&').forEach(function(kv){
+    all.split('&').forEach(function(kv){
+      if(!kv)return;
       var p=kv.split('='); params[p[0]]=decodeURIComponent(p[1]||'');
     });
-    if(params.access_token){
-      window._recoveryToken=params.access_token;
-      // Show set-password screen once DOM is ready
+    // Our email template puts the TokenHash in access_token. It's a hash that
+    // must be verified to obtain a real session token.
+    window._recoveryTokenHash=params.token_hash||params.access_token||null;
+    window._recoveryType=params.type||'recovery';
+    if(window._recoveryTokenHash){
       showSetPassword();
     }
   }
@@ -2243,19 +2251,36 @@ function submitNewPassword(){
   var showErr=function(m){err.style.display='block';err.textContent=m;};
   if(!pw1||pw1.length<6){showErr('Password must be at least 6 characters.');return;}
   if(pw1!==pw2){showErr('Passwords do not match.');return;}
-  // Update the password using the recovery access token
-  fetch(SUPA_URL+'/auth/v1/user',{
-    method:'PUT',
-    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json','Authorization':'Bearer '+window._recoveryToken},
-    body:JSON.stringify({password:pw1})
+  // Step 1: verify the recovery token hash to obtain a real access token
+  var btn=document.querySelector('#pg-login button');
+  if(btn){btn.textContent='Setting…';}
+  fetch(SUPA_URL+'/auth/v1/verify',{
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({type:'recovery',token_hash:window._recoveryTokenHash})
   }).then(function(r){return r.json();})
-  .then(function(d){
-    if(d.error||d.msg){showErr('Could not set password: '+(d.error_description||d.msg||d.error||'try again'));return;}
-    // Clear the hash and reload to a clean login
-    window.location.hash='';
-    alert('Password updated. Please sign in with your new password.');
-    window.location.reload();
-  }).catch(function(e){showErr('Network error. Please try again.');});
+  .then(function(v){
+    var accessToken=v.access_token;
+    if(!accessToken){
+      // Some Supabase configs return the session directly usable as access_token
+      showErr('This reset link has expired or was already used. Please request a new one.');
+      if(btn)btn.textContent='Set password & sign in';
+      return;
+    }
+    // Step 2: update the password using the verified session
+    return fetch(SUPA_URL+'/auth/v1/user',{
+      method:'PUT',
+      headers:{'apikey':SUPA_KEY,'Content-Type':'application/json','Authorization':'Bearer '+accessToken},
+      body:JSON.stringify({password:pw1})
+    }).then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error||d.msg){showErr('Could not set password: '+(d.error_description||d.msg||d.error||'try again'));if(btn)btn.textContent='Set password & sign in';return;}
+      window.location.hash='';
+      try{history.replaceState(null,'',window.location.pathname);}catch(e){}
+      alert('Password updated. Please sign in with your new password.');
+      window.location.reload();
+    });
+  }).catch(function(e){showErr('Network error. Please try again.');if(btn)btn.textContent='Set password & sign in';});
 }
 
 
