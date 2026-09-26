@@ -3953,7 +3953,8 @@ function rNotices(){
     h+='<div style="font-weight:700;font-size:13px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+n.title+'</div>';
     h+='<div style="font-size:11px;color:var(--t3);margin-top:1px">'+n.date+'</div>';
     h+='</div>';
-    if(!n.read)h+='<div style="width:8px;height:8px;border-radius:50%;background:var(--bad);flex-shrink:0"></div>';
+    var _nm=Date.parse((n.ts||n.date||'').replace(' ','T'));var _sm=CU.lastSeenNotices?Date.parse(CU.lastSeenNotices.replace(' ','T')):0;var _nUn=(!CU.lastSeenNotices)||(!isNaN(_nm)&&_nm>_sm);
+    if(_nUn)h+='<div style="width:8px;height:8px;border-radius:50%;background:var(--bad);flex-shrink:0"></div>';
     h+='<span style="font-size:12px;color:var(--t3);flex-shrink:0">'+(isOpen?'&#9650;':'&#9660;')+'</span>';
     h+='</button>';
 
@@ -4632,6 +4633,10 @@ function rHome(){
   var myVote=activePoll?(activePoll.votes[CU.id]||{}):null;
   var pollPending=activePoll&&!(myVote&&myVote._submitted===true);
   var bubbles=unread+(pollPending?1:0);
+  if(bubbles>0 && !window._bubbleDebugShown){
+    window._bubbleDebugShown=true;
+    alert('Bubble diagnostic:\nUnread notices: '+unread+'\nActive poll pending: '+(pollPending?'yes':'no')+'\nActive polls total: '+POLLS.filter(function(p){return p.active;}).length+'\nlast_seen: '+(CU.lastSeenNotices||'never'));
+  }
   if(bubbles>0){
     h+='<button data-id="notices" onclick="goTo(this.dataset.id)" style="display:flex;align-items:center;gap:8px;background:var(--badbg);border:none;border-radius:10px;padding:8px 12px;cursor:pointer;touch-action:manipulation">';
     if(unread>0)h+='<span style="background:var(--bad);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">'+unread+'</span>';
