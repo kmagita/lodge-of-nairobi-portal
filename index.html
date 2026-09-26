@@ -1099,6 +1099,29 @@ function checkSubsReminder(){
     'all');
 }
 
+
+function toggleEdInvited(eid){
+  var sel=document.getElementById('ed-degree');
+  var box=document.getElementById('ed-invited-'+eid);
+  if(sel&&box)box.style.display=(sel.value==='committee')?'block':'none';
+}
+
+function canSeeEvent(e){
+  if(!CU)return false;
+  var isOfficer=['master','secretary','dc','mentor','almoner','treasurer','steward'].indexOf(CU.role)>-1;
+  if(e.degree==='committee'){
+    return isOfficer || (e.invited_ids&&e.invited_ids.indexOf(CU.id)>-1);
+  }
+  // degree-based
+  if(e.degree&&e.degree!=='all'){
+    var DEG={EA:1,FC:2,MM:3};
+    if((DEG[CU.deg]||0)<(DEG[e.degree]||0))return false;
+  }
+  // committee-type events (legacy) still officer-only
+  if(e.type==='committee'&&!isOfficer)return false;
+  return true;
+}
+
 </script>
 </head>
 <body>
@@ -4795,9 +4818,7 @@ function rHome(){
     var d=new Date(e.date);
     if(!d||isNaN(d))return false;
     if(d<new Date(now.toDateString())||d>cutoff)return false;
-    if(e.type==='committee'&&!isOfficer2)return false;
-    if(e.degree&&e.degree!=='all'&&(DEG[CU.deg]||0)<(DEG[e.degree]||0))return false;
-    return true;
+    return canSeeEvent(e);
   };
   // Non-cancelled, visible, in-window events
   var upcoming=CALENDAR_EVENTS.filter(function(e){return !e.cancelled&&visible(e);})
@@ -5973,11 +5994,16 @@ function saveCalEventEdit(){
   ev.time   = get('ed-time')   || '';
   ev.venue  = get('ed-venue')  || ev.venue;
   ev.degree = get('ed-degree') || 'all';
+  if(ev.degree==='committee'){
+    var boxes=document.querySelectorAll('.ed-inv-'+id);
+    var inv=[]; boxes.forEach(function(b){if(b.checked)inv.push(b.dataset.mid);});
+    ev.invited_ids=inv;
+  } else { ev.invited_ids=[]; }
   supa('calendar_events?id=eq.'+id,{
     method:'PATCH',
     body:JSON.stringify({title:ev.title,date:ev.date,
       event_type:ev.type,time:ev.time,
-      venue:ev.venue,degree:ev.degree})
+      venue:ev.venue,degree:ev.degree,invited_ids:ev.invited_ids||[]})
   }).then(function(r){
     if(r.ok){window._editCalId=null;rCalendar();}
     else r.json().then(function(e){alert('Save failed: '+(e.message||'Check your connection'));});
@@ -6709,7 +6735,7 @@ function _rtTick(){
     CALENDAR_EVENTS = d.map(function(e){
       return {id:e.id, date:e.date, title:e.title, type:e.event_type||e.type||'meeting',
               venue:e.venue||'', cancelled:e.cancelled||false,
-              degree:e.degree||'all', time:e.time||'',
+              degree:e.degree||'all', time:e.time||'', invited_ids:e.invited_ids||[],
               closed:e.closed||false, actual_attendance:e.actual_attendance,
               actual_visitors:e.actual_visitors||0};
     });
