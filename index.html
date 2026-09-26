@@ -1696,7 +1696,9 @@ function doLogin() {
             raise:  m.raise || '',
             sub:    m.sub,
             phone:  m.phone || '',
-            firstLogin: m.first_login
+            firstLogin: m.first_login,
+            role:   officeToRole(m.office || ''),
+            lastSeenNotices: m.last_seen_notices || null
           };
           document.getElementById('li-err').style.display = 'none';
           document.getElementById('pg-login').style.display = 'none';
@@ -4633,10 +4635,6 @@ function rHome(){
   var myVote=activePoll?(activePoll.votes[CU.id]||{}):null;
   var pollPending=activePoll&&!(myVote&&myVote._submitted===true);
   var bubbles=unread+(pollPending?1:0);
-  if(bubbles>0 && !window._bubbleDebugShown){
-    window._bubbleDebugShown=true;
-    alert('Bubble diagnostic:\nUnread notices: '+unread+'\nActive poll pending: '+(pollPending?'yes':'no')+'\nActive polls total: '+POLLS.filter(function(p){return p.active;}).length+'\nlast_seen: '+(CU.lastSeenNotices||'never'));
-  }
   if(bubbles>0){
     h+='<button data-id="notices" onclick="goTo(this.dataset.id)" style="display:flex;align-items:center;gap:8px;background:var(--badbg);border:none;border-radius:10px;padding:8px 12px;cursor:pointer;touch-action:manipulation">';
     if(unread>0)h+='<span style="background:var(--bad);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">'+unread+'</span>';
