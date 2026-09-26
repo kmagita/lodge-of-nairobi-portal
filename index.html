@@ -1773,8 +1773,8 @@ function loadAppData() {
         return {id:n.id, type:n.type||'info',
                 title:n.title||'Notice', body:n.body||'',
                 to:n.to_all?['all']:(n.to_ids||[]),
-                date:(n.created_at||new Date().toISOString()).split('T')[0],
-                read:false};
+                ts:n.created_at||new Date().toISOString(),
+                date:(n.created_at||new Date().toISOString()).split('T')[0]};
       });
     }),
     safeFetch('polls?select=*,poll_votes(*)&order=created_at.desc', function(d) {
@@ -2215,13 +2215,15 @@ function syncAllDegrees(){
 
 function unreadNotices(){
   if(!CU||!NOTICES)return[];
-  var seen=CU.lastSeenNotices;
+  var seen=CU.lastSeenNotices;  // full ISO timestamp or null
   return NOTICES.filter(function(n){
     var to=n.to;
     var mine=!to?false:typeof to==='string'?to==='all'||to===CU.id:to.indexOf('all')>-1||to.indexOf(CU.id)>-1;
     if(!mine)return false;
-    if(!seen)return true;  // never opened notices — everything is unread
-    return (n.date||'')>seen.split('T')[0];  // unread if newer than last seen
+    if(!seen)return true;  // never opened notices — all unread
+    // Compare full timestamps. n.ts is the notice's created_at ISO string.
+    var nts=n.ts||n.date||'';
+    return nts>seen;  // unread only if created strictly after last seen
   });
 }
 
@@ -4620,7 +4622,7 @@ function rHome(){
     if(typeof to==='string')return to==='all'||to===CU.id;
     return to.indexOf('all')>-1||to.indexOf(CU.id)>-1;
   });
-  var unread=mine.filter(function(n){return !n.read;}).length;
+  var unread=unreadNotices().length;
   var activePoll=POLLS.find(function(p){return p.active;});
   var myVote=activePoll?(activePoll.votes[CU.id]||{}):null;
   var pollPending=activePoll&&!(myVote&&myVote._submitted===true);
@@ -4653,7 +4655,15 @@ function rHome(){
 
   // Pair rehearsals to the meeting/installation the following day
   var dayBefore=function(dateStr){var d=new Date(dateStr);d.setDate(d.getDate()-1);return d.toISOString().split('T')[0];};
+  // Pre-compute which rehearsals belong to a meeting/installation (day before)
   var pairedRehearsalIds={};
+  CALENDAR_EVENTS.forEach(function(e){
+    if(e.type==='meeting'||e.type==='installation'){
+      var rdate=dayBefore(e.date);
+      var reh=CALENDAR_EVENTS.find(function(r){return r.type==='rehearsal'&&r.date===rdate;});
+      if(reh)pairedRehearsalIds[reh.id]=true;
+    }
+  });
   var rsvpBtns=function(e,myRsvp){
     var s='<div style="display:flex;gap:6px;margin-top:6px">';
     s+='<button class="btn btn-sm" data-eid="'+e.id+'" data-status="attending" onclick="rsvpEvent(this.dataset.eid,this.dataset.status)" style="font-size:11px;'+(myRsvp==='attending'?'background:var(--ok);color:#fff;border-color:var(--ok)':'')+'">'+(myRsvp==='attending'?'&#10003; ':'')+'Attending</button>';
