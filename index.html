@@ -4500,10 +4500,20 @@ function rMembersAdmin(){
   // ── ADD MEMBER tab ─────────────────────────────────────────────────
   else if(tab==='add'){
     h+='<div class="card">';
-    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Full name</label><input id="nm-name" placeholder="Bro. First Last"></div>';
-    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Email</label><input type="email" id="nm-email" placeholder="email@example.com"></div>';
+    // Names + DOB
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">';
+    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">First name</label><input id="nm-first" placeholder="First"></div>';
+    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Middle name</label><input id="nm-middle" placeholder="Middle"></div>';
+    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Last name</label><input id="nm-last" placeholder="Last"></div>';
+    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Date of birth</label><input type="date" id="nm-dob"></div>';
     h+='</div>';
+    // Email + Phone
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Email</label><input type="email" id="nm-email" placeholder="email@example.com"></div>';
+    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Phone</label><input id="nm-phone" placeholder="07700 900000"></div>';
+    h+='</div>';
+    // Membership type
+    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Membership type</label><select id="nm-memtype" onchange="toggleMotherLodge()"><option value="initiate">Initiate (raised in this lodge)</option><option value="joining">Joining member</option><option value="honorary">Honorary member</option></select></div>';
     h+='<div class="info-ban" style="margin-bottom:12px"><svg class="ico" width="14" height="14"><use href="#ico-info-circle"/></svg> Degree is set automatically: initiation only = EA &middot; + passing = FC &middot; + raising = MM. Office drives portal access.</div>';
     h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
     h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Initiation date (EA)</label><input type="date" id="nm-init"></div>';
@@ -4512,10 +4522,8 @@ function rMembersAdmin(){
     h+='</div>';
     h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
     h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">UGLE number</label><input id="nm-ugle" placeholder="GL000000"></div>';
-    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Mother Lodge</label><input id="nm-mother" placeholder="e.g. Lodge of Nairobi No. 7187"></div>';
-    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Phone</label><input id="nm-phone" placeholder="07700 900000"></div>';
+    h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Mother Lodge</label><input id="nm-mother" value="Lodge of Nairobi No. 7187" disabled placeholder="e.g. Lodge of Nairobi No. 7187"></div>';
     h+='</div>';
-    h+='<div class="fg"><label class="lbl">Date of birth</label><input type="date" id="nm-dob"></div>';
     h+='<div class="fg"><label class="lbl">Temporary password</label><input type="password" id="nm-tmpPw" placeholder="e.g. Lodge7187" autocomplete="new-password"></div>';
     h+='<div style="font-size:11px;color:var(--t3);margin-bottom:10px">Share this with the member — they can change it after logging in.</div>';
     h+='<button class="btn btn-navy" style="width:100%;justify-content:center" onclick="addNewMember()"><svg class="ico" width="16" height="16"><use href="#ico-plus"/></svg> Add member</button>';
@@ -4544,7 +4552,11 @@ function openEditMember(mid){
   goTo('memberdetail');
 }
 function addNewMember(){
-  var name  = document.getElementById('nm-name');
+  var first = document.getElementById('nm-first');
+  var middle= document.getElementById('nm-middle');
+  var last  = document.getElementById('nm-last');
+  var memtype=document.getElementById('nm-memtype');
+  var name  = {value:[first?first.value.trim():'',middle?middle.value.trim():'',last?last.value.trim():''].filter(Boolean).join(' ')};
   var email = document.getElementById('nm-email');
   var init  = document.getElementById('nm-init');
   var pass_ = document.getElementById('nm-pass');
@@ -4554,7 +4566,7 @@ function addNewMember(){
   var dob   = document.getElementById('nm-dob');
   var phone = document.getElementById('nm-phone');
   var tmpPw = document.getElementById('nm-tmpPw');
-  if(!name||!name.value.trim()){alert('Enter a name.');return;}
+  if(!name.value.trim()){alert('Enter at least a first and last name.');return;}
   if(!email||!email.value.trim()){alert('Enter an email address.');return;}
   if(!tmpPw||!tmpPw.value.trim()){alert('Enter a temporary password for the member.');return;}
 
@@ -4578,7 +4590,7 @@ function addNewMember(){
     return supa('members',{method:'POST',
       headers:{'Prefer':'return=representation'},
       body:JSON.stringify({id:uid,name:nm,email:em,
-        office:office?office.value:'',deg:deg,ugle:ugle?ugle.value:'',mother_lodge:(document.getElementById('nm-mother')||{}).value||'',
+        office:office?office.value:'',deg:deg,ugle:ugle?ugle.value:'',mother_lodge:((memtype&&memtype.value==='initiate')?'Lodge of Nairobi No. 7187':((document.getElementById('nm-mother')||{}).value||'')),first_name:first?first.value.trim():'',middle_name:middle?middle.value.trim():'',last_name:last?last.value.trim():'',membership_type:memtype?memtype.value:'initiate',
         init:initV||null,pass_:passV||null,raise:raiseV||null,
         dob:dob&&dob.value?dob.value:null,phone:phone?phone.value:'',
         sub:'Unpaid',first_login:true})
@@ -8049,6 +8061,20 @@ function generateYearEvents(){
       alert('Could not create events: '+JSON.stringify(d));
     }
   }).catch(function(e){alert('Network error: '+e.message);});
+}
+
+
+function toggleMotherLodge(){
+  var mt=document.getElementById('nm-memtype');
+  var ml=document.getElementById('nm-mother');
+  if(!mt||!ml)return;
+  if(mt.value==='initiate'){
+    ml.value='Lodge of Nairobi No. 7187';
+    ml.disabled=true;
+  } else {
+    if(ml.value==='Lodge of Nairobi No. 7187')ml.value='';
+    ml.disabled=false;
+  }
 }
 
 </script>
