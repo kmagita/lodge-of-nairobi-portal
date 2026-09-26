@@ -2652,10 +2652,7 @@ function rMembers(){
     h+='<div style="background:var(--okbg);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+paid.length+'</div><div style="font-size:10px;color:var(--ok);font-weight:700">PAID</div></div>';
     h+='<div style="background:'+(arrears.length?'var(--badbg)':'var(--bg2)')+';border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:700;color:'+(arrears.length?'var(--bad)':'var(--t3)')+'">'+arrears.length+'</div><div style="font-size:10px;color:'+(arrears.length?'var(--bad)':'var(--t3)')+';font-weight:700">IN ARREARS</div></div>';
     h+='</div>';
-    h+='<div class="card" style="padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">';
-    h+='<div><div style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase">Collected '+(SUB_YEAR_VIEW||SUB_YEAR)+'</div><div style="font-size:20px;font-weight:700;color:var(--navy)">'+totalCollected.toLocaleString()+'</div></div>';
-    h+='<div style="text-align:right"><div style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase">Expected</div><div style="font-size:20px;font-weight:700;color:var(--t3)">'+expected.toLocaleString()+'</div></div>';
-    h+='<div style="text-align:right"><div style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase">Outstanding</div><div style="font-size:20px;font-weight:700;color:'+(expected-totalCollected>0?'var(--bad)':'var(--ok)')+'">'+Math.max(0,expected-totalCollected).toLocaleString()+'</div></div>';
+
     h+='</div>';
     h+='<div class="stitle">Member subscriptions</div>';
     MEMBERS.forEach(function(m){
@@ -2667,7 +2664,7 @@ function rMembers(){
       h+='<div class="card" style="margin-bottom:6px">';
       h+='<div class="srow">';
       h+='<div style="flex:1"><div style="font-weight:600;font-size:14px;color:var(--navy)">'+gn(m)+'</div>';
-      if(mPayments.length)h+='<div style="font-size:11px;color:var(--t3)">'+totalPaid.toLocaleString()+' collected &middot; '+mPayments.length+' payment'+(mPayments.length!==1?'s':'')+'</div>';
+      if(mPayments.length)h+='<div style="font-size:11px;color:var(--t3)">'+mPayments.length+' payment'+(mPayments.length!==1?'s':'')+' recorded</div>';
       h+='</div>';
       h+='<span class="badge" style="background:'+statusBg+';color:'+statusC+'">'+m.sub+'</span>';
       h+='<button class="btn btn-n btn-sm" style="margin-left:8px" data-mid="'+m.id+'" onclick="toggleTreas(this.dataset.mid)">'+(isOpen?'&#9650;':'&#9660;')+'</button>';
@@ -3712,12 +3709,6 @@ function rReports(){
     h+='<div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--warn)">'+partialIds.length+'</div><div style="font-size:11px;color:var(--t3)">Partial</div></div>';
     h+='<div style="text-align:center"><div style="font-size:28px;font-weight:700;color:var(--bad)">'+(MEMBERS.length-paidIds.length-partialIds.length)+'</div><div style="font-size:11px;color:var(--t3)">Outstanding</div></div>';
     h+='</div>';
-    h+='<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">';
-    h+='<span style="color:var(--t3)">Collected</span><span style="font-weight:700;color:var(--ok)">KShs '+collected.toLocaleString()+'</span></div>';
-    h+='<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">';
-    h+='<span style="color:var(--t3)">Expected</span><span style="font-weight:700;color:var(--navy)">KShs '+expected.toLocaleString()+'</span></div>';
-    h+='<div style="display:flex;justify-content:space-between;font-size:13px">';
-    h+='<span style="color:var(--t3)">Outstanding</span><span style="font-weight:700;color:var(--bad)">KShs '+(expected-collected).toLocaleString()+'</span></div>';
     if(unpaidMs.length){
       h+='<div style="margin-top:12px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Not yet paid</div>';
       unpaidMs.forEach(function(m){
@@ -4944,13 +4935,17 @@ function rHome(){
     h+='</div>';
   }
   if(CU.role==='treasurer'){
-    var arrears=MEMBERS.filter(function(m){return m.sub==='Arrears';}).length;
-    var paid=MEMBERS.filter(function(m){return m.sub==='Paid';}).length;
+    // Count from actual payment records for the current sub year (honorary excluded)
+    var _syr=SUB_YEAR;
+    var _paidIds={};
+    SUB_PAYMENTS.forEach(function(p){if(p.year===_syr)_paidIds[p.memberId]=true;});
+    var paid=MEMBERS.filter(function(m){return m.sub!=='Honorary'&&_paidIds[m.id];}).length;
+    var arrears=MEMBERS.filter(function(m){return m.sub!=='Honorary'&&!_paidIds[m.id];}).length;
     h+='<div class="card" style="border-top:4px solid var(--info);margin-bottom:10px">';
-    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Subscriptions</div>';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Subscriptions '+_syr+'</div>';
     h+='<div style="display:flex;gap:10px;margin-bottom:8px">';
     h+='<div style="flex:1;text-align:center;background:var(--okbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--ok)">'+paid+'</div><div style="font-size:10px;color:var(--ok);font-weight:600">PAID</div></div>';
-    h+='<div style="flex:1;text-align:center;background:'+(arrears?'var(--badbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:'+(arrears?'var(--bad)':'var(--t3)')+'">'+arrears+'</div><div style="font-size:10px;font-weight:600;color:'+(arrears?'var(--bad)':'var(--t3)')+'">ARREARS</div></div>';
+    h+='<div style="flex:1;text-align:center;background:'+(arrears?'var(--badbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:'+(arrears?'var(--bad)':'var(--t3)')+'">'+arrears+'</div><div style="font-size:10px;font-weight:600;color:'+(arrears?'var(--bad)':'var(--t3)')+'">OUTSTANDING</div></div>';
     h+='</div>';
     h+='<button class="btn btn-n btn-sm" data-id="members" onclick="goTo(this.dataset.id)">Manage dues</button>';
     h+='</div>';
