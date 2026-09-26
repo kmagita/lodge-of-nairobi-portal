@@ -4637,41 +4637,71 @@ function rHome(){
   var now=new Date();
   var cutoff=new Date(now);cutoff.setDate(cutoff.getDate()+31);
   var isOfficer=['master','secretary','dc','mentor','almoner','treasurer','steward'].indexOf(CU.role)>-1;
-  var upcoming=CALENDAR_EVENTS.filter(function(e){
+  var isOfficer2=['master','secretary','dc','mentor','almoner','treasurer','steward'].indexOf(CU.role)>-1;
+  var DEG={EA:1,FC:2,MM:3};
+  var visible=function(e){
     var d=new Date(e.date);
-    if(!d||isNaN(d)||e.cancelled)return false;
+    if(!d||isNaN(d))return false;
     if(d<new Date(now.toDateString())||d>cutoff)return false;
-    if(e.type==='committee'&&!isOfficer)return false;
-    // Degree filter: if event specifies a degree, member must meet it
-    if(e.degree&&e.degree!=='all'){
-      var DEG={EA:1,FC:2,MM:3};
-      if((DEG[CU.deg]||0)<(DEG[e.degree]||0))return false;
-    }
+    if(e.type==='committee'&&!isOfficer2)return false;
+    if(e.degree&&e.degree!=='all'&&(DEG[CU.deg]||0)<(DEG[e.degree]||0))return false;
     return true;
-  }).sort(function(a,b){return a.date.localeCompare(b.date);});
+  };
+  // Non-cancelled, visible, in-window events
+  var upcoming=CALENDAR_EVENTS.filter(function(e){return !e.cancelled&&visible(e);})
+    .sort(function(a,b){return a.date.localeCompare(b.date);});
+
+  // Pair rehearsals to the meeting/installation the following day
+  var dayBefore=function(dateStr){var d=new Date(dateStr);d.setDate(d.getDate()-1);return d.toISOString().split('T')[0];};
+  var pairedRehearsalIds={};
+  var rsvpBtns=function(e,myRsvp){
+    var s='<div style="display:flex;gap:6px;margin-top:6px">';
+    s+='<button class="btn btn-sm" data-eid="'+e.id+'" data-status="attending" onclick="rsvpEvent(this.dataset.eid,this.dataset.status)" style="font-size:11px;'+(myRsvp==='attending'?'background:var(--ok);color:#fff;border-color:var(--ok)':'')+'">'+(myRsvp==='attending'?'&#10003; ':'')+'Attending</button>';
+    s+='<button class="btn btn-sm" data-eid="'+e.id+'" data-status="apologies" onclick="rsvpEvent(this.dataset.eid,this.dataset.status)" style="font-size:11px;'+(myRsvp==='apologies'?'background:var(--bad);color:#fff;border-color:var(--bad)':'')+'">'+(myRsvp==='apologies'?'&#10003; ':'')+'Apologies</button>';
+    s+='</div>';
+    return s;
+  };
 
   if(upcoming.length){
     h+='<div class="card" style="margin-bottom:10px">';
     h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Upcoming</div>';
+    var typeC={rehearsal:'var(--gold)',meeting:'var(--navy)',committee:'var(--t3)',installation:'var(--ok)'};
+
     upcoming.forEach(function(e){
+      if(pairedRehearsalIds[e.id])return; // already shown inside a meeting card
+
+      // For a meeting/installation, find its rehearsal (day before, same-degree/all)
+      var rehearsal=null;
+      if(e.type==='meeting'||e.type==='installation'){
+        var rdate=dayBefore(e.date);
+        rehearsal=CALENDAR_EVENTS.find(function(r){
+          return r.type==='rehearsal'&&r.date===rdate;
+        });
+      }
+
       var d=new Date(e.date);
       var myRsvp=(RSVP_DATA[e.id]&&RSVP_DATA[e.id][CU.id])||null;
-      var typeC={rehearsal:'var(--gold)',meeting:'var(--navy)',committee:'var(--t3)',installation:'var(--ok)'};
       h+='<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-bottom:1px solid var(--bdr)">';
       h+='<div style="text-align:center;min-width:36px;flex-shrink:0">';
       h+='<div style="font-size:18px;font-weight:700;color:'+(typeC[e.type]||'var(--navy)')+'">'+d.getDate()+'</div>';
-      h+='<div style="font-size:10px;color:var(--t3)">'+months[d.getMonth()]+'</div>';
-      h+='</div>';
+      h+='<div style="font-size:10px;color:var(--t3)">'+months[d.getMonth()]+'</div></div>';
       h+='<div style="flex:1;min-width:0">';
-      h+='<div style="font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+e.title+'</div>';
+      h+='<div style="font-size:13px;font-weight:600;color:var(--navy)">'+e.title+'</div>';
       h+='<div style="font-size:11px;color:var(--t3)">'+days[d.getDay()]+(e.venue?' &middot; '+e.venue:'')+'</div>';
-      // RSVP buttons — only for meetings and rehearsals
-      if(e.type==='meeting'||e.type==='rehearsal'||e.type==='installation'){
-        h+='<div style="display:flex;gap:6px;margin-top:6px">';
-        h+='<button class="btn btn-sm" data-eid="'+e.id+'" data-status="attending" onclick="rsvpEvent(this.dataset.eid,this.dataset.status)" style="font-size:11px;'+(myRsvp==='attending'?'background:var(--ok);color:#fff;border-color:var(--ok)':'')+'">';
-        h+=(myRsvp==='attending'?'&#10003; ':'')+'Attending</button>';
-        h+='<button class="btn btn-sm" data-eid="'+e.id+'" data-status="apologies" onclick="rsvpEvent(this.dataset.eid,this.dataset.status)" style="font-size:11px;'+(myRsvp==='apologies'?'background:var(--bad);color:#fff;border-color:var(--bad)':'')+'">';
-        h+=(myRsvp==='apologies'?'&#10003; ':'')+'Apologies</button>';
+      if(e.type==='meeting'||e.type==='rehearsal'||e.type==='installation'){h+=rsvpBtns(e,myRsvp);}
+
+      // Rehearsal sub-line inside the meeting card
+      if(rehearsal){
+        pairedRehearsalIds[rehearsal.id]=true;
+        var rd=new Date(rehearsal.date);
+        h+='<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--bdr)">';
+        if(rehearsal.cancelled){
+          h+='<div style="font-size:12px;color:var(--bad)"><strong>Rehearsal cancelled</strong> &middot; was '+days[rd.getDay()]+' '+rd.getDate()+' '+months[rd.getMonth()]+'</div>';
+        } else if(visible(rehearsal)){
+          var rRsvp=(RSVP_DATA[rehearsal.id]&&RSVP_DATA[rehearsal.id][CU.id])||null;
+          h+='<div style="font-size:12px;font-weight:600;color:var(--gold)">Rehearsal &middot; '+days[rd.getDay()]+' '+rd.getDate()+' '+months[rd.getMonth()]+'</div>';
+          h+=rsvpBtns(rehearsal,rRsvp);
+        }
         h+='</div>';
       }
       h+='</div></div>';
@@ -5670,10 +5700,65 @@ function rCalendar(){
   }
 
   var h='<div class="sf" style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px">Calendar</div>';
-  h+='<div style="font-size:12px;color:var(--t3);margin-bottom:16px">Lodge of Nairobi № 7187</div>';
+  h+='<div style="font-size:12px;color:var(--t3);margin-bottom:12px">Lodge of Nairobi \u2116 7187</div>';
+
+  // ── Month grid ─────────────────────────────────────────────────────────
+  if(window._calMonth===undefined){var _n=new Date();window._calMonth=_n.getMonth();window._calYear=_n.getFullYear();}
+  var cm=window._calMonth, cy=window._calYear;
+  var firstDay=new Date(cy,cm,1).getDay();
+  var daysInMonth=new Date(cy,cm+1,0).getDate();
+  var todayStr=new Date().toISOString().split('T')[0];
+  // Map date → events
+  var evByDate={};
+  CALENDAR_EVENTS.forEach(function(ev){ (evByDate[ev.date]=evByDate[ev.date]||[]).push(ev); });
+
+  h+='<div class="card" style="margin-bottom:12px;padding:14px">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">';
+  h+='<button class="btn btn-n btn-sm" onclick="calNav(-1)">&#8249;</button>';
+  h+='<div style="font-weight:700;font-size:15px;color:var(--navy)">'+['January','February','March','April','May','June','July','August','September','October','November','December'][cm]+' '+cy+'</div>';
+  h+='<button class="btn btn-n btn-sm" onclick="calNav(1)">&#8250;</button>';
+  h+='</div>';
+  // Weekday headers
+  h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">';
+  ['S','M','T','W','T','F','S'].forEach(function(dn){h+='<div style="text-align:center;font-size:10px;font-weight:700;color:var(--t3);padding:4px 0">'+dn+'</div>';});
+  h+='</div>';
+  // Day cells
+  h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
+  for(var i=0;i<firstDay;i++){h+='<div></div>';}
+  for(var day=1;day<=daysInMonth;day++){
+    var ds=cy+'-'+String(cm+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+    var dayEvents=(evByDate[ds]||[]).filter(function(ev){return !ev.cancelled;});
+    var isToday=ds===todayStr;
+    var isSel=window._calSelDate===ds;
+    var dotColors=dayEvents.map(function(ev){return (ec[ev.type]||ec.other).dot;});
+    var bg=isSel?'var(--navy)':(isToday?'var(--goldbg)':'transparent');
+    var col=isSel?'#fff':'var(--navy)';
+    h+='<button onclick="calSelectDay(\''+ds+'\')" style="aspect-ratio:1;border:none;border-radius:8px;background:'+bg+';color:'+col+';cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2px;position:relative;font-size:13px;font-weight:'+(isToday||isSel?'700':'400')+'">';
+    h+='<span>'+day+'</span>';
+    if(dotColors.length){
+      h+='<div style="display:flex;gap:2px;margin-top:2px">';
+      dotColors.slice(0,3).forEach(function(dc){h+='<span style="width:5px;height:5px;border-radius:50%;background:'+(isSel?'#fff':dc)+'"></span>';});
+      h+='</div>';
+    }
+    h+='</button>';
+  }
+  h+='</div></div>';
+
+  // ── Selected day events ────────────────────────────────────────────────
+  if(window._calSelDate){
+    var selEvents=(evByDate[window._calSelDate]||[]).sort(function(a,b){return (a.time||'').localeCompare(b.time||'');});
+    var sd=new Date(window._calSelDate+'T12:00:00');
+    h+='<div class="stitle">'+dayNames[sd.getDay()]+' '+sd.getDate()+' '+monNames[sd.getMonth()]+' '+sd.getFullYear()+'</div>';
+    if(!selEvents.length){
+      h+='<div class="card" style="text-align:center;color:var(--t3);padding:16px;margin-bottom:16px">No events on this day</div>';
+    } else {
+      selEvents.forEach(function(ev){h+=evCard(ev, ev.date<todayStr);});
+    }
+  }
 
   // Secretary/WM: add event form
   if(isSec){
+    h+='<div style="text-align:right;margin-bottom:8px"><button class="btn btn-n btn-sm" onclick="generateYearEvents()">&#128197; Generate year\'s meetings</button></div>';
     h+='<div class="card" style="margin-bottom:12px">';
     h+='<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px">Add event</div>';
     h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
@@ -7891,6 +7976,61 @@ function reopenEvent(eid){
     body:JSON.stringify({closed:false})
   }).catch(function(){});
   rReports();
+}
+
+
+function calNav(dir){
+  window._calMonth+=dir;
+  if(window._calMonth<0){window._calMonth=11;window._calYear--;}
+  if(window._calMonth>11){window._calMonth=0;window._calYear++;}
+  rCalendar();
+}
+function calSelectDay(ds){
+  window._calSelDate=(window._calSelDate===ds?null:ds);
+  rCalendar();
+}
+
+function generateYearEvents(){
+  var yr=prompt('Generate regular meetings & rehearsals for which year?', new Date().getFullYear());
+  if(!yr)return;
+  yr=parseInt(yr);
+  if(isNaN(yr)){alert('Invalid year.');return;}
+  // First Thursday of each month except Jan(0), Apr(3), Aug(7)
+  var skip=[0,3,7];
+  var toCreate=[];
+  for(var m=0;m<12;m++){
+    if(skip.indexOf(m)>-1)continue;
+    // find first Thursday
+    var d=new Date(yr,m,1);
+    while(d.getDay()!==4){d.setDate(d.getDate()+1);}
+    var meetingDate=yr+'-'+String(m+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    var reh=new Date(d);reh.setDate(reh.getDate()-1);
+    var rehDate=reh.getFullYear()+'-'+String(reh.getMonth()+1).padStart(2,'0')+'-'+String(reh.getDate()).padStart(2,'0');
+    // skip if a meeting already exists that date
+    if(!CALENDAR_EVENTS.find(function(e){return e.date===meetingDate&&e.type==='meeting';})){
+      toCreate.push({date:meetingDate,title:'Regular Lodge Meeting',event_type:'meeting',venue:'Freemasons Hall, Nairobi',degree:'all'});
+    }
+    if(!CALENDAR_EVENTS.find(function(e){return e.date===rehDate&&e.type==='rehearsal';})){
+      toCreate.push({date:rehDate,title:'Rehearsal',event_type:'rehearsal',venue:'Freemasons Hall, Nairobi',degree:'all'});
+    }
+  }
+  if(!toCreate.length){alert('All meetings and rehearsals for '+yr+' already exist.');return;}
+  if(!confirm('Create '+toCreate.length+' events (meetings + rehearsals) for '+yr+'?'))return;
+  supa('calendar_events',{method:'POST',headers:{'Prefer':'return=representation'},
+    body:JSON.stringify(toCreate)
+  }).then(function(r){return r.json();})
+  .then(function(d){
+    if(Array.isArray(d)){
+      d.forEach(function(e){
+        CALENDAR_EVENTS.push({id:e.id,date:e.date,title:e.title,
+          type:e.event_type||'meeting',venue:e.venue||'',cancelled:false,degree:e.degree||'all'});
+      });
+      alert(d.length+' events created for '+yr+'.');
+      rCalendar();
+    } else {
+      alert('Could not create events: '+JSON.stringify(d));
+    }
+  }).catch(function(e){alert('Network error: '+e.message);});
 }
 
 </script>
