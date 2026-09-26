@@ -1072,6 +1072,133 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 #pane-practice .erase-confirm p{font-size:13px;color:var(--danger);margin-bottom:0.75rem;line-height:1.5;}
 #pane-practice .feedback-msg{min-height:18px;margin-top:0.75rem;font-size:13px;}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+// ── PDF report helpers ──────────────────────────────────────────────────────
+function _pdfDoc(title){
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF();
+  doc.setFontSize(16); doc.setTextColor(14,31,69);
+  doc.text('Lodge of Nairobi No. 7187', 14, 18);
+  doc.setDrawColor(201,168,76); doc.setLineWidth(0.8); doc.line(14,22,196,22);
+  doc.setFontSize(13); doc.setTextColor(14,31,69);
+  doc.text(title, 14, 32);
+  doc.setFontSize(9); doc.setTextColor(120,120,120);
+  doc.text('Generated '+new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}), 14, 38);
+  return doc;
+}
+
+function treasurerAllReport(){
+  if(!window.jspdf){alert('PDF library still loading — try again in a moment.');return;}
+  var doc=_pdfDoc('Subscription Standing — All Members');
+  var y=48;
+  doc.setFontSize(9);
+  var paid=MEMBERS.filter(function(m){return m.sub==='Paid';}).length;
+  var arr=MEMBERS.filter(function(m){return m.sub==='Arrears';}).length;
+  var hon=MEMBERS.filter(function(m){return m.sub==='Honorary';}).length;
+  doc.setTextColor(45,122,63); doc.text('Paid: '+paid, 14, y);
+  doc.setTextColor(192,57,43); doc.text('Arrears: '+arr, 54, y);
+  doc.setTextColor(26,111,168); doc.text('Honorary: '+hon, 104, y);
+  y+=8;
+  // Table header
+  doc.setTextColor(14,31,69); doc.setFontSize(9);
+  doc.text('Member', 14, y); doc.text('Status', 120, y); doc.text('Last payment', 150, y);
+  doc.setDrawColor(200,200,200); doc.line(14,y+2,196,y+2);
+  y+=8;
+  MEMBERS.slice().sort(function(a,b){return a.name.localeCompare(b.name);}).forEach(function(m){
+    if(y>275){doc.addPage();y=20;}
+    var last=SUB_PAYMENTS.filter(function(p){return p.memberId===m.id;})
+      .sort(function(a,b){return (b.date||'').localeCompare(a.date||'');})[0];
+    doc.setTextColor(30,30,30); doc.text((m.name||'').substring(0,55), 14, y);
+    var sc=m.sub==='Paid'?[45,122,63]:m.sub==='Arrears'?[192,57,43]:[26,111,168];
+    doc.setTextColor(sc[0],sc[1],sc[2]); doc.text(m.sub||'—', 120, y);
+    doc.setTextColor(120,120,120); doc.text(last?(last.date||'—'):'—', 150, y);
+    y+=7;
+  });
+  doc.save('subscription-standing-all-'+new Date().toISOString().split('T')[0]+'.pdf');
+}
+
+function treasurerMemberReport(mid){
+  if(!window.jspdf){alert('PDF library still loading — try again in a moment.');return;}
+  var m=gm(mid); if(!m)return;
+  var doc=_pdfDoc('Subscription Standing — '+m.name);
+  var y=48;
+  doc.setFontSize(10); doc.setTextColor(30,30,30);
+  doc.text('Member: '+m.name, 14, y); y+=7;
+  doc.text('Current status: '+(m.sub||'—'), 14, y); y+=7;
+  if(m.ugle)doc.text('UGLE No: '+m.ugle, 14, y), y+=7;
+  y+=4;
+  doc.setFontSize(9); doc.setTextColor(14,31,69);
+  doc.text('Year', 14, y); doc.text('Amount', 50, y); doc.text('Date', 90, y); doc.text('Method', 130, y); doc.text('Reference', 165, y);
+  doc.setDrawColor(200,200,200); doc.line(14,y+2,196,y+2); y+=8;
+  var pays=SUB_PAYMENTS.filter(function(p){return p.memberId===mid;})
+    .sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+  if(!pays.length){
+    doc.setTextColor(120,120,120); doc.text('No payments recorded.', 14, y);
+  } else {
+    doc.setTextColor(30,30,30);
+    var total=0;
+    pays.forEach(function(p){
+      if(y>275){doc.addPage();y=20;}
+      doc.text(String(p.year||'—'), 14, y);
+      doc.text('KES '+(p.amount||0).toLocaleString(), 50, y);
+      doc.text(p.date||'—', 90, y);
+      doc.text(p.method||'—', 130, y);
+      doc.text((p.reference||'—').substring(0,20), 165, y);
+      total+=(p.amount||0); y+=7;
+    });
+    y+=4; doc.setDrawColor(200,200,200); doc.line(14,y-2,196,y-2);
+    doc.setTextColor(14,31,69); doc.text('Total paid: KES '+total.toLocaleString(), 14, y);
+  }
+  doc.save('subscription-'+m.name.replace(/[^a-z0-9]/gi,'-').toLowerCase()+'.pdf');
+}
+
+function secretaryAttendanceReport(){
+  if(!window.jspdf){alert('PDF library still loading — try again in a moment.');return;}
+  var doc=_pdfDoc('Attendance Report');
+  var y=48;
+  var closed=CALENDAR_EVENTS.filter(function(e){return e.closed;})
+    .sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+  if(!closed.length){
+    doc.setFontSize(10);doc.setTextColor(120,120,120);
+    doc.text('No closed events with recorded attendance yet.',14,y);
+    doc.save('attendance-report.pdf');return;
+  }
+  // Per-member attendance summary table
+  doc.setFontSize(9); doc.setTextColor(14,31,69);
+  doc.text('Member', 14, y); doc.text('Attended', 130, y); doc.text('Rate', 170, y);
+  doc.setDrawColor(200,200,200); doc.line(14,y+2,196,y+2); y+=8;
+  doc.setTextColor(30,30,30);
+  MEMBERS.slice().sort(function(a,b){return a.name.localeCompare(b.name);}).forEach(function(m){
+    if(y>275){doc.addPage();y=20;}
+    var att=closed.filter(function(e){return ATTENDANCE_DATA[e.id]&&ATTENDANCE_DATA[e.id][m.id];}).length;
+    var rate=closed.length?Math.round(att/closed.length*100):0;
+    doc.setTextColor(30,30,30); doc.text((m.name||'').substring(0,60), 14, y);
+    doc.text(att+' / '+closed.length, 130, y);
+    var rc=rate>=50?[45,122,63]:[176,122,0];
+    doc.setTextColor(rc[0],rc[1],rc[2]); doc.text(rate+'%', 170, y);
+    y+=7;
+  });
+  // Per-event breakdown on a new page
+  doc.addPage(); y=20;
+  doc.setFontSize(12); doc.setTextColor(14,31,69); doc.text('Attendance by event', 14, y); y+=10;
+  var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  closed.forEach(function(e){
+    if(y>265){doc.addPage();y=20;}
+    var reg=ATTENDANCE_DATA[e.id]||{};
+    var present=MEMBERS.filter(function(m){return reg[m.id];});
+    var d=new Date(e.date+'T12:00:00');
+    doc.setFontSize(10); doc.setTextColor(14,31,69);
+    doc.text(e.title+' — '+d.getDate()+' '+months[d.getMonth()]+' '+d.getFullYear(), 14, y); y+=6;
+    doc.setFontSize(8); doc.setTextColor(80,80,80);
+    doc.text('Present: '+present.length+(e.actual_visitors?' + '+e.actual_visitors+' visitors':''), 14, y); y+=5;
+    var names=present.map(function(m){return m.name;}).join(', ')||'None recorded';
+    var lines=doc.splitTextToSize(names, 180);
+    doc.setTextColor(110,110,110); doc.text(lines, 14, y); y+=lines.length*4+6;
+  });
+  doc.save('attendance-report-'+new Date().toISOString().split('T')[0]+'.pdf');
+}
+
+</script>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
@@ -2510,7 +2637,8 @@ function rMembers(){
     var honorary=MEMBERS.filter(function(m){return m.sub==='Honorary';});
     var totalCollected=SUB_PAYMENTS.filter(function(p){return p.year===SUB_YEAR;}).reduce(function(s,p){return s+p.amount;},0);
     var expected=(MEMBERS.length-honorary.length)*SUB_AMOUNT;
-    var h='<div class="sf" style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px">Subscriptions</div>';
+    var h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div class="sf" style="font-size:20px;font-weight:700;color:var(--navy)">Subscriptions</div>';
+    h+='<button class="btn btn-navy btn-sm" onclick="treasurerAllReport()">&#128196; Export PDF</button></div>';
     h+='<div style="font-size:12px;color:var(--t3);margin-bottom:14px">Lodge year '+SUB_YEAR+'</div>';
     h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">';
     h+='<div style="background:var(--okbg);border-radius:10px;padding:12px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--ok)">'+paid.length+'</div><div style="font-size:10px;color:var(--ok);font-weight:700">PAID</div></div>';
@@ -2540,6 +2668,7 @@ function rMembers(){
         h+='<div style="margin-top:12px"><div class="fg"><label class="lbl">Status</label><select id="ts-status-'+m.id+'">';
         ['Paid','Arrears','Honorary'].forEach(function(s){h+='<option value="'+s+'"'+(m.sub===s?' selected':'')+'>'+s+'</option>';});
         h+='</select></div>';
+        h+='<button class="btn btn-n btn-sm" style="margin-bottom:10px" data-mid="'+m.id+'" onclick="treasurerMemberReport(this.dataset.mid)">&#128196; Export this member\'s statement</button>';
         if(mPayments.length){
           h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:6px">Payment history</div>';
           mPayments.slice().reverse().forEach(function(p){
@@ -3755,7 +3884,9 @@ function rReports(){
 
   // ── Attendance / RSVP report (Secretary + Master) ───────────────────
   if(CU.role==='secretary'||CU.role==='master'){
-    h+='<div class="stitle">Attendance &amp; apologies</div>';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between"><div class="stitle" style="margin:0">Attendance &amp; apologies</div>';
+    if(CU.role==='secretary')h+='<button class="btn btn-navy btn-sm" onclick="secretaryAttendanceReport()">&#128196; Export PDF</button>';
+    h+='</div>';
     var now2=new Date();
     var today2=new Date(now2.toDateString());
     var isRsvpEvent=function(e){return !e.cancelled&&(e.type==='meeting'||e.type==='rehearsal'||e.type==='installation');};
@@ -4487,7 +4618,7 @@ function rMembersAdmin(){
       h+='<div style="font-weight:600;font-size:14px;color:var(--navy)">'+m.name+'</div>';
       h+='<div style="font-size:11px;color:var(--t3)">'+m.email+' &middot; '+m.deg+(m.office?' &middot; '+m.office:'')+'</div>';
       h+='</div>';
-      h+='<span class="badge" style="background:'+({'Paid':'var(--okbg)','Arrears':'var(--badbg)','Honorary':'var(--infobg)'}[m.sub]||'var(--bg2)')+';color:'+({'Paid':'var(--ok)','Arrears':'var(--bad)','Honorary':'var(--info)'}[m.sub]||'var(--t3)')+'">'+m.sub+'</span>';
+      // payment status hidden — treasurer only
       h+='<button class="btn btn-n btn-sm" data-dest="memberdetail" data-mid="'+m.id+'" onclick="window._detailId=this.dataset.mid;goTo(this.dataset.dest)"><svg class="ico" width="14" height="14"><use href="#ico-edit"/></svg></button>';
       h+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad)" data-mid="'+m.id+'" onclick="removeMember(this.dataset.mid)"><svg class="ico" width="14" height="14"><use href="#ico-trash"/></svg></button>';
       h+='</div>';
@@ -4920,10 +5051,12 @@ function rMemberDetail(){
       h+='<input type="'+f[2]+'" id="'+f[1]+'" value="'+f[3]+'"></div>';
     });
 
-    // Sub status
+    // Sub status — treasurer only
+    if(CU.role==='treasurer'){
     h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Subscription</label><select id="nm-sub-'+m.id+'">';
     ['Paid','Arrears','Honorary'].forEach(function(s){h+='<option value="'+s+'"'+(m.sub===s?' selected':'')+'>'+s+'</option>';});
     h+='</select></div>';
+    }
 
     h+='</div>';
 
