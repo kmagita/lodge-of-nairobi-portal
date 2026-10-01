@@ -3315,22 +3315,63 @@ function rDuties(){
 
   // ── My assignment card (for brothers) ─────────────────────────────────
   if(!isOfficer){
-    var myAssign=CHARGE_ASSIGNMENTS.filter(function(a){return a.prim===CU.id||a.back===CU.id;});
-    h+='<div style="font-size:10px;color:#bbb;margin-bottom:8px">v2 · '+CHARGE_ASSIGNMENTS.length+' total charges loaded · '+myAssign.length+' mine · id '+(CU.id||'').substring(0,8)+'</div>';
-    if(myAssign.length){
-      h+='<div class="stitle">My assignments</div>';
-      myAssign.forEach(function(a){
-        var isPrim=a.prim===CU.id;
-        var meet=new Date(a.mdate);
-        var now=new Date();
+    // Upcoming: I'm assigned (primary or standby) and it's not yet delivered
+    var myUpcoming=CHARGE_ASSIGNMENTS.filter(function(a){
+      return (a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';
+    }).sort(function(a,b){return (a.mdate||'').localeCompare(b.mdate||'');});
+    // Delivery history: credit goes to who ACTUALLY delivered — only show if that's me
+    var myDelivered=CHARGE_ASSIGNMENTS.filter(function(a){
+      return a.status==='Delivered'&&a.dby===CU.id;
+    }).sort(function(a,b){return (b.mdate||'').localeCompare(a.mdate||'');});
+    var myAssign=myUpcoming.concat(myDelivered);
+
+    var renderMyCard=function(a){
+      var isPrim=a.prim===CU.id;
+      var myRole=isPrim?'Primary':'Standby';
+      var otherId=isPrim?a.back:a.prim;
+      var otherM=otherId?gm(otherId):null;
+      var otherRole=isPrim?'Standby':'Primary';
+      var delivered=a.status==='Delivered';
+      var delivM=delivered&&a.dby?gm(a.dby):null;
+      var iDelivered=delivered&&a.dby===CU.id;
+      var _lib=LIBRARY.find(function(l){return l.id===a.pid;});
+      var card='<div class="card" style="border-left:4px solid '+(delivered?'var(--ok)':(isPrim?'var(--navy)':'var(--info)'))+';margin-bottom:8px">';
+      card+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:6px">'+((_lib&&_lib.title)||a.ptitle||'Charge')+'</div>';
+      // Badges row: my role + status
+      card+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">';
+      card+='<span class="badge" style="background:'+(isPrim?'var(--navy)':'var(--infobg)')+';color:'+(isPrim?'#fff':'var(--info)')+'">You: '+myRole+'</span>';
+      if(delivered){
+        card+='<span class="badge" style="background:var(--okbg);color:var(--ok)">&#10003; Delivered '+a.mdate+'</span>';
+      } else {
+        var meet=new Date(a.mdate);var now=new Date();
         var daysLeft=Math.max(0,Math.round((meet-now)/(1000*60*60*24)));
-        h+='<div class="card" style="border-left:4px solid '+(isPrim?'var(--navy)':'var(--info)')+'">';
-        var _lib=LIBRARY.find(function(l){return l.id===a.pid;});h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:4px">'+((_lib&&_lib.title)||a.ptitle||'Charge')+'</div>';
-        h+='<div style="display:flex;gap:8px;margin-bottom:8px">';
-        h+='<span class="badge" style="background:'+(isPrim?'var(--navy)':'var(--infobg)')+';color:'+(isPrim?'#fff':'var(--info)')+'">'+(isPrim?'Primary':'Standby')+'</span>';
-        h+='<span style="font-size:12px;color:var(--t3)">'+daysLeft+' days to meeting</span>';
-        h+='</div></div>';
-      });
+        card+='<span class="badge" style="background:var(--goldbg);color:var(--gold)">'+a.mdate+' &middot; '+daysLeft+' days</span>';
+      }
+      card+='</div>';
+      // In history, I always delivered it (that's the filter). Note if I stepped in as standby.
+      if(delivered&&!isPrim){
+        card+='<div style="font-size:12px;color:var(--ok);margin-bottom:2px"><strong>You delivered this as standby.</strong></div>';
+      }
+      // The other assignee
+      card+='<div style="font-size:12px;color:var(--t3)">'+otherRole+': '+(otherM?gn(otherM):'\u2014')+'</div>';
+      // Practice button for upcoming
+      if(!delivered){
+        card+='<button class="btn btn-n btn-sm" style="margin-top:8px;font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">Practice</button>';
+      }
+      card+='</div>';
+      return card;
+    };
+
+    if(myUpcoming.length){
+      h+='<div class="stitle">My upcoming charges</div>';
+      myUpcoming.forEach(function(a){h+=renderMyCard(a);});
+    }
+    if(myDelivered.length){
+      h+='<div class="stitle" style="margin-top:14px">My delivery history</div>';
+      myDelivered.forEach(function(a){h+=renderMyCard(a);});
+    }
+    if(!myAssign.length){
+      h+='<div class="card" style="text-align:center;padding:20px;color:var(--t3)">You have no charge assignments at present.</div>';
     }
   }
 
