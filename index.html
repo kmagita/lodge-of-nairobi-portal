@@ -3316,6 +3316,7 @@ function rDuties(){
   // ── My assignment card (for brothers) ─────────────────────────────────
   if(!isOfficer){
     var myAssign=CHARGE_ASSIGNMENTS.filter(function(a){return a.prim===CU.id||a.back===CU.id;});
+    h+='<div style="font-size:10px;color:#bbb;margin-bottom:8px">v2 · '+CHARGE_ASSIGNMENTS.length+' total charges loaded · '+myAssign.length+' mine · id '+(CU.id||'').substring(0,8)+'</div>';
     if(myAssign.length){
       h+='<div class="stitle">My assignments</div>';
       myAssign.forEach(function(a){
@@ -3324,7 +3325,7 @@ function rDuties(){
         var now=new Date();
         var daysLeft=Math.max(0,Math.round((meet-now)/(1000*60*60*24)));
         h+='<div class="card" style="border-left:4px solid '+(isPrim?'var(--navy)':'var(--info)')+'">';
-        h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:4px">'+a.ptitle+'</div>';
+        var _lib=LIBRARY.find(function(l){return l.id===a.pid;});h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:4px">'+((_lib&&_lib.title)||a.ptitle||'Charge')+'</div>';
         h+='<div style="display:flex;gap:8px;margin-bottom:8px">';
         h+='<span class="badge" style="background:'+(isPrim?'var(--navy)':'var(--infobg)')+';color:'+(isPrim?'#fff':'var(--info)')+'">'+(isPrim?'Primary':'Standby')+'</span>';
         h+='<span style="font-size:12px;color:var(--t3)">'+daysLeft+' days to meeting</span>';
@@ -3354,7 +3355,7 @@ function rDuties(){
     var delivM=isDelivered?gm(a.dby):null;
     h+='<div class="card" style="opacity:'+(isDelivered?.7:1)+'">';
     h+='<div class="srow" style="margin-bottom:8px">';
-    h+='<div style="flex:1"><div style="font-weight:700;font-size:14px;color:var(--navy)">'+a.ptitle+'</div>';
+    var _l2=LIBRARY.find(function(l){return l.id===a.pid;});h+='<div style="flex:1"><div style="font-weight:700;font-size:14px;color:var(--navy)">'+((_l2&&_l2.title)||a.ptitle||'Charge')+'</div>';
     h+='<div style="font-size:11px;color:var(--t3)">'+a.mdate+'</div></div>';
     h+='<span class="badge" style="background:'+(isDelivered?'var(--okbg)':'var(--goldbg)')+';color:'+(isDelivered?'var(--ok)':'var(--gold)')+';">'+(isDelivered?'&#10003; Delivered':'Assigned')+'</span>';
     h+='</div>';
