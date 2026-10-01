@@ -1072,7 +1072,25 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 #pane-practice .erase-confirm p{font-size:13px;color:var(--danger);margin-bottom:0.75rem;line-height:1.5;}
 #pane-practice .feedback-msg{min-height:18px;margin-top:0.75rem;font-size:13px;}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+function saveAssignees(caid){
+  var prim=document.getElementById('ea-prim-'+caid);
+  var back=document.getElementById('ea-back-'+caid);
+  var a=CHARGE_ASSIGNMENTS.find(function(x){return x.id===caid;});
+  if(!a)return;
+  if(!prim||!prim.value){alert('Select a primary assignee.');return;}
+  a.prim=prim.value;
+  a.back=(back&&back.value)?back.value:null;
+  supa('charge_assignments?id=eq.'+caid,{method:'PATCH',
+    body:JSON.stringify({primary_id:a.prim,backup_id:a.back})
+  }).then(function(r){
+    if(!r.ok){r.text().then(function(t){alert('Save failed: '+t);});return;}
+    window._editAssignOpen=null;
+    rDuties();
+  }).catch(function(e){alert('Network error saving assignees.');});
+}
+
+</script>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
@@ -3421,7 +3439,21 @@ function rDuties(){
       }
     }
     if(isDC&&!isDelivered){
+      // Edit assignees (reassign primary / standby)
+      var editOpen=window._editAssignOpen===a.id;
+      h+='<button class="btn btn-n btn-sm" style="margin-right:6px" data-caid="'+a.id+'" onclick="window._editAssignOpen=(window._editAssignOpen===this.dataset.caid?null:this.dataset.caid);rDuties()">'+(editOpen?'Cancel edit':'Edit assignees')+'</button>';
       h+='<button class="btn btn-navy btn-sm" data-caid="'+a.id+'" onclick="recordDelivery(this.dataset.caid)">'+(confirmingDeliveryId===a.id?'Cancel':'Record delivery')+'</button>';
+      if(editOpen){
+        h+='<div style="background:var(--bg2);border-radius:8px;padding:12px;margin-top:8px">';
+        h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Primary</label><select id="ea-prim-'+a.id+'"><option value="">— Select —</option>';
+        MEMBERS.forEach(function(m){h+='<option value="'+m.id+'"'+(a.prim===m.id?' selected':'')+'>'+gn(m)+'</option>';});
+        h+='</select></div>';
+        h+='<div class="fg" style="margin:0 0 10px"><label class="lbl">Standby</label><select id="ea-back-'+a.id+'"><option value="">— None —</option>';
+        MEMBERS.forEach(function(m){h+='<option value="'+m.id+'"'+(a.back===m.id?' selected':'')+'>'+gn(m)+'</option>';});
+        h+='</select></div>';
+        h+='<button class="btn btn-navy btn-sm" style="width:100%;justify-content:center" data-caid="'+a.id+'" onclick="saveAssignees(this.dataset.caid)">Save changes</button>';
+        h+='</div>';
+      }
       if(confirmingDeliveryId===a.id){
         var pm2=gm(a.prim),bk2=gm(a.back);
         h+='<div style="background:var(--goldbg);border:1px solid var(--bdr);border-radius:8px;padding:12px;margin-top:8px">';
