@@ -1117,6 +1117,42 @@ function restoreSession(){
   }).catch(function(){ try{localStorage.removeItem('lon_session');}catch(e){} });
 }
 
+
+// Open the practice module directly on a specific passage (from Duties / Library)
+function practicePassage(pid){
+  window._practiceTarget=pid;
+  goTo('practice');
+}
+
+
+function showPracticeLanding(){
+  if(typeof showTab==='function') showTab('library');
+  var lib=document.getElementById('tabLibrary');
+  if(!lib)return;
+  var myCharges=(typeof CHARGE_ASSIGNMENTS!=='undefined')?CHARGE_ASSIGNMENTS.filter(function(a){return (a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';}):[];
+  var h='<div style="padding:14px 4px">';
+  h+='<div style="font-family:Georgia,serif;font-size:20px;font-weight:700;color:var(--navy);margin-bottom:6px">Practice</div>';
+  h+='<div style="font-size:13px;color:var(--t3);margin-bottom:16px">Rehearse your charges and ritual passages aloud, and track your progress.</div>';
+  if(myCharges.length){
+    h+='<div class="stitle" style="margin-top:0">Your charges to rehearse</div>';
+    myCharges.forEach(function(a){
+      var lp=(typeof LIBRARY!=='undefined')?LIBRARY.find(function(l){return l.id===a.pid;}):null;
+      h+='<div class="card" style="display:flex;align-items:center;justify-content:space-between">';
+      h+='<div><div style="font-weight:700;font-size:14px;color:var(--navy)">'+((lp&&lp.title)||a.ptitle||'Charge')+'</div>';
+      h+='<div style="font-size:11px;color:var(--t3)">'+a.mdate+' &middot; '+(a.prim===CU.id?'Primary':'Standby')+'</div></div>';
+      h+='<button class="btn btn-n btn-sm" data-pid="'+a.pid+'" onclick="window._practiceTarget=this.dataset.pid;rPractice();">&#9654; Rehearse</button>';
+      h+='</div>';
+    });
+  }
+  h+='<div class="stitle">Browse the library</div>';
+  h+='<div class="card" style="text-align:center;padding:20px">';
+  h+='<div style="font-size:13px;color:var(--t3);margin-bottom:12px">Choose any passage from the Library to practise it.</div>';
+  h+='<button class="btn btn-n btn-sm" onclick="goTo(\'library\')">Open the Library</button>';
+  h+='</div>';
+  h+='</div>';
+  lib.innerHTML=h;
+}
+
 </script>
 </head>
 <body>
@@ -1309,22 +1345,24 @@ function restoreSession(){
   <div id="pane-polls" class="pane"></div>
   <div id="pane-practice" class="pane">
 <style>
-/* Hide PM elements that are redundant inside the portal */
-.btn-sm.btn-primary[onclick*="showAddTab"],
-.end-btn[onclick*="endSession"],
-#tabAdd,
-#tabSettings,
-[onclick*="showAddTab"],
-.top-bar .end-btn { display:none !important; }
-
+/* ── Pocket Mentor: strip redundant chrome, integrate with portal ── */
+#pane-practice .nav-bar { display:none !important; }          /* PM internal tab bar — portal nav handles it */
+#pane-practice #tabAdd,
+#pane-practice #tabSettings { display:none !important; }       /* no add/settings — library is in portal */
+#pane-practice [onclick*="showAddTab"],
+#pane-practice .end-btn { display:none !important; }           /* no + Add / End buttons */
+#pane-practice .top-bar-title { color:var(--navy); font-family:Georgia,serif; }
+#pane-practice .tab-content { padding-bottom:16px !important; } /* no bottom-nav gap needed now */
+/* Portal-style section headers inside PM */
+#pane-practice .top-bar { background:transparent; border:none; padding:14px 4px 6px; }
 </style>
 <div style="position:sticky;top:0;z-index:200;background:#1a2236;padding:8px 16px"><button onclick="goTo('home')" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:rgba(255,255,255,.75);padding:4px 0"><svg style="width:16px;height:16px;flex-shrink:0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back to portal</button></div>
 <div class="screen main-screen" id="mainScreen">
 
-  <!-- LIBRARY -->
+  <!-- LIBRARY (portal-fed; shown only when no specific passage chosen) -->
   <div id="tabLibrary" class="tab-content">
     <div class="top-bar">
-      <div class="top-bar-title">My Passages</div>
+      <div class="top-bar-title">Choose a passage</div>
       <button class="btn btn-sm btn-primary" onclick="showAddTab()">+ Add</button>
       <button class="end-btn" onclick="endSession()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v7"/><path d="M6.8 5.8a9 9 0 1 0 10.4 0"/></svg>
@@ -3378,8 +3416,21 @@ function rPractice(){
       }
     }
 
-    if(typeof showTab==='function') showTab('library');
-    if(typeof renderLibrary==='function') renderLibrary();
+    if(window._practiceTarget){
+      // Open the requested passage directly — skip the library list entirely
+      var tgt=window._practiceTarget; window._practiceTarget=null;
+      if(typeof showTab==='function') showTab('library');
+      setTimeout(function(){
+        if(typeof openPractice==='function' && st && st.passages && st.passages.some(function(p){return p.id===tgt;})){
+          openPractice(tgt);
+        } else {
+          showPracticeLanding();
+        }
+      }, 150);
+    } else {
+      // No specific passage chosen — show a clean landing that points to the Library
+      showPracticeLanding();
+    }
   }, 250);
 }
 
@@ -3436,7 +3487,7 @@ function rDuties(){
       card+='<div style="font-size:12px;color:var(--t3)">'+otherRole+': '+(otherM?gn(otherM):'\u2014')+'</div>';
       // Practice button for upcoming
       if(!delivered){
-        card+='<button class="btn btn-n btn-sm" style="margin-top:8px;font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">Practice</button>';
+        card+='<button class="btn btn-n btn-sm" style="margin-top:8px;font-size:11px" data-pid="'+a.pid+'" onclick="practicePassage(this.dataset.pid)">Practice this charge</button>';
       }
       card+='</div>';
       return card;
@@ -3608,6 +3659,8 @@ function rLibrary(){
         h+='<div style="font-weight:700;font-size:14px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">'+l.title+'</div>';
         h+='<div style="font-size:11px;color:var(--t3)">'+(l.type||'charge')+'</div>';
         h+='</button>';
+        // Practice button — available to all members
+        h+='<button class="btn btn-n btn-sm" style="padding:3px 8px;font-size:11px;flex-shrink:0" data-pid="'+l.id+'" onclick="practicePassage(this.dataset.pid)">&#9654; Practise</button>';
         // Action buttons outside the expand button
         if(isDC){
           h+='<button class="btn btn-n btn-sm" style="padding:3px 8px;font-size:11px;flex-shrink:0" data-id="'+l.id+'" onclick="libContentId=(libContentId===this.dataset.id?null:this.dataset.id);rLibrary()">'+( isEditContent?'Done':'Edit')+'</button>';
@@ -5017,7 +5070,7 @@ function rHome(){
       h+='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--bdr)">';
       h+='<div style="flex:1"><div style="font-weight:600;font-size:13px;color:var(--navy)">'+(lib?lib.title:a.ptitle||'Charge')+'</div>';
       h+='<div style="font-size:11px;color:var(--t3)">'+a.mdate+' &middot; '+(a.prim===CU.id?'Primary':'Standby')+'</div></div>';
-      h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">Practice</button>';
+      h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-pid="'+a.pid+'" onclick="practicePassage(this.dataset.pid)">Practice</button>';
       h+='</div>';
     });
     h+='</div>';
