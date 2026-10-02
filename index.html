@@ -8007,13 +8007,15 @@ function startPracticeRecording(){
 
   const rec=new SR(); rec.continuous=true; rec.interimResults=true; rec.lang='en-US';
   rec.onresult=e=>{
-    let interim='',final='';
+    let final='';
     for(let i=e.resultIndex;i<e.results.length;i++){
       if(e.results[i].isFinal) final+=e.results[i][0].transcript+' ';
-      else interim+=e.results[i][0].transcript;
     }
     st.practiceTranscript+=final;
-    live.textContent=(st.practiceTranscript+interim).trim()||'Listening...';
+    // Do NOT show the recited words — the brother recites from memory.
+    // Show only a neutral listening indicator with a pulse of progress.
+    var wc=st.practiceTranscript.trim().split(/\s+/).filter(Boolean).length;
+    live.textContent='Listening'+(wc?' \u00b7 '+wc+' word'+(wc!==1?'s':'')+' heard':'...');
   };
   rec.onend=()=>{
     if(st.practiceActive){ clearTimeout(st.restartTimer); st.restartTimer=setTimeout(()=>{ if(st.practiceActive) try{ rec.start(); }catch(e){ startPracticeRecording(); } },300); }
