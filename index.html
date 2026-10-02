@@ -3237,7 +3237,7 @@ function attendanceSummary(){
 var pollForm=false;
 var newPollDraft={fields:[]};
 
-function pmInit(){if(!window._pmLoaded){window._pmLoaded=true;load();}loadVoices&&loadVoices();showTab('library');}
+function pmInit(){if(!window._pmLoaded){window._pmLoaded=true;load();}loadVoices&&loadVoices();}
 
 
 // Parse portal catechism text (Q: ... / A: ... format) into PM qnaPairs
@@ -3336,9 +3336,8 @@ function rPractice(){
     }
 
     if(window._practiceTarget){
-      // Open the requested passage directly — skip the library list entirely
+      // Open the requested passage directly — openPractice switches to the practice view
       var tgt=window._practiceTarget; window._practiceTarget=null;
-      if(typeof showTab==='function') showTab('library');
       setTimeout(function(){
         if(typeof openPractice==='function' && st && st.passages && st.passages.some(function(p){return p.id===tgt;})){
           openPractice(tgt);
@@ -7634,8 +7633,9 @@ function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 function renderLibrary(filter='all'){
   checkDraftBanner();
   const list=document.getElementById('passageList');
+  if(!list) return;  // portal build renders its own landing in tabLibrary
   const data=filter==='all'?st.passages:st.passages.filter(p=>p.format===filter);
-  if(!data.length){ list.innerHTML='<div class="empty-state">No passages yet.<br>Tap <strong>+ Add</strong> to begin.</div>'; return; }
+  if(!data.length){ list.innerHTML='<div class="empty-state">Choose a passage from the Library to practise.</div>'; return; }
   list.innerHTML=data.map(p=>{
     const prog=st.progressMap[p.id]; const pct=prog?Math.round(prog.accuracy):0;
     const bCls=pct>=80?'badge-success':pct>=40?'badge-warn':'badge-gray';
@@ -7680,6 +7680,8 @@ function confirmDelete(id){ st.passages=st.passages.filter(p=>p.id!==id); delete
 // ═══════════════════════════════════════════════════════
 function openPractice(id){
   const p=st.passages.find(p=>p.id===id); if(!p) return;
+  // TTS passages (portal library) don't need a recording — use device voice
+  if(p.refVoiceType==='tts' && !p.refAudio){ p.refAudio='tts'; }
   // Validation
   if((p.format==='charge'||p.format==='oration')&&!p.refAudio){ alert('No reference recording. Please edit and record first.'); return; }
   if(p.format==='catechism'&&(!p.qnaPairs||!p.qnaPairs.length)){ alert('No Q&A pairs found. Please edit and add pairs first.'); return; }
@@ -8672,9 +8674,11 @@ function practicePassage(pid){
 
 
 function showPracticeLanding(){
-  if(typeof showTab==='function') showTab('library');
+  // Activate the library tab container without invoking the PM's renderLibrary
+  document.querySelectorAll('#pane-practice .tab-content').forEach(function(t){t.classList.remove('active');});
   var lib=document.getElementById('tabLibrary');
   if(!lib)return;
+  lib.classList.add('active');
   var myCharges=(typeof CHARGE_ASSIGNMENTS!=='undefined')?CHARGE_ASSIGNMENTS.filter(function(a){return (a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';}):[];
   var h='<div style="padding:14px 4px">';
   h+='<div style="font-family:Georgia,serif;font-size:20px;font-weight:700;color:var(--navy);margin-bottom:6px">Practice</div>';
