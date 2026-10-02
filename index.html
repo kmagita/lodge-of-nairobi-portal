@@ -6920,13 +6920,32 @@ window.speechSynthesis.onvoiceschanged = loadVoices;
 loadVoices();
 
 function speakText(text, voiceIndex, rate, onEnd) {
+  if(!('speechSynthesis' in window)){
+    alert('Text-to-speech is not supported on this browser. Please record a reference reading instead.');
+    if(onEnd)onEnd();
+    return;
+  }
   window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
-  if (ttsVoices[voiceIndex]) utt.voice = ttsVoices[voiceIndex];
-  utt.rate = rate || 1.0;
-  utt.lang = 'en-US';
-  if (onEnd) utt.onend = onEnd;
-  window.speechSynthesis.speak(utt);
+  // Voices may not be loaded yet on first use — refresh and retry briefly
+  if(!ttsVoices.length){ loadVoices(); }
+  function doSpeak(){
+    const utt = new SpeechSynthesisUtterance(text);
+    if (ttsVoices[voiceIndex]) utt.voice = ttsVoices[voiceIndex];
+    else if (ttsVoices[0]) utt.voice = ttsVoices[0];
+    utt.rate = rate || 1.0;
+    utt.lang = 'en-US';
+    if (onEnd) utt.onend = onEnd;
+    utt.onerror = function(e){ console.warn('TTS error:', e.error); if(onEnd)onEnd(); };
+    window.speechSynthesis.speak(utt);
+    // Chrome bug: long utterances pause after ~15s. Keep it alive by resuming.
+    clearInterval(window._ttsKeepAlive);
+    window._ttsKeepAlive = setInterval(function(){
+      if(window.speechSynthesis.speaking){ window.speechSynthesis.resume(); }
+      else { clearInterval(window._ttsKeepAlive); }
+    }, 10000);
+  }
+  // If voices still loading, wait a moment then speak
+  if(!ttsVoices.length){ setTimeout(doSpeak, 250); } else { doSpeak(); }
 }
 
 function buildVoiceSelect(selectedIdx) {
@@ -7777,6 +7796,7 @@ function setSpeed(s,el){ st.speed=s; document.querySelectorAll('.speed-btn').for
 // ═══════════════════════════════════════════════════════
 function stopPlayback(){
   if(st.currentAudio){ st.currentAudio.pause(); st.currentAudio=null; }
+  clearInterval(window._ttsKeepAlive);
   window.speechSynthesis.cancel();
   document.getElementById('stopBtn').style.display='none';
   document.getElementById('playbackStatus').textContent='Play chunk | Play full';
@@ -7884,8 +7904,19 @@ function playChunk(){
     return;
   }
 
-  // Standard: slice the audio
-  if(!p.refAudio){ alert('No reference recording found.'); return; }
+  // Standard: use TTS if no recording (or passage is set to TTS), else slice audio
+  if(p.refVoiceType==='tts' || !p.refAudio || p.refAudio==='tts'){
+    document.getElementById('stopBtn').style.display='flex';
+    document.getElementById('playbackStatus').textContent='Playing chunk '+(st.chunkIdx+1)+'...';
+    speakText(chunk, p.refVoiceIndex||0, st.speed, function(){
+      stopPlayback();
+      if((st.format==='listenrecite')&&!st.practiceActive){
+        document.getElementById('listenReciteStatus').textContent='Now recite — mic opening...';
+        setTimeout(function(){ if(st.format==='listenrecite'){ startPracticeRecording(); document.getElementById('listenReciteStatus').textContent='Reciting... tap mic to stop.'; } },700);
+      }
+    });
+    return;
+  }
   const ts=p.chunkTimestamps||[];
   let startTime=0, endTime=null;
   if(ts[st.chunkIdx]){ startTime=ts[st.chunkIdx].start; endTime=ts[st.chunkIdx].end; }
