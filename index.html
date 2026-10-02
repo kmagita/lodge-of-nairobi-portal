@@ -10,7 +10,7 @@
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#f4f0e8;--bg2:#ede8dc;--white:#fff;--navy:#0e1f45;--gold:#a07820;--goldbg:#fdf6e3;--gb:#d4b86a;--text:#1a1a2e;--t2:#4a4060;--t3:#8a8aaa;--ok:#1a7a40;--okbg:#e8f5ee;--bad:#a02020;--badbg:#fde8e8;--warn:#a05010;--warnbg:#fff3e8;--info:#1a5080;--infobg:#e8f0fb;--purp:#5a2080;--purpbg:#f3eafc;--bdr:#ddd5c0;--bdr2:#c8bfa8}
+:root{--bg:#f5ede0;--bg2:#ede5d8;--white:#fff;--navy:#0e1f45;--gold:#c9a84c;--goldbg:#fdf3e0;--gb:#ddd0aa;--text:#1a1208;--t2:#4a3f2f;--t3:#8a7a6a;--ok:#2d7a3f;--okbg:#eaf5ee;--bad:#c0392b;--badbg:#fdecea;--warn:#b07a00;--warnbg:#fff8e1;--info:#1a6fa8;--infobg:#e8f4fd;--purp:#5a2080;--purpbg:#f3eafc;--bdr:#ddd0aa;--bdr2:#c8bfa8}
 body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px;min-height:100vh}
 input,select,textarea{background:var(--white);border:1.5px solid var(--bdr2);border-radius:8px;color:var(--text);padding:9px 12px;font-size:13px;width:100%;outline:none;font-family:inherit}
 input:focus,select:focus,textarea:focus{border-color:var(--navy)}
@@ -1072,88 +1072,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 #pane-practice .erase-confirm p{font-size:13px;color:var(--danger);margin-bottom:0.75rem;line-height:1.5;}
 #pane-practice .feedback-msg{min-height:18px;margin-top:0.75rem;font-size:13px;}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
-// ── Restore session on page refresh ─────────────────────────────────────────
-function restoreSession(){
-  var saved;
-  try{ saved=JSON.parse(localStorage.getItem('lon_session')||'null'); }catch(e){ saved=null; }
-  if(!saved||!saved.rt){ return; }
-  // Use the refresh token to get a fresh access token (handles expiry)
-  fetch(SUPA_URL+'/auth/v1/token?grant_type=refresh_token',{
-    method:'POST',
-    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({refresh_token:saved.rt})
-  }).then(function(r){return r.json();})
-  .then(function(data){
-    if(!data.access_token){ try{localStorage.removeItem('lon_session');}catch(e){} return; }
-    SUPA_TOKEN=data.access_token; SUPA_RTOKEN=data.refresh_token;
-    try{ localStorage.setItem('lon_session', JSON.stringify({at:SUPA_TOKEN,rt:SUPA_RTOKEN,uid:data.user.id})); }catch(e){}
-    // Fetch member profile and bring the app up (mirrors login flow)
-    supa('members?select=*&id=eq.'+data.user.id).then(function(r){return r.json();})
-    .then(function(rows){
-      if(!rows||!rows.length){ try{localStorage.removeItem('lon_session');}catch(e){} return; }
-      var m=rows[0];
-      if(m.status==='pending'||m.status==='declined'){ try{localStorage.removeItem('lon_session');}catch(e){} return; }
-      CU={id:m.id,name:m.name,email:m.email,office:m.office||'',deg:m.deg,
-          ugle:m.ugle||'',dob:m.dob||'',init:m.init||'',pass_:m.pass_||'',raise:m.raise||'',
-          sub:m.sub,phone:m.phone||'',firstLogin:m.first_login,
-          role:officeToRole(m.office||''),lastSeenNotices:m.last_seen_notices||null};
-      document.getElementById('pg-login').style.display='none';
-      document.getElementById('pg-app').style.display='block';
-      document.getElementById('tb-name').textContent=gn(CU);
-      document.getElementById('tb-role').textContent=RLBL[CU.role]||CU.role;
-      mSrch='';mFilt='all';
-      loadAppData().then(function(){
-        buildNav();
-        goTo('home');
-        POLLS.forEach(function(p){
-          if(!p.active||!p.label)return;
-          var ex=NOTICES.find(function(n){return n.type==='poll'&&n.title&&n.title.indexOf(p.label)>-1;});
-          if(!ex)NOTICES.unshift({id:'auto-'+p.id,type:'poll',title:'Poll: '+p.label,body:'An active poll is open for '+p.label+'. Please respond.',to:'all',date:(p.createdAt||new Date().toISOString()).split('T')[0],read:false});
-        });
-        checkSubsReminder(); startRealtime(); keepAlive();
-      });
-    }).catch(function(){});
-  }).catch(function(){ try{localStorage.removeItem('lon_session');}catch(e){} });
-}
-
-
-// Open the practice module directly on a specific passage (from Duties / Library)
-function practicePassage(pid){
-  window._practiceTarget=pid;
-  goTo('practice');
-}
-
-
-function showPracticeLanding(){
-  if(typeof showTab==='function') showTab('library');
-  var lib=document.getElementById('tabLibrary');
-  if(!lib)return;
-  var myCharges=(typeof CHARGE_ASSIGNMENTS!=='undefined')?CHARGE_ASSIGNMENTS.filter(function(a){return (a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';}):[];
-  var h='<div style="padding:14px 4px">';
-  h+='<div style="font-family:Georgia,serif;font-size:20px;font-weight:700;color:var(--navy);margin-bottom:6px">Practice</div>';
-  h+='<div style="font-size:13px;color:var(--t3);margin-bottom:16px">Rehearse your charges and ritual passages aloud, and track your progress.</div>';
-  if(myCharges.length){
-    h+='<div class="stitle" style="margin-top:0">Your charges to rehearse</div>';
-    myCharges.forEach(function(a){
-      var lp=(typeof LIBRARY!=='undefined')?LIBRARY.find(function(l){return l.id===a.pid;}):null;
-      h+='<div class="card" style="display:flex;align-items:center;justify-content:space-between">';
-      h+='<div><div style="font-weight:700;font-size:14px;color:var(--navy)">'+((lp&&lp.title)||a.ptitle||'Charge')+'</div>';
-      h+='<div style="font-size:11px;color:var(--t3)">'+a.mdate+' &middot; '+(a.prim===CU.id?'Primary':'Standby')+'</div></div>';
-      h+='<button class="btn btn-n btn-sm" data-pid="'+a.pid+'" onclick="window._practiceTarget=this.dataset.pid;rPractice();">&#9654; Rehearse</button>';
-      h+='</div>';
-    });
-  }
-  h+='<div class="stitle">Browse the library</div>';
-  h+='<div class="card" style="text-align:center;padding:20px">';
-  h+='<div style="font-size:13px;color:var(--t3);margin-bottom:12px">Choose any passage from the Library to practise it.</div>';
-  h+='<button class="btn btn-n btn-sm" onclick="goTo(\'library\')">Open the Library</button>';
-  h+='</div>';
-  h+='</div>';
-  lib.innerHTML=h;
-}
-
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
@@ -1356,7 +1275,7 @@ function showPracticeLanding(){
 /* Portal-style section headers inside PM */
 #pane-practice .top-bar { background:transparent; border:none; padding:14px 4px 6px; }
 </style>
-<div style="position:sticky;top:0;z-index:200;background:#1a2236;padding:8px 16px"><button onclick="goTo('home')" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:rgba(255,255,255,.75);padding:4px 0"><svg style="width:16px;height:16px;flex-shrink:0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back to portal</button></div>
+
 <div class="screen main-screen" id="mainScreen">
 
   <!-- LIBRARY (portal-fed; shown only when no specific passage chosen) -->
@@ -8696,6 +8615,86 @@ function declinePending(pid){
     PENDING_MEMBERS=PENDING_MEMBERS.filter(function(x){return x.id!==pid;});
     rMembersAdmin();
   }).catch(function(e){alert('Could not decline: '+e.message);});
+}
+
+// ── Restore session on page refresh ─────────────────────────────────────────
+function restoreSession(){
+  var saved;
+  try{ saved=JSON.parse(localStorage.getItem('lon_session')||'null'); }catch(e){ saved=null; }
+  if(!saved||!saved.rt){ return; }
+  // Use the refresh token to get a fresh access token (handles expiry)
+  fetch(SUPA_URL+'/auth/v1/token?grant_type=refresh_token',{
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({refresh_token:saved.rt})
+  }).then(function(r){return r.json();})
+  .then(function(data){
+    if(!data.access_token){ try{localStorage.removeItem('lon_session');}catch(e){} return; }
+    SUPA_TOKEN=data.access_token; SUPA_RTOKEN=data.refresh_token;
+    try{ localStorage.setItem('lon_session', JSON.stringify({at:SUPA_TOKEN,rt:SUPA_RTOKEN,uid:data.user.id})); }catch(e){}
+    // Fetch member profile and bring the app up (mirrors login flow)
+    supa('members?select=*&id=eq.'+data.user.id).then(function(r){return r.json();})
+    .then(function(rows){
+      if(!rows||!rows.length){ try{localStorage.removeItem('lon_session');}catch(e){} return; }
+      var m=rows[0];
+      if(m.status==='pending'||m.status==='declined'){ try{localStorage.removeItem('lon_session');}catch(e){} return; }
+      CU={id:m.id,name:m.name,email:m.email,office:m.office||'',deg:m.deg,
+          ugle:m.ugle||'',dob:m.dob||'',init:m.init||'',pass_:m.pass_||'',raise:m.raise||'',
+          sub:m.sub,phone:m.phone||'',firstLogin:m.first_login,
+          role:officeToRole(m.office||''),lastSeenNotices:m.last_seen_notices||null};
+      document.getElementById('pg-login').style.display='none';
+      document.getElementById('pg-app').style.display='block';
+      document.getElementById('tb-name').textContent=gn(CU);
+      document.getElementById('tb-role').textContent=RLBL[CU.role]||CU.role;
+      mSrch='';mFilt='all';
+      loadAppData().then(function(){
+        buildNav();
+        goTo('home');
+        POLLS.forEach(function(p){
+          if(!p.active||!p.label)return;
+          var ex=NOTICES.find(function(n){return n.type==='poll'&&n.title&&n.title.indexOf(p.label)>-1;});
+          if(!ex)NOTICES.unshift({id:'auto-'+p.id,type:'poll',title:'Poll: '+p.label,body:'An active poll is open for '+p.label+'. Please respond.',to:'all',date:(p.createdAt||new Date().toISOString()).split('T')[0],read:false});
+        });
+        checkSubsReminder(); startRealtime(); keepAlive();
+      });
+    }).catch(function(){});
+  }).catch(function(){ try{localStorage.removeItem('lon_session');}catch(e){} });
+}
+
+
+// Open the practice module directly on a specific passage (from Duties / Library)
+function practicePassage(pid){
+  window._practiceTarget=pid;
+  goTo('practice');
+}
+
+
+function showPracticeLanding(){
+  if(typeof showTab==='function') showTab('library');
+  var lib=document.getElementById('tabLibrary');
+  if(!lib)return;
+  var myCharges=(typeof CHARGE_ASSIGNMENTS!=='undefined')?CHARGE_ASSIGNMENTS.filter(function(a){return (a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';}):[];
+  var h='<div style="padding:14px 4px">';
+  h+='<div style="font-family:Georgia,serif;font-size:20px;font-weight:700;color:var(--navy);margin-bottom:6px">Practice</div>';
+  h+='<div style="font-size:13px;color:var(--t3);margin-bottom:16px">Rehearse your charges and ritual passages aloud, and track your progress.</div>';
+  if(myCharges.length){
+    h+='<div class="stitle" style="margin-top:0">Your charges to rehearse</div>';
+    myCharges.forEach(function(a){
+      var lp=(typeof LIBRARY!=='undefined')?LIBRARY.find(function(l){return l.id===a.pid;}):null;
+      h+='<div class="card" style="display:flex;align-items:center;justify-content:space-between">';
+      h+='<div><div style="font-weight:700;font-size:14px;color:var(--navy)">'+((lp&&lp.title)||a.ptitle||'Charge')+'</div>';
+      h+='<div style="font-size:11px;color:var(--t3)">'+a.mdate+' &middot; '+(a.prim===CU.id?'Primary':'Standby')+'</div></div>';
+      h+='<button class="btn btn-n btn-sm" data-pid="'+a.pid+'" onclick="window._practiceTarget=this.dataset.pid;rPractice();">&#9654; Rehearse</button>';
+      h+='</div>';
+    });
+  }
+  h+='<div class="stitle">Browse the library</div>';
+  h+='<div class="card" style="text-align:center;padding:20px">';
+  h+='<div style="font-size:13px;color:var(--t3);margin-bottom:12px">Choose any passage from the Library to practise it.</div>';
+  h+='<button class="btn btn-n btn-sm" onclick="goTo(\'library\')">Open the Library</button>';
+  h+='</div>';
+  h+='</div>';
+  lib.innerHTML=h;
 }
 </script>
 </body>
