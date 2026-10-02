@@ -1072,7 +1072,52 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 #pane-practice .erase-confirm p{font-size:13px;color:var(--danger);margin-bottom:0.75rem;line-height:1.5;}
 #pane-practice .feedback-msg{min-height:18px;margin-top:0.75rem;font-size:13px;}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+// ── Restore session on page refresh ─────────────────────────────────────────
+function restoreSession(){
+  var saved;
+  try{ saved=JSON.parse(localStorage.getItem('lon_session')||'null'); }catch(e){ saved=null; }
+  if(!saved||!saved.rt){ return; }
+  // Use the refresh token to get a fresh access token (handles expiry)
+  fetch(SUPA_URL+'/auth/v1/token?grant_type=refresh_token',{
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({refresh_token:saved.rt})
+  }).then(function(r){return r.json();})
+  .then(function(data){
+    if(!data.access_token){ try{localStorage.removeItem('lon_session');}catch(e){} return; }
+    SUPA_TOKEN=data.access_token; SUPA_RTOKEN=data.refresh_token;
+    try{ localStorage.setItem('lon_session', JSON.stringify({at:SUPA_TOKEN,rt:SUPA_RTOKEN,uid:data.user.id})); }catch(e){}
+    // Fetch member profile and bring the app up (mirrors login flow)
+    supa('members?select=*&id=eq.'+data.user.id).then(function(r){return r.json();})
+    .then(function(rows){
+      if(!rows||!rows.length){ try{localStorage.removeItem('lon_session');}catch(e){} return; }
+      var m=rows[0];
+      if(m.status==='pending'||m.status==='declined'){ try{localStorage.removeItem('lon_session');}catch(e){} return; }
+      CU={id:m.id,name:m.name,email:m.email,office:m.office||'',deg:m.deg,
+          ugle:m.ugle||'',dob:m.dob||'',init:m.init||'',pass_:m.pass_||'',raise:m.raise||'',
+          sub:m.sub,phone:m.phone||'',firstLogin:m.first_login,
+          role:officeToRole(m.office||''),lastSeenNotices:m.last_seen_notices||null};
+      document.getElementById('pg-login').style.display='none';
+      document.getElementById('pg-app').style.display='block';
+      document.getElementById('tb-name').textContent=gn(CU);
+      document.getElementById('tb-role').textContent=RLBL[CU.role]||CU.role;
+      mSrch='';mFilt='all';
+      loadAppData().then(function(){
+        buildNav();
+        goTo('home');
+        POLLS.forEach(function(p){
+          if(!p.active||!p.label)return;
+          var ex=NOTICES.find(function(n){return n.type==='poll'&&n.title&&n.title.indexOf(p.label)>-1;});
+          if(!ex)NOTICES.unshift({id:'auto-'+p.id,type:'poll',title:'Poll: '+p.label,body:'An active poll is open for '+p.label+'. Please respond.',to:'all',date:(p.createdAt||new Date().toISOString()).split('T')[0],read:false});
+        });
+        checkSubsReminder(); startRealtime(); keepAlive();
+      });
+    }).catch(function(){});
+  }).catch(function(){ try{localStorage.removeItem('lon_session');}catch(e){} });
+}
+
+</script>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
@@ -1671,6 +1716,7 @@ function doLogin() {
       }
       SUPA_TOKEN  = data.access_token;
       SUPA_RTOKEN = data.refresh_token;
+      try{ localStorage.setItem('lon_session', JSON.stringify({at:SUPA_TOKEN, rt:SUPA_RTOKEN, uid:data.user.id})); }catch(e){}
       // Fetch member profile
       supa('members?select=*&id=eq.' + data.user.id)
         .then(function(r) { return r.json(); })
@@ -1917,6 +1963,7 @@ function dbMember(m) {
 
 // ── Sign out ──────────────────────────────────────────────────────────────
 function doLogout() {
+  try{ localStorage.removeItem('lon_session'); }catch(e){}
   supaAuth('logout', {}, SUPA_TOKEN).catch(function(){});
   SUPA_TOKEN = null; SUPA_RTOKEN = null; CU = null;
   document.getElementById('pg-app').style.display   = 'none';
@@ -2272,9 +2319,13 @@ function nw(){
     window._recoveryType=params.type||'recovery';
     if(window._recoveryTokenHash){
       showSetPassword();
+      window._inRecovery=true;
     }
   }
 })();
+
+// Attempt session restore on load (skip if handling a password-recovery link)
+(function(){ if(!window._inRecovery){ try{ restoreSession(); }catch(e){} } })();
 
 function showSetPassword(){
   var login=document.getElementById('pg-login');
