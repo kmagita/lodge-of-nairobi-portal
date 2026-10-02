@@ -7190,11 +7190,13 @@ function clearDraft(){
 }
 
 function checkDraftBanner(){
-  const draft=loadDraft();
   const banner=document.getElementById('draftBanner');
+  if(!banner)return;  // Add-passage draft banner is hidden in the portal build
+  const draft=loadDraft();
+  const sub=document.getElementById('draftBannerSub');
   if(draft&&draft.title){
     banner.classList.add('visible');
-    document.getElementById('draftBannerSub').textContent='"'+draft.title+'" — tap to resume.';
+    if(sub)sub.textContent='"'+draft.title+'" — tap to resume.';
   } else {
     banner.classList.remove('visible');
   }
