@@ -1893,11 +1893,22 @@ function loadAppData() {
 
 
 // ── Map DB member row to in-app shape ─────────────────────────────────────
+function normDate(d){
+  if(!d)return'';
+  // Normalise any date/datetime string to YYYY-MM-DD for <input type=date>
+  var s=String(d);
+  // Already YYYY-MM-DD
+  var mm=s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if(mm)return mm[1];
+  var dt=new Date(s);
+  if(!isNaN(dt))return dt.toISOString().split('T')[0];
+  return'';
+}
 function dbMember(m) {
   return {
     id:m.id, name:m.name, email:m.email, office:m.office||'',
-    deg:m.deg, ugle:m.ugle||'', dob:m.dob||'',
-    init:m.init||'', pass_:m.pass_||'', raise:m.raise||'',
+    deg:m.deg, ugle:m.ugle||'', dob:normDate(m.dob),
+    init:normDate(m.init), pass_:normDate(m.pass_), raise:normDate(m.raise),
     sub:m.sub, phone:m.phone||'', pw:'',
     role: officeToRole(m.office||''),
     lastSeenNotices: m.last_seen_notices||null
@@ -4646,8 +4657,20 @@ function rMembersAdmin(){
       h+='<div style="border-top:1px solid var(--bdr);padding:10px 0">';
       h+='<div style="font-weight:700;font-size:14px;color:var(--navy)">'+(p.name||'')+'</div>';
       h+='<div style="font-size:12px;color:var(--t3);margin:2px 0">'+(p.email||'')+(p.phone?' &middot; '+p.phone:'')+'</div>';
-      h+='<div style="font-size:11px;color:var(--t3)">'+(p.deg||'')+' &middot; '+(p.membership_type||'')+(p.mother_lodge?' &middot; '+p.mother_lodge:'')+'</div>';
-      h+='<div style="display:flex;gap:8px;margin-top:8px">';
+      h+='<div style="font-size:11px;color:var(--t3);margin-bottom:8px">'+(p.deg||'')+' &middot; '+(p.membership_type||'')+(p.mother_lodge?' &middot; '+p.mother_lodge:'')+'</div>';
+      // Review & complete ceremony dates before approving
+      var rvOpen=window._reviewPending===p.id;
+      h+='<button class="btn btn-n btn-sm" style="margin-bottom:6px" data-pid="'+p.id+'" onclick="window._reviewPending=(window._reviewPending===this.dataset.pid?null:this.dataset.pid);rMembersAdmin()">'+(rvOpen?'&#9650; Close':'Review / complete details')+'</button>';
+      if(rvOpen){
+        h+='<div style="background:var(--bg2);border-radius:8px;padding:12px;margin-bottom:8px">';
+        h+='<div style="font-size:11px;color:var(--t3);margin-bottom:8px">Fill in or correct ceremony dates. Degree is set automatically from the dates.</div>';
+        h+='<div class="fg" style="margin:0 0 8px"><label class="lbl">Initiation (EA)</label><input type="date" id="rv-init-'+p.id+'" value="'+(p.init||'')+'"></div>';
+        h+='<div class="fg" style="margin:0 0 8px"><label class="lbl">Passing (FC)</label><input type="date" id="rv-pass-'+p.id+'" value="'+(p.pass_||'')+'"></div>';
+        h+='<div class="fg" style="margin:0 0 8px"><label class="lbl">Raising (MM)</label><input type="date" id="rv-raise-'+p.id+'" value="'+(p.raise||'')+'"></div>';
+        h+='<div class="fg" style="margin:0"><label class="lbl">UGLE number</label><input id="rv-ugle-'+p.id+'" value="'+(p.ugle||'')+'" placeholder="GL000000"></div>';
+        h+='</div>';
+      }
+      h+='<div style="display:flex;gap:8px;margin-top:4px">';
       h+='<button class="btn btn-navy btn-sm" data-pid="'+p.id+'" onclick="approvePending(this.dataset.pid)">Approve</button>';
       h+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad)" data-pid="'+p.id+'" onclick="declinePending(this.dataset.pid)">Decline</button>';
       h+='</div></div>';
@@ -8532,7 +8555,19 @@ function approvePending(pid){
   var p=PENDING_MEMBERS.find(function(x){return x.id===pid;});
   if(!p)return;
   if(!confirm('Approve '+p.name+'? They will be able to log in with the password they set at registration.'))return;
-  supa('members?id=eq.'+pid,{method:'PATCH',body:JSON.stringify({status:'active'})})
+  // Pull any reviewed ceremony dates / UGLE the Secretary entered
+  var patch={status:'active'};
+  var gi=document.getElementById('rv-init-'+pid);
+  var gp=document.getElementById('rv-pass-'+pid);
+  var gr=document.getElementById('rv-raise-'+pid);
+  var gu=document.getElementById('rv-ugle-'+pid);
+  if(gi||gp||gr){
+    var iv=gi?gi.value:p.init, pv=gp?gp.value:p.pass_, rv=gr?gr.value:p.raise;
+    patch.init=iv||null; patch.pass_=pv||null; patch.raise=rv||null;
+    patch.deg = rv?'MM':(pv?'FC':(iv?'EA':'EA'));
+  }
+  if(gu)patch.ugle=gu.value;
+  supa('members?id=eq.'+pid,{method:'PATCH',body:JSON.stringify(patch)})
   .then(function(r){
     if(!r.ok){r.text().then(function(t){alert('Approve failed: '+t);});return;}
     PENDING_MEMBERS=PENDING_MEMBERS.filter(function(x){return x.id!==pid;});
