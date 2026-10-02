@@ -1072,55 +1072,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 #pane-practice .erase-confirm p{font-size:13px;color:var(--danger);margin-bottom:0.75rem;line-height:1.5;}
 #pane-practice .feedback-msg{min-height:18px;margin-top:0.75rem;font-size:13px;}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
-function saveAssignees(caid){
-  var prim=document.getElementById('ea-prim-'+caid);
-  var back=document.getElementById('ea-back-'+caid);
-  var a=CHARGE_ASSIGNMENTS.find(function(x){return x.id===caid;});
-  if(!a)return;
-  if(!prim||!prim.value){alert('Select a primary assignee.');return;}
-  a.prim=prim.value;
-  a.back=(back&&back.value)?back.value:null;
-  supa('charge_assignments?id=eq.'+caid,{method:'PATCH',
-    body:JSON.stringify({primary_id:a.prim,backup_id:a.back})
-  }).then(function(r){
-    if(!r.ok){r.text().then(function(t){alert('Save failed: '+t);});return;}
-    window._editAssignOpen=null;
-    rDuties();
-  }).catch(function(e){alert('Network error saving assignees.');});
-}
-
-
-function approvePending(pid){
-  var p=PENDING_MEMBERS.find(function(x){return x.id===pid;});
-  if(!p)return;
-  if(!confirm('Approve '+p.name+'? They will be able to log in with the password they set at registration.'))return;
-  supa('members?id=eq.'+pid,{method:'PATCH',body:JSON.stringify({status:'active'})})
-  .then(function(r){
-    if(!r.ok){r.text().then(function(t){alert('Approve failed: '+t);});return;}
-    PENDING_MEMBERS=PENDING_MEMBERS.filter(function(x){return x.id!==pid;});
-    if(!MEMBERS.find(function(m){return m.id===pid;})){
-      MEMBERS.push({id:p.id,name:p.name,email:p.email,office:'',deg:p.deg||'EA',sub:'Unpaid',role:'brother'});
-      MEMBERS.sort(function(a,b){return a.name.localeCompare(b.name);});
-    }
-    alert(p.name+' approved. They can now log in.');
-    rMembersAdmin();
-  }).catch(function(e){alert('Network error: '+e.message);});
-}
-
-
-function declinePending(pid){
-  var p=PENDING_MEMBERS.find(function(x){return x.id===pid;});
-  if(!p)return;
-  if(!confirm('Decline '+p.name+'\'s registration? They will not be able to log in.'))return;
-  supa('members?id=eq.'+pid,{method:'PATCH',body:JSON.stringify({status:'declined'})})
-  .then(function(r){
-    PENDING_MEMBERS=PENDING_MEMBERS.filter(function(x){return x.id!==pid;});
-    rMembersAdmin();
-  }).catch(function(e){alert('Could not decline: '+e.message);});
-}
-
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
@@ -1278,7 +1230,7 @@ function declinePending(pid){
     <div id="li-btn" onclick="doLogin()" style="display:block;width:100%;padding:13px 0;margin-top:6px;font-size:15px;font-weight:700;background:#0e1f45;color:#fff;border-radius:8px;cursor:pointer;text-align:center;letter-spacing:.03em;-webkit-user-select:none;user-select:none">Sign in</div>
     <div style="text-align:center;margin-top:14px"><span onclick="forgotPassword()" style="font-size:13px;color:var(--navy);cursor:pointer;text-decoration:underline">Forgot password?</span></div>
   </div>
-</div>
+  </div>
 
 <div id="pg-app" style="display:none;background:var(--bg);min-height:100vh">
   <div class="topbar">
@@ -6203,6 +6155,7 @@ function rProfile(){
   h+='<button class="btn btn-navy btn-sm" onclick="changePassword()"><svg class="ico" width="14" height="14"><use href="#ico-lock"/></svg> Update password</button>';
   h+='</div>';
 
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools.</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -8524,6 +8477,53 @@ function canSeeEvent(e){
   if(e.type==='committee'&&!isOfficer)return false;
   return true;
   }catch(err){return false;}
+}
+
+function saveAssignees(caid){
+  var prim=document.getElementById('ea-prim-'+caid);
+  var back=document.getElementById('ea-back-'+caid);
+  var a=CHARGE_ASSIGNMENTS.find(function(x){return x.id===caid;});
+  if(!a)return;
+  if(!prim||!prim.value){alert('Select a primary assignee.');return;}
+  a.prim=prim.value;
+  a.back=(back&&back.value)?back.value:null;
+  supa('charge_assignments?id=eq.'+caid,{method:'PATCH',
+    body:JSON.stringify({primary_id:a.prim,backup_id:a.back})
+  }).then(function(r){
+    if(!r.ok){r.text().then(function(t){alert('Save failed: '+t);});return;}
+    window._editAssignOpen=null;
+    rDuties();
+  }).catch(function(e){alert('Network error saving assignees.');});
+}
+
+
+function approvePending(pid){
+  var p=PENDING_MEMBERS.find(function(x){return x.id===pid;});
+  if(!p)return;
+  if(!confirm('Approve '+p.name+'? They will be able to log in with the password they set at registration.'))return;
+  supa('members?id=eq.'+pid,{method:'PATCH',body:JSON.stringify({status:'active'})})
+  .then(function(r){
+    if(!r.ok){r.text().then(function(t){alert('Approve failed: '+t);});return;}
+    PENDING_MEMBERS=PENDING_MEMBERS.filter(function(x){return x.id!==pid;});
+    if(!MEMBERS.find(function(m){return m.id===pid;})){
+      MEMBERS.push({id:p.id,name:p.name,email:p.email,office:'',deg:p.deg||'EA',sub:'Unpaid',role:'brother'});
+      MEMBERS.sort(function(a,b){return a.name.localeCompare(b.name);});
+    }
+    alert(p.name+' approved. They can now log in.');
+    rMembersAdmin();
+  }).catch(function(e){alert('Network error: '+e.message);});
+}
+
+
+function declinePending(pid){
+  var p=PENDING_MEMBERS.find(function(x){return x.id===pid;});
+  if(!p)return;
+  if(!confirm('Decline '+p.name+'\'s registration? They will not be able to log in.'))return;
+  supa('members?id=eq.'+pid,{method:'PATCH',body:JSON.stringify({status:'declined'})})
+  .then(function(r){
+    PENDING_MEMBERS=PENDING_MEMBERS.filter(function(x){return x.id!==pid;});
+    rMembersAdmin();
+  }).catch(function(e){alert('Could not decline: '+e.message);});
 }
 </script>
 </body>
