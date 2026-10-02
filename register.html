@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lodge of Nairobi № 7187 — Member Registration</title>
+<style>
+  :root{--navy:#0e1f45;--gold:#c9a84c;--bg:#f5ede0;--bdr:#ddd0aa;--t3:#8a7a6a;--ok:#2d7a3f;--bad:#c0392b;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:#1a1208;padding:20px 16px;}
+  .wrap{max-width:440px;margin:0 auto;}
+  .logo{text-align:center;font-size:40px;color:var(--gold);margin-bottom:6px;}
+  h1{text-align:center;font-family:Georgia,serif;font-size:19px;color:var(--navy);}
+  .sub{text-align:center;font-size:12px;color:var(--gold);margin-bottom:18px;}
+  .card{background:#fff;border:1px solid var(--bdr);border-radius:14px;padding:20px;}
+  label{display:block;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;}
+  input,select{display:block;width:100%;padding:10px 12px;border:1px solid var(--bdr);border-radius:8px;font-size:15px;background:#fff;margin-bottom:12px;color:#1a1208;}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .hint{font-size:11px;color:var(--t3);margin:-6px 0 12px;}
+  .ban{font-size:12px;background:#e8f4fd;border-radius:8px;padding:10px 12px;margin-bottom:14px;color:#1a6fa8;}
+  .pwwrap{position:relative;}
+  .pwwrap .rev{position:absolute;right:12px;top:11px;font-size:12px;font-weight:600;color:var(--navy);cursor:pointer;user-select:none;}
+  button{display:block;width:100%;padding:14px;font-size:16px;font-weight:700;color:#fff;background:var(--navy);border:none;border-radius:8px;cursor:pointer;}
+  button:disabled{opacity:.6;}
+  #msg{display:none;border-radius:8px;padding:12px;margin-bottom:14px;font-size:14px;}
+  #msg.ok{display:block;background:#eaf5ee;color:var(--ok);}
+  #msg.err{display:block;background:#fdecea;color:var(--bad);}
+  #done{display:none;text-align:center;padding:20px;}
+  #done .tick{font-size:48px;color:var(--ok);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">&#9670;</div>
+  <h1>Lodge of Nairobi &#8470; 7187</h1>
+  <div class="sub">Member Registration</div>
+
+  <div class="card" id="form">
+    <div class="ban">Fill in your details and choose a password. Your registration will be reviewed by the Secretary — you'll be able to log in once approved.</div>
+    <div id="msg"></div>
+
+    <div class="row">
+      <div><label>First name</label><input id="first" autocomplete="given-name"></div>
+      <div><label>Last name</label><input id="last" autocomplete="family-name"></div>
+    </div>
+    <label>Middle name (optional)</label><input id="middle">
+
+    <label>Email</label><input type="email" id="email" autocomplete="email" placeholder="you@example.com">
+    <label>Phone</label><input id="phone" autocomplete="tel" placeholder="07xx xxx xxx">
+    <label>Date of birth</label><input type="date" id="dob">
+
+    <label>Membership type</label>
+    <select id="memtype" onchange="toggleMother()">
+      <option value="initiate">Initiated in this lodge</option>
+      <option value="joining">Joining member</option>
+      <option value="honorary">Honorary member</option>
+    </select>
+
+    <label>Mother Lodge</label>
+    <input id="mother" value="Lodge of Nairobi No. 7187" disabled>
+
+    <div class="ban">Degree is set automatically from the dates below. Leave a date blank if that ceremony hasn't taken place.</div>
+    <label>Initiation date (EA)</label><input type="date" id="init">
+    <label>Passing date (FC)</label><input type="date" id="pass">
+    <label>Raising date (MM)</label><input type="date" id="raise">
+
+    <label>Choose a password</label>
+    <div class="pwwrap">
+      <input type="password" id="pw" placeholder="At least 6 characters" autocomplete="new-password">
+      <span class="rev" onclick="var p=document.getElementById('pw');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Show':'Hide';">Show</span>
+    </div>
+    <div class="hint">You'll use this with your email to log in once approved.</div>
+
+    <button id="btn" onclick="register()">Submit registration</button>
+  </div>
+
+  <div class="card" id="done">
+    <div class="tick">&#10003;</div>
+    <h1 style="margin:10px 0">Registration submitted</h1>
+    <p style="font-size:14px;color:var(--t3)">Thank you. The Secretary will review your details. Once approved, you can log in with your email and the password you just set.</p>
+  </div>
+</div>
+
+<script>
+var SUPA_URL='https://nmsektzznrseomefuwtz.supabase.co';
+var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tc2VrdHp6bnJzZW9tZWZ1d3R6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2OTUzNjMsImV4cCI6MjEwNDI3MTM2M30.coHWD6tuFCX2t025ZQsHxswfy5llUtZRsidOr_VzT_c';
+
+function toggleMother(){
+  var mt=document.getElementById('memtype').value;
+  var ml=document.getElementById('mother');
+  if(mt==='initiate'){ml.value='Lodge of Nairobi No. 7187';ml.disabled=true;}
+  else{if(ml.value==='Lodge of Nairobi No. 7187')ml.value='';ml.disabled=false;}
+}
+function degFromDates(i,p,r){if(r)return'MM';if(p)return'FC';if(i)return'EA';return'EA';}
+function show(type,text){var m=document.getElementById('msg');m.className=type;m.textContent=text;window.scrollTo(0,0);}
+
+function register(){
+  var first=document.getElementById('first').value.trim();
+  var middle=document.getElementById('middle').value.trim();
+  var last=document.getElementById('last').value.trim();
+  var email=document.getElementById('email').value.trim().toLowerCase();
+  var phone=document.getElementById('phone').value.trim();
+  var dob=document.getElementById('dob').value;
+  var memtype=document.getElementById('memtype').value;
+  var init=document.getElementById('init').value;
+  var pass=document.getElementById('pass').value;
+  var raise=document.getElementById('raise').value;
+  var pw=document.getElementById('pw').value;
+
+  if(!first||!last){show('err','Please enter your first and last name.');return;}
+  if(!email){show('err','Please enter your email address.');return;}
+  if(!pw||pw.length<6){show('err','Please choose a password of at least 6 characters.');return;}
+
+  var btn=document.getElementById('btn');
+  btn.disabled=true; btn.textContent='Submitting…';
+
+  var name=[first,middle,last].filter(Boolean).join(' ');
+  var deg=degFromDates(init,pass,raise);
+  var mother=(memtype==='initiate')?'Lodge of Nairobi No. 7187':(document.getElementById('mother').value.trim());
+
+  // Step 1: create the auth account with the chosen password
+  fetch(SUPA_URL+'/auth/v1/signup',{
+    method:'POST',headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({email:email,password:pw})
+  }).then(function(r){return r.json();})
+  .then(function(d){
+    var uid=(d.user&&d.user.id)||d.id||null;
+    var token=d.access_token||(d.session&&d.session.access_token)||null;
+    if(!uid){
+      btn.disabled=false;btn.textContent='Submit registration';
+      show('err','Could not register: '+(d.msg||d.error_description||d.error_code||'this email may already be registered.'));
+      return;
+    }
+    // Step 2: create member profile with status=pending (using own token so RLS passes)
+    return fetch(SUPA_URL+'/rest/v1/members',{
+      method:'POST',
+      headers:{'apikey':SUPA_KEY,'Content-Type':'application/json','Authorization':'Bearer '+(token||SUPA_KEY),'Prefer':'return=minimal'},
+      body:JSON.stringify({
+        id:uid,name:name,email:email,office:'',deg:deg,
+        first_name:first,middle_name:middle,last_name:last,
+        phone:phone,dob:dob||null,membership_type:memtype,mother_lodge:mother,
+        init:init||null,pass_:pass||null,raise:raise||null,
+        sub:'Unpaid',first_login:false,status:'pending'
+      })
+    }).then(function(r){
+      if(!r.ok){
+        r.text().then(function(t){
+          btn.disabled=false;btn.textContent='Submit registration';
+          show('err','Could not complete registration. Please tell the Secretary. ('+t.substring(0,80)+')');
+        });
+        return;
+      }
+      document.getElementById('form').style.display='none';
+      document.getElementById('done').style.display='block';
+      window.scrollTo(0,0);
+    });
+  }).catch(function(e){
+    btn.disabled=false;btn.textContent='Submit registration';
+    show('err','Network error. Please check your connection and try again.');
+  });
+}
+</script>
+</body>
+</html>

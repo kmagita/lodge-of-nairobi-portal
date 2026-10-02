@@ -1090,6 +1090,36 @@ function saveAssignees(caid){
   }).catch(function(e){alert('Network error saving assignees.');});
 }
 
+
+function approvePending(pid){
+  var p=PENDING_MEMBERS.find(function(x){return x.id===pid;});
+  if(!p)return;
+  if(!confirm('Approve '+p.name+'? They will be able to log in with the password they set at registration.'))return;
+  supa('members?id=eq.'+pid,{method:'PATCH',body:JSON.stringify({status:'active'})})
+  .then(function(r){
+    if(!r.ok){r.text().then(function(t){alert('Approve failed: '+t);});return;}
+    PENDING_MEMBERS=PENDING_MEMBERS.filter(function(x){return x.id!==pid;});
+    if(!MEMBERS.find(function(m){return m.id===pid;})){
+      MEMBERS.push({id:p.id,name:p.name,email:p.email,office:'',deg:p.deg||'EA',sub:'Unpaid',role:'brother'});
+      MEMBERS.sort(function(a,b){return a.name.localeCompare(b.name);});
+    }
+    alert(p.name+' approved. They can now log in.');
+    rMembersAdmin();
+  }).catch(function(e){alert('Network error: '+e.message);});
+}
+
+
+function declinePending(pid){
+  var p=PENDING_MEMBERS.find(function(x){return x.id===pid;});
+  if(!p)return;
+  if(!confirm('Decline '+p.name+'\'s registration? They will not be able to log in.'))return;
+  supa('members?id=eq.'+pid,{method:'PATCH',body:JSON.stringify({status:'declined'})})
+  .then(function(r){
+    PENDING_MEMBERS=PENDING_MEMBERS.filter(function(x){return x.id!==pid;});
+    rMembersAdmin();
+  }).catch(function(e){alert('Could not decline: '+e.message);});
+}
+
 </script>
 </head>
 <body>
@@ -1701,6 +1731,23 @@ function doLogin() {
             return;
           }
           var m = rows[0];
+          // Block accounts awaiting Secretary approval
+          if(m.status==='pending'){
+            document.getElementById('li-err').style.display='block';
+            document.getElementById('li-err').textContent='Your registration is awaiting approval by the Secretary. You will be able to log in once approved.';
+            document.getElementById('li-btn').style.opacity='1';
+            document.getElementById('li-btn').textContent='Sign in';
+            supaAuth('logout',{},SUPA_TOKEN).catch(function(){});
+            return;
+          }
+          if(m.status==='declined'){
+            document.getElementById('li-err').style.display='block';
+            document.getElementById('li-err').textContent='This registration was not approved. Please contact the Secretary.';
+            document.getElementById('li-btn').style.opacity='1';
+            document.getElementById('li-btn').textContent='Sign in';
+            supaAuth('logout',{},SUPA_TOKEN).catch(function(){});
+            return;
+          }
           // Map DB row to in-app member shape
           CU = {
             id:     m.id,
@@ -1784,7 +1831,7 @@ function safeFetch(path, transform) {
 function loadAppData() {
   var queries = [
     safeFetch('members?select=*,last_seen_notices&order=name', function(d) {
-      MEMBERS = d.map(dbMember);
+      MEMBERS = d.filter(function(m){return !m.status||m.status==='active';}).map(dbMember);
     }),
     safeFetch('calendar_events?select=*&order=date', function(d) {
       CALENDAR_EVENTS = d;
@@ -1851,6 +1898,7 @@ function loadAppData() {
                 degree:l.degree||'EA', type:l.type||'charge', qa:l.qa||[]};
       });
     }),
+    safeFetch('members?status=eq.pending&order=name', function(d){ PENDING_MEMBERS=d||[]; }),
     safeFetch('event_rsvp?select=*', function(d){
       RSVP_DATA={};
       d.forEach(function(r){
@@ -3331,8 +3379,8 @@ function rDuties(){
   var h='<div class="sf" style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px">Meeting Duties</div>';
   h+='<div style="font-size:12px;color:var(--t3);margin-bottom:16px">'+NEXT_MEETING.num+' Regular Meeting &middot; '+NEXT_MEETING.date+'</div>';
 
-  // ── My assignment card (for brothers) ─────────────────────────────────
-  if(!isOfficer){
+  // ── My personal assignments & delivery history (everyone, incl. officers) ──
+  if(true){
     // Upcoming: I'm assigned (primary or standby) and it's not yet delivered
     var myUpcoming=CHARGE_ASSIGNMENTS.filter(function(a){
       return (a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';
@@ -3388,7 +3436,7 @@ function rDuties(){
       h+='<div class="stitle" style="margin-top:14px">My delivery history</div>';
       myDelivered.forEach(function(a){h+=renderMyCard(a);});
     }
-    if(!myAssign.length){
+    if(!myAssign.length&&!isOfficer){
       h+='<div class="card" style="text-align:center;padding:20px;color:var(--t3)">You have no charge assignments at present.</div>';
     }
   }
@@ -3396,15 +3444,11 @@ function rDuties(){
   // ── All assignments — officers only ────────────────────────────────────
   var canSeeAll=(CU.role==='dc'||CU.role==='secretary'||CU.role==='master');
   if(!canSeeAll){
-    // Brother: only their own assignments were shown above. If none, say so.
-    var mine=CHARGE_ASSIGNMENTS.filter(function(a){return a.prim===CU.id||a.back===CU.id;});
-    if(!mine.length){
-      h+='<div class="card" style="text-align:center;padding:20px;color:var(--t3)">You have no charge assignments at present.</div>';
-    }
+    // Non-officers: personal section above is all they see.
     document.getElementById('pane-duties').innerHTML=h;
     return;
   }
-  h+='<div class="stitle">Charge assignments</div>';
+  h+='<div class="stitle" style="margin-top:16px">All charge assignments</div>';
   if(!CHARGE_ASSIGNMENTS.length){
     h+='<div class="card" style="text-align:center;padding:20px;color:var(--t3)">No assignments yet.</div>';
   }
@@ -4642,6 +4686,23 @@ function rMembersAdmin(){
   if(!CU)return;
   var tab=typeof adminTab!=='undefined'?adminTab:'register';
   var h='<div class="sf" style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:14px">Administration</div>';
+  // ── Pending approvals (Secretary) ────────────────────────────────────
+  if((CU.role==='secretary'||CU.role==='master')&&PENDING_MEMBERS&&PENDING_MEMBERS.length){
+    h+='<div class="card" style="border-top:4px solid var(--gold);margin-bottom:14px">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Pending registrations ('+PENDING_MEMBERS.length+')</div>';
+    PENDING_MEMBERS.forEach(function(p){
+      h+='<div style="border-top:1px solid var(--bdr);padding:10px 0">';
+      h+='<div style="font-weight:700;font-size:14px;color:var(--navy)">'+(p.name||'')+'</div>';
+      h+='<div style="font-size:12px;color:var(--t3);margin:2px 0">'+(p.email||'')+(p.phone?' &middot; '+p.phone:'')+'</div>';
+      h+='<div style="font-size:11px;color:var(--t3)">'+(p.deg||'')+' &middot; '+(p.membership_type||'')+(p.mother_lodge?' &middot; '+p.mother_lodge:'')+'</div>';
+      h+='<div style="display:flex;gap:8px;margin-top:8px">';
+      h+='<button class="btn btn-navy btn-sm" data-pid="'+p.id+'" onclick="approvePending(this.dataset.pid)">Approve</button>';
+      h+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad)" data-pid="'+p.id+'" onclick="declinePending(this.dataset.pid)">Decline</button>';
+      h+='</div></div>';
+    });
+    h+='</div>';
+  }
+
 
   // Tab bar (3 tabs — offices are set per-member in Register)
   var tabs=[['register','Register'],['add','Add member'],['import','Import CSV']];
@@ -6808,6 +6869,7 @@ function stopRealtime(){
 
 
 var RSVP_DATA={};
+var PENDING_MEMBERS=[];
 var ATTENDANCE_DATA={};  // event_id → {member_id: true} — actual attendance register  // keyed by event_id → {member_id: 'attending'|'apologies'}
 
 function rsvpEvent(eid,status){
