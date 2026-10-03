@@ -7861,6 +7861,13 @@ function playFull(){
     return;
   }
   if(!p.refAudio){ alert('No reference recording found.'); return; }
+  if(p.refVoiceType==='tts' || p.refAudio==='tts'){
+    // TTS: speak the whole passage via device voice
+    var stopB=document.getElementById('stopBtn'); if(stopB)stopB.style.display='flex';
+    var ps=document.getElementById('playbackStatus'); if(ps)ps.textContent='Playing full passage...';
+    speakText(p.text||'', p.refVoiceIndex||0, st.speed, function(){ stopPlayback(); });
+    return;
+  }
   const audio=new Audio(p.refAudio); audio.playbackRate=st.speed;
   st.currentAudio=audio;
   document.getElementById('stopBtn').style.display='flex';
@@ -7897,13 +7904,15 @@ function playVoiceItem(voiceType, recKey, text, voiceIndex, itemRecordings, onEn
     // Use TTS
     speakText(text, voiceIndex||0, st.speed, onEnd);
   } else {
-    // Use recording
+    // Use recording — but only if it's a real audio source (data/blob URL)
     const audio=itemRecordings&&itemRecordings[recKey];
-    if(audio){
+    const isReal = audio && typeof audio==='string' && (audio.indexOf('data:')===0||audio.indexOf('blob:')===0);
+    if(isReal){
       const a=new Audio(audio); a.playbackRate=st.speed; st.currentAudio=a;
-      a.play(); a.onended=onEnd; a.onerror=onEnd;
+      a.onended=onEnd; a.onerror=function(){ speakText(text, voiceIndex||0, st.speed, onEnd); };
+      a.play().catch(function(){ speakText(text, voiceIndex||0, st.speed, onEnd); });
     } else {
-      // Fallback to TTS
+      // No real recording — fall back to TTS
       speakText(text, voiceIndex||0, st.speed, onEnd);
     }
   }
