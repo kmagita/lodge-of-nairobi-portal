@@ -4509,8 +4509,19 @@ function rAgenda(){
   h+='<div class="card" style="padding:12px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">';
   h+='<div><div style="font-size:13px;font-weight:700;color:var(--navy)">'+AGENDA_ITEMS.length+' agenda items</div>';
   h+='<div style="font-size:11px;color:var(--t3)">Estimated duration: '+Math.floor(total/60)+'h '+(total%60)+'min</div></div>';
-  if(canEdit)h+='<button class="btn btn-navy btn-sm" onclick="addAgendaItem()"><svg class="ico" width="16" height="16"><use href="#ico-plus"/></svg> Add item</button>';
+  if(canEdit)h+='<button class="btn btn-navy btn-sm" onclick="window._agendaAddOpen=!window._agendaAddOpen;rAgenda()">'+(window._agendaAddOpen?'&#9650; Cancel':'+ Add item')+'</button>';
   h+='</div>';
+  // Add item form
+  if(canEdit&&window._agendaAddOpen){
+    h+='<div class="card" style="margin-bottom:12px">';
+    h+='<div class="fg"><label class="lbl">Item title</label><input id="ag-title" placeholder="e.g. Minutes of the previous meeting"></div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+    h+='<div class="fg" style="margin:0"><label class="lbl">Type</label><select id="ag-type"><option value="business">Business</option><option value="ceremony">Ceremony</option><option value="opening">Opening</option><option value="closing">Closing</option><option value="reading">Reading</option><option value="correspondence">Correspondence</option></select></div>';
+    h+='<div class="fg" style="margin:0"><label class="lbl">Duration (mins)</label><input type="number" id="ag-dur" placeholder="e.g. 15"></div>';
+    h+='</div>';
+    h+='<button class="btn btn-navy btn-sm" style="width:100%;justify-content:center;margin-top:12px" onclick="addAgendaItem()">Add to agenda</button>';
+    h+='</div>';
+  }
 
   // Agenda list
   AGENDA_ITEMS.sort(function(a,b){return a.order-b.order;}).forEach(function(item,i){
@@ -4587,6 +4598,7 @@ function addAgendaItem(){
     title:title.value.trim(),type:type?type.value:'business',
     duration:dur&&dur.value?parseInt(dur.value):null,
     presenter:null,fixed:false,ceremony:false,notes:''};
+  window._agendaAddOpen=false;
   AGENDA_ITEMS.push(item);
   supa('agenda_items',{method:'POST',
     body:JSON.stringify({sort_order:item.order,title:item.title,
@@ -4896,19 +4908,28 @@ function rHome(){
 
   // ── 2. UPCOMING EVENTS + ATTENDANCE ─────────────────────────────────
   var now=new Date();
-  var cutoff=new Date(now);cutoff.setDate(cutoff.getDate()+31);
+  var cutoff=new Date(now);cutoff.setDate(cutoff.getDate()+45);
   var isOfficer=['master','secretary','dc','mentor','almoner','treasurer','steward'].indexOf(CU.role)>-1;
-  var isOfficer2=['master','secretary','dc','mentor','almoner','treasurer','steward'].indexOf(CU.role)>-1;
+  var isOfficer2=isOfficer;
   var DEG={EA:1,FC:2,MM:3};
+  var today0=new Date(now.toDateString());
   var visible=function(e){
     var d=new Date(e.date);
     if(!d||isNaN(d))return false;
-    if(d<new Date(now.toDateString())||d>cutoff)return false;
-    return canSeeEvent(e);
+    if(d<today0)return false;       // not in the past
+    return canSeeEvent(e);          // degree/committee rules
   };
+  var withinWindow=function(e){ var d=new Date(e.date); return d<=cutoff; };
   // Non-cancelled, visible, in-window events
-  var upcoming=CALENDAR_EVENTS.filter(function(e){return !e.cancelled&&visible(e);})
+  var allFuture=CALENDAR_EVENTS.filter(function(e){return !e.cancelled&&visible(e);})
     .sort(function(a,b){return a.date.localeCompare(b.date);});
+  var upcoming=allFuture.filter(withinWindow);
+  // If nothing in the window, still show the very next meeting/rehearsal so the
+  // home screen is never empty of what's coming.
+  if(!upcoming.length && allFuture.length){
+    var nextMeet=allFuture.find(function(e){return e.type==='meeting'||e.type==='installation';});
+    upcoming = nextMeet ? [nextMeet] : [allFuture[0]];
+  }
 
   // Pair rehearsals to the meeting/installation the following day
   var dayBefore=function(dateStr){var d=new Date(dateStr);d.setDate(d.getDate()-1);return d.toISOString().split('T')[0];};
