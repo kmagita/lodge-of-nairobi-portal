@@ -7715,7 +7715,20 @@ function openPractice(id){
   if(p.format==='catechism'&&(!p.qnaPairs||!p.qnaPairs.length)){ alert('No Q&A pairs found. Please edit and add pairs first.'); return; }
   if(p.format==='responsive'&&(!p.respLines||!p.respLines.length)){ alert('No lines found. Please edit and add lines first.'); return; }
 
-  st.activePassage=p; st.chunkIdx=0; st.level=1; st.format='recite'; st.speed=0.75;
+  st.activePassage=p; st.level=1; st.format='recite'; st.speed=0.75;
+  // Resume prompt: if the brother was partway through, offer to continue
+  var _pr=st.progressMap[p.id];
+  var _resumeAt=(_pr&&_pr.lastChunkOpened>0)?_pr.lastChunkOpened:0;
+  if(_resumeAt>0){
+    var _tc=getChunks().length;
+    if(confirm('Resume "'+p.title+'" from where you left off (part '+(_resumeAt+1)+' of '+_tc+')?\n\nOK = Resume   Cancel = Start over')){
+      st.chunkIdx=_resumeAt;
+    } else {
+      st.chunkIdx=0;
+    }
+  } else {
+    st.chunkIdx=0;
+  }
   document.getElementById('practiceTitle').textContent=p.title;
   document.getElementById('practiceSub').textContent=p.format;
   document.querySelectorAll('.level-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
@@ -7756,6 +7769,14 @@ function renderChunk(){
   const p=st.activePassage; if(!p) return;
   const chunks=getChunks();
   const chunk=chunks[st.chunkIdx]||'';
+  // Track progress position (resume point + furthest reached)
+  if(!st.progressMap[p.id]) st.progressMap[p.id]={sessions:0,accuracy:0,furthestChunk:0,totalChunks:chunks.length,timesCompleted:0,blindAccuracy:0,blindAttempts:0,lastChunkOpened:0,lastPractised:''};
+  var _pm=st.progressMap[p.id];
+  _pm.totalChunks=chunks.length;
+  _pm.lastChunkOpened=st.chunkIdx;
+  if(st.chunkIdx>(_pm.furthestChunk||0)) _pm.furthestChunk=st.chunkIdx;
+  _pm.lastPractised=new Date().toISOString().split('T')[0];
+  persist();
   const isCat=p.format==='catechism';
   const isResp=p.format==='responsive';
 
@@ -8182,9 +8203,16 @@ function checkAttempt(){
 
   const pid=p.id;
   const acc=refWords.length?Math.round(((correct+close*0.5)/refWords.length)*100):0;
-  if(!st.progressMap[pid]) st.progressMap[pid]={sessions:0,accuracy:0};
+  if(!st.progressMap[pid]) st.progressMap[pid]={sessions:0,accuracy:0,furthestChunk:0,totalChunks:0,timesCompleted:0,blindAccuracy:0,blindAttempts:0,lastChunkOpened:0,lastPractised:''};
   const prev=st.progressMap[pid]; prev.sessions++;
-  prev.accuracy=Math.round((prev.accuracy*(prev.sessions-1)+acc)/prev.sessions);
+  prev.lastPractised=new Date().toISOString().split('T')[0];
+  // Read-back accuracy counts only in no-text modes (blind / listen-recite / hidden catechism)
+  var noText=(st.format==='blind'||st.format==='listenrecite'||(st.activePassage&&st.activePassage.format==='catechism'&&st.level>1));
+  if(noText){
+    prev.blindAttempts=(prev.blindAttempts||0)+1;
+    prev.blindAccuracy=Math.round(((prev.blindAccuracy||0)*(prev.blindAttempts-1)+acc)/prev.blindAttempts);
+    prev.accuracy=prev.blindAccuracy; // keep legacy field in sync for the library badge
+  }
   persist();
 }
 
@@ -8216,7 +8244,30 @@ function tryAgain(){
   renderChunk();
 }
 function prevChunk(){ if(st.chunkIdx>0){st.chunkIdx--;renderChunk();} }
-function nextChunk(){ const c=getChunks(); if(st.chunkIdx<c.length-1){st.chunkIdx++;renderChunk();}else alert('All chunks complete at this level!\n\nWell done, brother.'); }
+function nextChunk(){
+  const ch=getChunks();
+  if(st.chunkIdx<ch.length-1){ st.chunkIdx++; renderChunk(); }
+  else {
+    // Reached the end. Count a completion only for a no-text (blind) run-through.
+    var p=st.activePassage;
+    var noText=(st.format==='blind'||st.format==='listenrecite'||(p&&p.format==='catechism'&&st.level>1));
+    if(p){
+      if(!st.progressMap[p.id]) st.progressMap[p.id]={sessions:0,accuracy:0,furthestChunk:0,totalChunks:ch.length,timesCompleted:0,blindAccuracy:0,blindAttempts:0,lastChunkOpened:0,lastPractised:''};
+      var pm=st.progressMap[p.id];
+      pm.furthestChunk=ch.length-1;
+      pm.totalChunks=ch.length;
+      if(noText){
+        pm.timesCompleted=(pm.timesCompleted||0)+1;
+        pm.lastChunkOpened=0; // reset resume point after a full blind run-through
+        persist();
+        alert('Passage completed from memory!\n\nWell done, brother. Completions: '+pm.timesCompleted);
+      } else {
+        persist();
+        alert('You have reached the end.\n\nTry a blind run-through to record a completion.');
+      }
+    }
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 // PROGRESS
