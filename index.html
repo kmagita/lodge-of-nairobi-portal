@@ -5024,23 +5024,31 @@ function rHome(){
 
   // ── 4. PRACTICE PROGRESS ────────────────────────────────────────────
   try{
-    var pmP=JSON.parse(localStorage.getItem('pm_passages_'+(CU?CU.id:''))||localStorage.getItem('pm_passages')||'[]');
     var pmPr=JSON.parse(localStorage.getItem('pm_progress_'+(CU?CU.id:''))||localStorage.getItem('pm_progress')||'{}');
+    var pmPs=JSON.parse(localStorage.getItem('pm_passages_'+(CU?CU.id:''))||localStorage.getItem('pm_passages')||'[]');
+    var titleOf=function(pid){var p=pmPs.find(function(x){return x.id===pid;});return p?p.title:null;};
+    var prs=Object.keys(pmPr).map(function(pid){return {pid:pid,pr:pmPr[pid]};}).filter(function(x){return x.pr&&(x.pr.sessions>0||x.pr.furthestChunk>0||x.pr.lastChunkOpened>0);});
+    var ts=prs.reduce(function(s,x){return s+(x.pr.sessions||0);},0);
+    var cp=prs.reduce(function(s,x){return s+(x.pr.timesCompleted||0);},0);
+    // Most recent in-progress passage
+    prs.sort(function(a,b){return (b.pr.lastPractised||'').localeCompare(a.pr.lastPractised||'');});
+    var recent=prs[0];
     h+='<div class="card" style="border-top:4px solid var(--ok);margin-bottom:10px">';
-    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:'+(pmP.length?'10':'0')+'px">';
-    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Practice progress</div>';
-    h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">'+(pmP.length?'Open':'Start')+'</button></div>';
-    if(pmP.length){
-      var ts=Object.values(pmPr).reduce(function(s,p){return s+(p.sessions||0);},0);
-      var cp=Object.values(pmPr).filter(function(p){return p.completed;}).length;
-      var ws=Object.values(pmPr).filter(function(p){return p.sessions>0;});
-      var aa=ws.length?Math.round(ws.reduce(function(s,p){return s+(p.accuracy||0);},0)/ws.length):0;
-      h+='<div style="display:flex;gap:8px">';
-      h+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--navy)">'+pmP.length+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">PASSAGES</div></div>';
-      h+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--navy)">'+ts+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">SESSIONS</div></div>';
-      h+='<div style="flex:1;text-align:center;background:'+(cp?'var(--okbg)':'var(--bg2)')+';border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:'+(cp?'var(--ok)':'var(--t3)')+'">'+cp+'</div><div style="font-size:10px;color:'+(cp?'var(--ok)':'var(--t3)')+';font-weight:600">COMPLETE</div></div>';
-      if(ws.length)h+='<div style="flex:1;text-align:center;background:var(--goldbg);border-radius:8px;padding:8px"><div style="font-size:20px;font-weight:700;color:var(--gold)">'+aa+'%</div><div style="font-size:10px;color:var(--gold);font-weight:600">ACCURACY</div></div>';
-      h+='</div>';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Practice</div>';
+    h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-id="practice" onclick="goTo(this.dataset.id)">'+(prs.length?'Continue':'Start')+'</button></div>';
+    if(prs.length){
+      h+='<div style="font-size:12px;color:var(--t2);margin-top:6px">'+ts+' session'+(ts!==1?'s':'')+(cp?' &middot; '+cp+' completed':'')+'</div>';
+      if(recent){
+        var rt=recent.pr.totalChunks||1;
+        var rr=(recent.pr.lastChunkOpened||recent.pr.furthestChunk||0);
+        var rpct=Math.min(100,Math.round((rr/Math.max(1,rt-1))*100)); if(isNaN(rpct))rpct=0;
+        var rtitle=titleOf(recent.pid)||'passage';
+        h+='<div style="margin-top:8px;font-size:11px;color:var(--t3)">Last: '+rtitle+' &middot; '+rpct+'%</div>';
+        h+='<div style="height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-top:4px"><div style="height:100%;width:'+rpct+'%;background:var(--gold)"></div></div>';
+      }
+    } else {
+      h+='<div style="font-size:12px;color:var(--t3);margin-top:6px">Rehearse your charges and track your progress.</div>';
     }
     h+='</div>';
   }catch(e){}
