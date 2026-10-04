@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-04 15:29:26 -->
+  <!-- build: 2026-10-04 15:51:54 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -6296,7 +6296,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-04 15:29:26</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-04 15:51:54</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -8894,9 +8894,52 @@ function showPracticeLanding(){
   h+='<div style="flex:1;text-align:center;background:var(--bg2);border-radius:10px;padding:10px"><div style="font-size:13px;font-weight:700;color:var(--navy);margin-top:4px">'+(lastDate?lastDate:'—')+'</div><div style="font-size:10px;color:var(--t3);font-weight:600">LAST PRACTISED</div></div>';
   h+='</div>';
 
+  // ── Graphical summary: sessions & completions per charge ─────────────
+  var withData=prs.filter(function(x){var p2=passById(x.pid);return p2;}).map(function(x){
+    return {title:(passById(x.pid)||{}).title||'Passage',
+            sessions:x.pr.sessions||0, completed:x.pr.timesCompleted||0,
+            blind:x.pr.blindAccuracy||0, blindAtt:x.pr.blindAttempts||0};
+  });
+  if(withData.length){
+    var maxS=Math.max.apply(null, withData.map(function(d){return d.sessions;}).concat([1]));
+    h+='<div class="stitle" style="margin-top:0">Sessions per charge</div>';
+    h+='<div class="card" style="padding:14px">';
+    withData.forEach(function(d){
+      var w=Math.round((d.sessions/maxS)*100);
+      h+='<div style="margin-bottom:12px">';
+      h+='<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="color:var(--navy);font-weight:600">'+d.title+'</span><span style="color:var(--t3)">'+d.sessions+' session'+(d.sessions!==1?'s':'')+'</span></div>';
+      h+='<div style="height:14px;background:var(--bg2);border-radius:7px;overflow:hidden"><div style="height:100%;width:'+w+'%;background:linear-gradient(90deg,var(--navy),var(--gold));border-radius:7px"></div></div>';
+      // completions as small dots + blind score
+      var meta=[];
+      if(d.completed)meta.push(d.completed+'\u00d7 completed from memory');
+      if(d.blindAtt>0)meta.push('blind score '+d.blind+'% ('+d.blindAtt+' attempt'+(d.blindAtt!==1?'s':'')+')');
+      if(meta.length)h+='<div style="font-size:10px;color:var(--t3);margin-top:3px">'+meta.join(' \u00b7 ')+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+
+    // Completions overview — a compact row of completion counts
+    var anyCompleted=withData.some(function(d){return d.completed>0;});
+    if(anyCompleted){
+      h+='<div class="stitle">Completed from memory</div>';
+      h+='<div class="card" style="padding:14px">';
+      withData.filter(function(d){return d.completed>0;}).forEach(function(d){
+        h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+        h+='<span style="font-size:13px;color:var(--navy);flex:1">'+d.title+'</span>';
+        // render completion as filled circles (cap at 10, then +n)
+        var dots='';var cap=Math.min(d.completed,10);
+        for(var i=0;i<cap;i++)dots+='<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--ok);margin-left:3px"></span>';
+        if(d.completed>10)dots+='<span style="font-size:11px;color:var(--ok);margin-left:4px">+'+(d.completed-10)+'</span>';
+        h+='<span>'+dots+'</span>';
+        h+='</div>';
+      });
+      h+='</div>';
+    }
+  }
+
   // In-progress passages with Resume
   if(inProgress.length){
-    h+='<div class="stitle" style="margin-top:0">Continue practising</div>';
+    h+='<div class="stitle">Continue practising</div>';
     inProgress.forEach(function(it){
       var total=it.pr.totalChunks||getChunksFor(it.p).length||1;
       var reached=(it.pr.lastChunkOpened||it.pr.furthestChunk||0);
@@ -9025,7 +9068,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-04 15:29:26');
+console.log('Portal build 2026-10-04 15:51:54');
 
 function toggleSharePractice(){
   if(!CU)return;
