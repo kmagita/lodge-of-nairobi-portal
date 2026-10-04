@@ -8873,9 +8873,6 @@ function showPracticeLanding(){
   var myCharges=(typeof CHARGE_ASSIGNMENTS!=='undefined')?CHARGE_ASSIGNMENTS.filter(function(a){return (a.prim===CU.id||a.back===CU.id)&&a.status!=='Delivered';}):[];
 
   var h='<div style="padding:14px 4px">';
-  // TEMP DEBUG: show raw progress keys
-  var _dbg=Object.keys(pm).map(function(k){var p2=passById(k);return (p2?p2.title:'?')+' ['+k.substring(0,6)+'] s='+(pm[k].sessions||0);}).join(' | ');
-  h+='<div style="font-size:10px;color:#c00;background:#fee;padding:6px;border-radius:6px;margin-bottom:8px;word-break:break-all">DEBUG: '+(_dbg||'(no progress keys)')+'</div>';
   h+='<div style="font-family:Georgia,serif;font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px">Practice</div>';
   h+='<div style="font-size:13px;color:var(--t3);margin-bottom:14px">Rehearse aloud and track your progress.</div>';
 
@@ -8978,13 +8975,13 @@ function syncProgressUp(){
       updated_at:new Date().toISOString()};
   });
   if(!rows.length){ localStorage.removeItem(dirtyKey); return; }
-  supa('practice_progress',{method:'POST',
-    headers:{'Prefer':'resolution=merge-duplicates'},
+  supa('practice_progress?on_conflict=member_id,passage_id',{method:'POST',
+    headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},
     body:JSON.stringify(rows)
   }).then(function(r){
     if(r.ok){ localStorage.removeItem(dirtyKey); console.log('Progress synced:',rows.length,'passages'); }
-    else { r.text().then(function(t){ console.warn('Progress sync failed:',r.status,t); alert('Progress sync failed ('+r.status+'): '+t.substring(0,150)); }); }
-  }).catch(function(e){ console.warn('Progress sync error:',e); alert('Progress sync error: '+e.message); });
+    else { r.text().then(function(t){ console.warn('Progress sync failed:',r.status,t); }); }
+  }).catch(function(e){ console.warn('Progress sync error:',e); });
 }
 
 function syncProgressDown(){
