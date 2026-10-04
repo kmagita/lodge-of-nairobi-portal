@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-04 10:01 -->
+  <!-- build: 2026-10-04 14:59 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -6296,7 +6296,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-04 10:01</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-04 14:59</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -7815,6 +7815,7 @@ function openPractice(id){
   st.progressMap[p.id].sessions=(st.progressMap[p.id].sessions||0)+1;
   st.progressMap[p.id].lastPractised=new Date().toISOString().split('T')[0];
   persist();
+  if(typeof queueProgressSync==='function')queueProgressSync();
   showTab('practice'); renderChunk();
 }
 
@@ -7853,6 +7854,7 @@ function renderChunk(){
   if(st.chunkIdx>(_pm.furthestChunk||0)) _pm.furthestChunk=st.chunkIdx;
   _pm.lastPractised=new Date().toISOString().split('T')[0];
   persist();
+  if(typeof queueProgressSync==='function')queueProgressSync();
   const isCat=p.format==='catechism';
   const isResp=p.format==='responsive';
 
@@ -8289,6 +8291,7 @@ function checkAttempt(){
     prev.accuracy=prev.blindAccuracy; // keep legacy field in sync for the library badge
   }
   persist();
+  if(typeof queueProgressSync==='function')queueProgressSync();
 }
 
 function updateScore(correct,close,wrong,total){
@@ -8335,6 +8338,7 @@ function nextChunk(){
         pm.timesCompleted=(pm.timesCompleted||0)+1;
         pm.lastChunkOpened=0; // reset resume point after a full blind run-through
         persist();
+        if(typeof queueProgressSync==='function')queueProgressSync();
         alert('Passage completed from memory!\n\nWell done, brother. Completions: '+pm.timesCompleted);
       } else {
         persist();
@@ -8956,9 +8960,9 @@ function syncProgressUp(){
   var dirtyKey='pm_sync_dirty_'+CU.id;
   if(localStorage.getItem(dirtyKey)!=='1')return;  // nothing to push
   var pr;
-  try{ pr=JSON.parse(localStorage.getItem('pm_progress_'+CU.id)||'{}'); }catch(e){ return; }
+  try{ pr=JSON.parse(localStorage.getItem('pm_progress_'+CU.id)||localStorage.getItem('pm_progress')||'{}'); }catch(e){ return; }
   var titles;
-  try{ titles=JSON.parse(localStorage.getItem('pm_passages_'+CU.id)||'[]'); }catch(e){ titles=[]; }
+  try{ titles=JSON.parse(localStorage.getItem('pm_passages_'+CU.id)||localStorage.getItem('pm_passages')||'[]'); }catch(e){ titles=[]; }
   var titleOf=function(pid){var p=titles.find(function(x){return x.id===pid;});return p?p.title:'';};
   var rows=Object.keys(pr).map(function(pid){
     var p=pr[pid]||{};
@@ -8975,8 +8979,9 @@ function syncProgressUp(){
     headers:{'Prefer':'resolution=merge-duplicates'},
     body:JSON.stringify(rows)
   }).then(function(r){
-    if(r.ok){ localStorage.removeItem(dirtyKey); }
-  }).catch(function(){ /* stay dirty; will retry */ });
+    if(r.ok){ localStorage.removeItem(dirtyKey); console.log('Progress synced:',rows.length,'passages'); }
+    else { r.text().then(function(t){ console.warn('Progress sync failed:',r.status,t); }); }
+  }).catch(function(e){ console.warn('Progress sync error:',e); });
 }
 
 function syncProgressDown(){
@@ -9009,7 +9014,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-04 10:01');
+console.log('Portal build 2026-10-04 14:59');
 
 function toggleSharePractice(){
   if(!CU)return;
