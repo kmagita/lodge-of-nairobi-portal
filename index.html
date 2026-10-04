@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-09-08 11:08:16 -->
+  <!-- build: 2026-10-04 10:01 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -1072,7 +1072,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 #pane-practice .erase-confirm p{font-size:13px;color:var(--danger);margin-bottom:0.75rem;line-height:1.5;}
 #pane-practice .feedback-msg{min-height:18px;margin-top:0.75rem;font-size:13px;}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">console.log('Portal build 2026-10-04 10:01');
+</script>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
@@ -6238,7 +6239,7 @@ function rProfile(){
   h+='<button class="btn btn-navy btn-sm" onclick="changePassword()"><svg class="ico" width="14" height="14"><use href="#ico-lock"/></svg> Update password</button>';
   h+='</div>';
 
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools.</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-04 10:01</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -7718,10 +7719,10 @@ function confirmDelete(id){ st.passages=st.passages.filter(p=>p.id!==id); delete
 // ═══════════════════════════════════════════════════════
 function openPractice(id){
   const p=st.passages.find(p=>p.id===id); if(!p) return;
-  // TTS passages (portal library) don't need a recording — use device voice
-  if(p.refVoiceType==='tts' && !p.refAudio){ p.refAudio='tts'; }
-  // Validation
-  if((p.format==='charge'||p.format==='oration')&&!p.refAudio){ alert('No reference recording. Please edit and record first.'); return; }
+  // Reference audio: use TTS unless there's a REAL recorded audio source.
+  var _hasRealAudio = p.refAudio && typeof p.refAudio==='string' && (p.refAudio.indexOf('data:')===0||p.refAudio.indexOf('blob:')===0);
+  if(!_hasRealAudio){ p.refVoiceType='tts'; p.refAudio='tts'; }  // device voice
+  // (No recording-required block — TTS covers charges/orations without audio.)
   if(p.format==='catechism'&&(!p.qnaPairs||!p.qnaPairs.length)){ alert('No Q&A pairs found. Please edit and add pairs first.'); return; }
   if(p.format==='responsive'&&(!p.respLines||!p.respLines.length)){ alert('No lines found. Please edit and add lines first.'); return; }
 
@@ -7922,8 +7923,7 @@ function playFull(){
     playItemSequence(p, 0);
     return;
   }
-  if(!p.refAudio){ alert('No reference recording found.'); return; }
-  if(p.refVoiceType==='tts' || p.refAudio==='tts'){
+  if(!p.refAudio || p.refVoiceType==='tts' || p.refAudio==='tts' || !(p.refAudio.indexOf('data:')===0||p.refAudio.indexOf('blob:')===0)){
     // TTS: speak the whole passage via device voice
     var stopB=document.getElementById('stopBtn'); if(stopB)stopB.style.display='flex';
     var ps=document.getElementById('playbackStatus'); if(ps)ps.textContent='Playing full passage...';
