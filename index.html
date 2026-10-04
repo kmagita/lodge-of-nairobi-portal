@@ -7810,6 +7810,11 @@ function openPractice(id){
   const isCatOrResp=p.format==='catechism'||p.format==='responsive';
   document.querySelector('.level-row').style.display=isCatOrResp?'none':'flex';
 
+  // Count a practice session (one per passage opening)
+  if(!st.progressMap[p.id]) st.progressMap[p.id]={sessions:0,accuracy:0,furthestChunk:0,totalChunks:0,timesCompleted:0,blindAccuracy:0,blindAttempts:0,lastChunkOpened:0,lastPractised:''};
+  st.progressMap[p.id].sessions=(st.progressMap[p.id].sessions||0)+1;
+  st.progressMap[p.id].lastPractised=new Date().toISOString().split('T')[0];
+  persist();
   showTab('practice'); renderChunk();
 }
 
@@ -8274,7 +8279,7 @@ function checkAttempt(){
   const pid=p.id;
   const acc=refWords.length?Math.round(((correct+close*0.5)/refWords.length)*100):0;
   if(!st.progressMap[pid]) st.progressMap[pid]={sessions:0,accuracy:0,furthestChunk:0,totalChunks:0,timesCompleted:0,blindAccuracy:0,blindAttempts:0,lastChunkOpened:0,lastPractised:''};
-  const prev=st.progressMap[pid]; prev.sessions++;
+  const prev=st.progressMap[pid];
   prev.lastPractised=new Date().toISOString().split('T')[0];
   // Read-back accuracy counts only in no-text modes (blind / listen-recite / hidden catechism)
   var noText=(st.format==='blind'||st.format==='listenrecite'||(st.activePassage&&st.activePassage.format==='catechism'&&st.level>1));
