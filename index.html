@@ -1764,6 +1764,7 @@ function doLogin() {
               }
             });
             checkSubsReminder();
+            syncProgressDown();
             startRealtime();
             keepAlive();
           });
@@ -3286,6 +3287,7 @@ function rPractice(){
         if(_saveId){
           localStorage.setItem('pm_passages_'+_saveId,localStorage.getItem('pm_passages')||'[]');
           localStorage.setItem('pm_progress_'+_saveId,localStorage.getItem('pm_progress')||'{}');
+          queueProgressSync();  // push progress to Supabase (offline-safe)
         }
       };
       window._persistPatched=true;
@@ -8758,7 +8760,7 @@ function restoreSession(){
           var ex=NOTICES.find(function(n){return n.type==='poll'&&n.title&&n.title.indexOf(p.label)>-1;});
           if(!ex)NOTICES.unshift({id:'auto-'+p.id,type:'poll',title:'Poll: '+p.label,body:'An active poll is open for '+p.label+'. Please respond.',to:'all',date:(p.createdAt||new Date().toISOString()).split('T')[0],read:false});
         });
-        checkSubsReminder(); startRealtime(); keepAlive();
+        checkSubsReminder(); syncProgressDown(); startRealtime(); keepAlive();
       });
     }).catch(function(){});
   }).catch(function(){ try{localStorage.removeItem('lon_session');}catch(e){} });
@@ -8879,6 +8881,71 @@ function getChunksFor(p){
   if(p.format==='responsive'){ var self=p.speakers?p.speakers.find(function(s){return s.isSelf;}):null; return self?(p.respLines||[]).filter(function(l){return l.speakerId===self.sid;}).map(function(l){return l.text;}):(p.respLines||[]).map(function(l){return l.text;}); }
   var sents=(p.text||'').match(/[^.!?]+[.!?]*/g); return sents?sents.map(function(s){return s.trim();}).filter(Boolean):[p.text||''];
 }
+
+// ── Practice progress sync (offline-first) ──────────────────────────────────
+function queueProgressSync(){
+  // Mark that there are local progress changes to push, then try to sync
+  try{ localStorage.setItem('pm_sync_dirty_'+(CU?CU.id:''),'1'); }catch(e){}
+  if(navigator.onLine){ syncProgressUp(); }
+}
+
+function syncProgressUp(){
+  if(!CU||!navigator.onLine)return;
+  var dirtyKey='pm_sync_dirty_'+CU.id;
+  if(localStorage.getItem(dirtyKey)!=='1')return;  // nothing to push
+  var pr;
+  try{ pr=JSON.parse(localStorage.getItem('pm_progress_'+CU.id)||'{}'); }catch(e){ return; }
+  var titles;
+  try{ titles=JSON.parse(localStorage.getItem('pm_passages_'+CU.id)||'[]'); }catch(e){ titles=[]; }
+  var titleOf=function(pid){var p=titles.find(function(x){return x.id===pid;});return p?p.title:'';};
+  var rows=Object.keys(pr).map(function(pid){
+    var p=pr[pid]||{};
+    return {member_id:CU.id, passage_id:pid, passage_title:titleOf(pid),
+      furthest_chunk:p.furthestChunk||0, total_chunks:p.totalChunks||0,
+      times_completed:p.timesCompleted||0, sessions:p.sessions||0,
+      last_practised:p.lastPractised||null,
+      blind_accuracy:p.blindAccuracy||0, blind_attempts:p.blindAttempts||0,
+      last_chunk_opened:p.lastChunkOpened||0,
+      updated_at:new Date().toISOString()};
+  });
+  if(!rows.length){ localStorage.removeItem(dirtyKey); return; }
+  supa('practice_progress',{method:'POST',
+    headers:{'Prefer':'resolution=merge-duplicates'},
+    body:JSON.stringify(rows)
+  }).then(function(r){
+    if(r.ok){ localStorage.removeItem(dirtyKey); }
+  }).catch(function(){ /* stay dirty; will retry */ });
+}
+
+function syncProgressDown(){
+  // On login / new device: pull this member's saved progress and merge (newest wins)
+  if(!CU||!navigator.onLine)return;
+  supa('practice_progress?member_id=eq.'+CU.id,{method:'GET'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!Array.isArray(d)||!d.length)return;
+      var local;
+      try{ local=JSON.parse(localStorage.getItem('pm_progress_'+CU.id)||'{}'); }catch(e){ local={}; }
+      d.forEach(function(row){
+        var loc=local[row.passage_id];
+        var remote={furthestChunk:row.furthest_chunk,totalChunks:row.total_chunks,
+          timesCompleted:row.times_completed,sessions:row.sessions,
+          lastPractised:row.last_practised,blindAccuracy:row.blind_accuracy,
+          blindAttempts:row.blind_attempts,lastChunkOpened:row.last_chunk_opened,
+          accuracy:row.blind_accuracy};
+        // newest-wins by lastPractised
+        if(!loc || (row.last_practised||'')>=(loc.lastPractised||'')){
+          local[row.passage_id]=remote;
+        }
+      });
+      localStorage.setItem('pm_progress_'+CU.id, JSON.stringify(local));
+      localStorage.setItem('pm_progress', JSON.stringify(local)); // active copy
+    }).catch(function(){});
+}
+
+// Retry sync when the connection comes back, and periodically
+window.addEventListener('online', function(){ syncProgressUp(); });
+setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 </script>
 </body>
 </html
