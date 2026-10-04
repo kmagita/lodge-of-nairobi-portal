@@ -1072,8 +1072,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 #pane-practice .erase-confirm p{font-size:13px;color:var(--danger);margin-bottom:0.75rem;line-height:1.5;}
 #pane-practice .feedback-msg{min-height:18px;margin-top:0.75rem;font-size:13px;}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">console.log('Portal build 2026-10-04 10:01');
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
@@ -1727,7 +1726,8 @@ function doLogin() {
             phone:  m.phone || '',
             firstLogin: m.first_login,
             role:   officeToRole(m.office || ''),
-            lastSeenNotices: m.last_seen_notices || null
+            lastSeenNotices: m.last_seen_notices || null,
+            sharePractice: m.share_practice!==false
           };
           document.getElementById('li-err').style.display = 'none';
           document.getElementById('pg-login').style.display = 'none';
@@ -3553,7 +3553,6 @@ function rDuties(){
 
 function rLibrary(){
   if(!CU)return;
-  console.log('rLibrary called, LIBRARY.length=',LIBRARY.length,'CU.role=',CU.role,'libContentId=',libContentId);
   var isDC=CU.role==='dc';
   var DEG={EA:1,FC:2,MM:3};
   var myRank=DEG[CU.deg]||1;
@@ -4381,7 +4380,59 @@ function rMentor(){
     h+='<button class="btn btn-navy" style="width:100%;justify-content:center;margin-top:4px" onclick="saveHistoricalSession()">Save session</button>';
     h+='</div>';
   }
+  // ── Members' practice progress (shared only; RLS enforces) ───────────
+  h+='<div class="stitle" style="margin-top:16px">Practice progress</div>';
+  h+='<div id="mentor-progress"><div class="card" style="text-align:center;color:var(--t3);padding:16px">Loading…</div></div>';
   document.getElementById('pane-mentor').innerHTML=h;
+  loadMentorProgress();
+}
+
+function loadMentorProgress(){
+  supa('practice_progress?select=*&order=last_practised.desc',{method:'GET'})
+    .then(function(r){return r.json();})
+    .then(function(rows){
+      var box=document.getElementById('mentor-progress');
+      if(!box)return;
+      if(!Array.isArray(rows)||!rows.length){
+        box.innerHTML='<div class="card" style="text-align:center;color:var(--t3);padding:16px">No shared practice progress yet.</div>';
+        return;
+      }
+      // Group by member
+      var byMember={};
+      rows.forEach(function(r){ (byMember[r.member_id]=byMember[r.member_id]||[]).push(r); });
+      var h='';
+      Object.keys(byMember).forEach(function(mid){
+        var m=gm(mid);
+        var list=byMember[mid].sort(function(a,b){return (b.last_practised||'').localeCompare(a.last_practised||'');});
+        var lastDate=list[0].last_practised||'';
+        var totalSessions=list.reduce(function(s,x){return s+(x.sessions||0);},0);
+        var totalCompleted=list.reduce(function(s,x){return s+(x.times_completed||0);},0);
+        // Status: active if practised within 14 days, else slowing
+        var active=false;
+        if(lastDate){ var d=new Date(lastDate); active=((Date.now()-d.getTime())/(1000*60*60*24))<=14; }
+        h+='<div class="card" style="margin-bottom:10px">';
+        h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+        h+='<div style="font-weight:700;font-size:14px;color:var(--navy)">'+(m?gn(m):'Member')+'</div>';
+        h+='<span class="badge" style="background:'+(active?'var(--okbg)':'var(--warnbg)')+';color:'+(active?'var(--ok)':'var(--warn)')+'">'+(active?'Active':'Slowing')+'</span>';
+        h+='</div>';
+        h+='<div style="font-size:11px;color:var(--t3);margin-bottom:8px">'+totalSessions+' session'+(totalSessions!==1?'s':'')+(totalCompleted?' &middot; '+totalCompleted+' completed':'')+(lastDate?' &middot; last '+lastDate:'')+'</div>';
+        list.forEach(function(x){
+          var total=x.total_chunks||1;
+          var reached=(x.last_chunk_opened||x.furthest_chunk||0);
+          var pct=Math.min(100,Math.round((reached/Math.max(1,total-1))*100)); if(isNaN(pct))pct=0;
+          h+='<div style="margin-bottom:6px">';
+          h+='<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--t2)"><span>'+(x.passage_title||'Passage')+'</span><span style="color:var(--t3)">'+pct+'%'+(x.times_completed?' &middot; '+x.times_completed+'\u2713':'')+'</span></div>';
+          h+='<div style="height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-top:2px"><div style="height:100%;width:'+pct+'%;background:var(--gold)"></div></div>';
+          if(x.blind_attempts>0)h+='<div style="font-size:10px;color:var(--t3);margin-top:1px">Blind accuracy '+x.blind_accuracy+'% over '+x.blind_attempts+' attempt'+(x.blind_attempts!==1?'s':'')+'</div>';
+          h+='</div>';
+        });
+        h+='</div>';
+      });
+      box.innerHTML=h;
+    }).catch(function(e){
+      var box=document.getElementById('mentor-progress');
+      if(box)box.innerHTML='<div class="card" style="color:var(--bad);padding:12px">Could not load progress.</div>';
+    });
 }
 
 var mentorOpen=null;
@@ -4735,7 +4786,7 @@ function rMembersAdmin(){
   // ── REGISTER tab ───────────────────────────────────────────────────
   if(tab==='register'){
     var q=(document.getElementById('reg-search')||{value:''}).value.toLowerCase();
-    h+='<div class="fg" style="margin-bottom:12px"><input id="reg-search" placeholder="Search name, email or office..." oninput="rMembersAdmin()" value="'+q+'" style="width:100%"></div>';
+    h+='<div class="fg" style="margin-bottom:12px"><input id="reg-search" placeholder="Search name, email or office..." oninput="filterRegList(this.value)" value="'+q+'" style="width:100%"></div>';
     h+='<div class="card" style="padding:0;overflow:hidden">';
     var shown=0;
     MEMBERS.filter(function(m){
@@ -4743,7 +4794,7 @@ function rMembersAdmin(){
     }).forEach(function(m,i){
       shown++;
       var derivedRole=officeToRole(m.office);
-      h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;'+(i?'border-top:1px solid var(--bdr)':'')+'">';
+      h+='<div class="reg-row" data-search="'+((m.name+' '+m.email+' '+(m.office||'')+' '+m.deg).toLowerCase().replace(/"/g,''))+'" style="display:flex;align-items:center;gap:10px;padding:10px 14px;'+(i?'border-top:1px solid var(--bdr)':'')+'">';
       h+='<div style="flex:1">';
       h+='<div style="font-weight:600;font-size:14px;color:var(--navy)">'+m.name+'</div>';
       h+='<div style="font-size:11px;color:var(--t3)">'+m.email+' &middot; '+m.deg+(m.office?' &middot; '+m.office:'')+'</div>';
@@ -6239,6 +6290,12 @@ function rProfile(){
   h+='<button class="btn btn-navy btn-sm" onclick="changePassword()"><svg class="ico" width="14" height="14"><use href="#ico-lock"/></svg> Update password</button>';
   h+='</div>';
 
+  h+='<div class="stitle" style="margin-top:20px">Practice privacy</div>';
+  h+='<div class="card" style="display:flex;align-items:center;justify-content:space-between">';
+  h+='<div style="flex:1;padding-right:12px"><div style="font-size:13px;font-weight:600;color:var(--navy)">Share progress with the Lodge Mentor</div>';
+  h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
+  h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
+  h+='</div>';
   h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-04 10:01</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
@@ -8746,7 +8803,7 @@ function restoreSession(){
       CU={id:m.id,name:m.name,email:m.email,office:m.office||'',deg:m.deg,
           ugle:m.ugle||'',dob:m.dob||'',init:m.init||'',pass_:m.pass_||'',raise:m.raise||'',
           sub:m.sub,phone:m.phone||'',firstLogin:m.first_login,
-          role:officeToRole(m.office||''),lastSeenNotices:m.last_seen_notices||null};
+          role:officeToRole(m.office||''),lastSeenNotices:m.last_seen_notices||null,sharePractice:m.share_practice!==false};
       document.getElementById('pg-login').style.display='none';
       document.getElementById('pg-app').style.display='block';
       document.getElementById('tb-name').textContent=gn(CU);
@@ -8946,6 +9003,26 @@ function syncProgressDown(){
 // Retry sync when the connection comes back, and periodically
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
+
+console.log('Portal build 2026-10-04 10:01');
+
+function toggleSharePractice(){
+  if(!CU)return;
+  CU.sharePractice=!CU.sharePractice;
+  supa('members?id=eq.'+CU.id,{method:'PATCH',
+    body:JSON.stringify({share_practice:CU.sharePractice})
+  }).then(function(r){
+    if(!r.ok){CU.sharePractice=!CU.sharePractice;r.text().then(function(t){alert('Could not update: '+t);});}
+    rProfile();
+  }).catch(function(e){CU.sharePractice=!CU.sharePractice;alert('Network error.');rProfile();});
+}
+
+function filterRegList(q){
+  q=(q||'').toLowerCase();
+  document.querySelectorAll('#pane-members .reg-row').forEach(function(row){
+    row.style.display = (!q || (row.getAttribute('data-search')||'').indexOf(q)>-1) ? '' : 'none';
+  });
+}
 </script>
 </body>
 </html
