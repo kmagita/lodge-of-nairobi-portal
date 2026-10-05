@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-05 05:43:22 -->
+  <!-- build: 2026-10-05 10:39:01 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -4461,8 +4461,8 @@ function saveLodgeMentorData(pid){
   rMentor();
 }
 function addMentoringPair(){
-  var mentee=document.getElementById('mp-mentee');
-  var mentor=document.getElementById('mp-mentor');
+  var mentee=document.getElementById('np-mentee');
+  var mentor=document.getElementById('np-mentor');
   if(!mentee||!mentee.value){alert('Select a mentee.');return;}
   var pair={id:'mp'+Date.now(),mentee:mentee.value,
     personalMentor:mentor?mentor.value:'',
@@ -4547,17 +4547,6 @@ function logMentorSession(pid){
     notes:notes?notes.value:''
   });
   mentorOpen=pid;
-  rMentor();
-}
-function addMentoringPair(){
-  var mentor=document.getElementById('mp-mentor');
-  var mentee=document.getElementById('mp-mentee');
-  if(!mentor||!mentee||mentor.value===mentee.value){alert('Please select different members.');return;}
-  MENTORING_PAIRS.push({
-    id:'mp'+Date.now(),mentor:mentor.value,mentee:mentee.value,
-    startDate:new Date().toISOString().split('T')[0],
-    sessions:[],milestones:{initiated:null,passed:null,raised:null},notes:''
-  });
   rMentor();
 }
 
@@ -6298,7 +6287,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-05 05:43:22</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-05 10:39:01</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -9031,7 +9020,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-05 05:43:22');
+console.log('Portal build 2026-10-05 10:39:01');
 
 function toggleSharePractice(){
   if(!CU)return;
