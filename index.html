@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-04 15:51:54 -->
+  <!-- build: 2026-10-05 05:39:09 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -2367,8 +2367,12 @@ function unreadNotices(){
     var to=n.to;
     var mine=!to?false:typeof to==='string'?to==='all'||to===CU.id:to.indexOf('all')>-1||to.indexOf(CU.id)>-1;
     if(!mine)return false;
+    // A poll notice you've already submitted is never unread
+    if(n.type==='poll'){
+      var rel=POLLS.find(function(p){return (n.title||'').indexOf(p.label)>-1;});
+      if(rel){ var v=rel.votes[CU.id]; if(v&&v._submitted===true) return false; }
+    }
     if(!seen)return true;  // never opened notices — all unread
-    // Compare as timestamps (DB uses space, JS uses T — parse both to Date)
     var nts=n.ts||n.date||'';
     var nMs=Date.parse(nts.replace(' ','T'));
     var sMs=Date.parse(seen.replace(' ','T'));
@@ -4955,9 +4959,7 @@ function rHome(){
     return to.indexOf('all')>-1||to.indexOf(CU.id)>-1;
   });
   var unread=unreadNotices().length;
-  var activePoll=POLLS.find(function(p){return p.active;});
-  var myVote=activePoll?(activePoll.votes[CU.id]||{}):null;
-  var pollPending=activePoll&&!(myVote&&myVote._submitted===true);
+  var pollPending=POLLS.some(function(p){ return p.active && !(p.votes[CU.id]&&p.votes[CU.id]._submitted===true); });
   var bubbles=unread+(pollPending?1:0);
   if(bubbles>0){
     h+='<button data-id="notices" onclick="goTo(this.dataset.id)" style="display:flex;align-items:center;gap:8px;background:var(--badbg);border:none;border-radius:10px;padding:8px 12px;cursor:pointer;touch-action:manipulation">';
@@ -6296,7 +6298,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-04 15:51:54</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-05 05:39:09</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -8895,8 +8897,8 @@ function showPracticeLanding(){
   h+='</div>';
 
   // ── Graphical summary: sessions & completions per charge ─────────────
-  var withData=prs.filter(function(x){var p2=passById(x.pid);return p2;}).map(function(x){
-    return {title:(passById(x.pid)||{}).title||'Passage',
+  var withData=inProgress.map(function(x){
+    return {title:(x.p&&x.p.title)||'Passage',
             sessions:x.pr.sessions||0, completed:x.pr.timesCompleted||0,
             blind:x.pr.blindAccuracy||0, blindAtt:x.pr.blindAttempts||0};
   });
@@ -9068,7 +9070,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-04 15:51:54');
+console.log('Portal build 2026-10-05 05:39:09');
 
 function toggleSharePractice(){
   if(!CU)return;
