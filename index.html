@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-05 10:45:49 -->
+  <!-- build: 2026-10-05 10:50:13 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -4268,9 +4268,10 @@ function rMentor(){
 
       // Milestones row
       h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;font-size:11px">';
-      h+='<div style="text-align:center;padding:6px;background:var(--bg2);border-radius:6px"><div style="color:var(--t3);font-weight:700">INITIATED</div><div style="color:var(--navy);font-size:10px">'+(ms.initiated||'—')+'</div></div>';
-      h+='<div style="text-align:center;padding:6px;background:'+(ms.passed?'var(--okbg)':'var(--bg2)')+';border-radius:6px"><div style="color:'+(ms.passed?'var(--ok)':'var(--t3)')+';font-weight:700">PASSED</div><div style="color:var(--navy);font-size:10px">'+(ms.passed||'Pending')+'</div></div>';
-      h+='<div style="text-align:center;padding:6px;background:'+(ms.raised?'var(--okbg)':'var(--bg2)')+';border-radius:6px"><div style="color:'+(ms.raised?'var(--ok)':'var(--t3)')+';font-weight:700">RAISED</div><div style="color:var(--navy);font-size:10px">'+(ms.raised||'Pending')+'</div></div>';
+      var mInit=menteeM?menteeM.init:'', mPass=menteeM?menteeM.pass_:'', mRaise=menteeM?menteeM.raise:'';
+      h+='<div style="text-align:center;padding:6px;background:'+(mInit?'var(--okbg)':'var(--bg2)')+';border-radius:6px"><div style="color:'+(mInit?'var(--ok)':'var(--t3)')+';font-weight:700">INITIATED</div><div style="color:var(--navy);font-size:10px">'+(mInit||'—')+'</div></div>';
+      h+='<div style="text-align:center;padding:6px;background:'+(mPass?'var(--okbg)':'var(--bg2)')+';border-radius:6px"><div style="color:'+(mPass?'var(--ok)':'var(--t3)')+';font-weight:700">PASSED</div><div style="color:var(--navy);font-size:10px">'+(mPass||'Pending')+'</div></div>';
+      h+='<div style="text-align:center;padding:6px;background:'+(mRaise?'var(--okbg)':'var(--bg2)')+';border-radius:6px"><div style="color:'+(mRaise?'var(--ok)':'var(--t3)')+';font-weight:700">RAISED</div><div style="color:var(--navy);font-size:10px">'+(mRaise||'Pending')+'</div></div>';
       h+='</div>';
 
       if(isOpen){
@@ -6284,7 +6285,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-05 10:45:49</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-05 10:50:13</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -9017,7 +9018,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-05 10:45:49');
+console.log('Portal build 2026-10-05 10:50:13');
 
 function toggleSharePractice(){
   if(!CU)return;
