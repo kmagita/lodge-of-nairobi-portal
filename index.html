@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-05 10:50:13 -->
+  <!-- build: 2026-10-05 10:55:59 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -4289,6 +4289,25 @@ function rMentor(){
         // ── Mentee's practice progress (read-only, loaded from Supabase) ──
         h+='<div class="stitle" style="margin-top:4px">Practice progress</div>';
         h+='<div id="mp-prog-'+pair.mentee+'" class="card" style="padding:12px;background:var(--bg2)"><div style="font-size:12px;color:var(--t3)">Loading…</div></div>';
+        // ── Delivered charges by this mentee ──
+        var mDelivered=(typeof CHARGE_ASSIGNMENTS!=='undefined')?CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Delivered'&&a.dby===pair.mentee;}).sort(function(a,b){return (b.mdate||'').localeCompare(a.mdate||'');}):[];
+        h+='<div class="stitle" style="margin-top:4px">Charges delivered</div>';
+        h+='<div class="card" style="padding:12px;background:var(--bg2)">';
+        if(mDelivered.length){
+          mDelivered.forEach(function(a){
+            var lib=(typeof LIBRARY!=='undefined')?LIBRARY.find(function(l){return l.id===a.pid;}):null;
+            var wasPrim=a.prim===pair.mentee;
+            h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr)">';
+            h+='<div><div style="font-size:13px;font-weight:600;color:var(--navy)">'+((lib&&lib.title)||a.ptitle||'Charge')+'</div>';
+            h+='<div style="font-size:11px;color:var(--t3)">'+(a.mdate||'')+' &middot; '+(wasPrim?'as Primary':'stepped in as Standby')+'</div></div>';
+            h+='<span class="badge" style="background:var(--okbg);color:var(--ok)">&#10003;</span>';
+            h+='</div>';
+          });
+          h+='<div style="font-size:11px;color:var(--t3);margin-top:8px">'+mDelivered.length+' charge'+(mDelivered.length!==1?'s':'')+' delivered</div>';
+        } else {
+          h+='<div style="font-size:12px;color:var(--t3)">No charges delivered yet.</div>';
+        }
+        h+='</div>';
 
         // Lodge mentor notes
         h+='<div class="fg"><label class="lbl">Lodge mentor notes</label>';
@@ -6285,7 +6304,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-05 10:50:13</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-05 10:55:59</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -9018,7 +9037,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-05 10:50:13');
+console.log('Portal build 2026-10-05 10:55:59');
 
 function toggleSharePractice(){
   if(!CU)return;
