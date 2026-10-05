@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-05 10:39:01 -->
+  <!-- build: 2026-10-05 10:45:49 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -4284,10 +4284,10 @@ function rMentor(){
 
         // Milestones editor
         h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">';
-        h+='<div class="fg" style="margin:0"><label class="lbl">Initiated</label><input type="date" id="ms-init-'+pair.id+'" value="'+(ms.initiated||'')+'"></div>';
-        h+='<div class="fg" style="margin:0"><label class="lbl">Passed</label><input type="date" id="ms-pass-'+pair.id+'" value="'+(ms.passed||'')+'"></div>';
-        h+='<div class="fg" style="margin:0"><label class="lbl">Raised</label><input type="date" id="ms-raise-'+pair.id+'" value="'+(ms.raised||'')+'"></div>';
         h+='</div>';
+        // ── Mentee's practice progress (read-only, loaded from Supabase) ──
+        h+='<div class="stitle" style="margin-top:4px">Practice progress</div>';
+        h+='<div id="mp-prog-'+pair.mentee+'" class="card" style="padding:12px;background:var(--bg2)"><div style="font-size:12px;color:var(--t3)">Loading…</div></div>';
 
         // Lodge mentor notes
         h+='<div class="fg"><label class="lbl">Lodge mentor notes</label>';
@@ -4384,11 +4384,8 @@ function rMentor(){
     h+='<button class="btn btn-navy" style="width:100%;justify-content:center;margin-top:4px" onclick="saveHistoricalSession()">Save session</button>';
     h+='</div>';
   }
-  // ── Members' practice progress (shared only; RLS enforces) ───────────
-  h+='<div class="stitle" style="margin-top:16px">Practice progress</div>';
-  h+='<div id="mentor-progress"><div class="card" style="text-align:center;color:var(--t3);padding:16px">Loading…</div></div>';
   document.getElementById('pane-mentor').innerHTML=h;
-  loadMentorProgress();
+  fillMenteeProgress();
 }
 
 function loadMentorProgress(){
@@ -6287,7 +6284,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-05 10:39:01</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-05 10:45:49</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -9020,7 +9017,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-05 10:39:01');
+console.log('Portal build 2026-10-05 10:45:49');
 
 function toggleSharePractice(){
   if(!CU)return;
@@ -9052,6 +9049,36 @@ function startBlindRecital(){
 function restartPractice(){
   st.chunkIdx=0;
   renderChunk();
+}
+
+function fillMenteeProgress(){
+  supa('practice_progress?select=*&order=last_practised.desc',{method:'GET'})
+    .then(function(r){return r.json();})
+    .then(function(rows){
+      if(!Array.isArray(rows))return;
+      var byMember={};
+      rows.forEach(function(r){ (byMember[r.member_id]=byMember[r.member_id]||[]).push(r); });
+      // For each pair box on the page
+      document.querySelectorAll('[id^="mp-prog-"]').forEach(function(box){
+        var mid=box.id.replace('mp-prog-','');
+        var list=byMember[mid];
+        if(!list||!list.length){ box.innerHTML='<div style="font-size:12px;color:var(--t3)">No shared practice yet.</div>'; return; }
+        var totalSessions=list.reduce(function(s,x){return s+(x.sessions||0);},0);
+        var totalCompleted=list.reduce(function(s,x){return s+(x.times_completed||0);},0);
+        var lastDate=list[0].last_practised||'';
+        var hh='<div style="font-size:11px;color:var(--t3);margin-bottom:8px">'+totalSessions+' session'+(totalSessions!==1?'s':'')+(totalCompleted?' &middot; '+totalCompleted+' completed':'')+(lastDate?' &middot; last '+lastDate:'')+'</div>';
+        list.forEach(function(x){
+          var total=x.total_chunks||1;
+          var reached=(x.last_chunk_opened||x.furthest_chunk||0);
+          var pct=Math.min(100,Math.round((reached/Math.max(1,total-1))*100)); if(isNaN(pct))pct=0;
+          hh+='<div style="margin-bottom:6px">';
+          hh+='<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--t2)"><span>'+(x.passage_title||'Passage')+'</span><span style="color:var(--t3)">'+pct+'%'+(x.times_completed?' &middot; '+x.times_completed+'\u00d7':'')+'</span></div>';
+          hh+='<div style="height:5px;background:var(--white);border-radius:3px;overflow:hidden;margin-top:2px"><div style="height:100%;width:'+pct+'%;background:var(--gold)"></div></div>';
+          hh+='</div>';
+        });
+        box.innerHTML=hh;
+      });
+    }).catch(function(){});
 }
 </script>
 </body>
