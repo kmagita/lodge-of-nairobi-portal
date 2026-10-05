@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-05 10:55:59 -->
+  <!-- build: 2026-10-05 11:36:23 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -1845,6 +1845,7 @@ function loadAppData() {
                 contacts:w.welfare_contacts||[]};
       });
     }),
+    safeFetch('mentor_changes?select=*&order=changed_at.desc', function(d){ MENTOR_CHANGES=d||[]; }),
     safeFetch('mentoring_pairs?select=*,mentoring_sessions(*)', function(d) {
       MENTORING_PAIRS = d.map(function(p) {
         return {id:p.id, mentee:p.mentee_id, personalMentor:p.personal_mentor,
@@ -2130,6 +2131,7 @@ var WELFARE = [
 ];
 
 // ── Mentoring pairs ───────────────────────────────────────────────────────
+var MENTOR_CHANGES=[];
 var MENTORING_PAIRS = [
   {id:'mp1',personalMentor:'m2',mentee:'m5',assignedBy:'m3',
    assignedDate:'2024-03-01',
@@ -4330,6 +4332,7 @@ function rMentor(){
 
         h+='<div style="display:flex;gap:8px;margin-top:8px">';
         h+='<button class="btn btn-navy btn-sm" data-id="'+pair.id+'" onclick="saveLodgeMentorData(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-device-floppy"/></svg> Save</button>';
+        h+='<button class="btn btn-n btn-sm" style="margin-left:6px" data-mid="'+pair.mentee+'" onclick="menteeReport(this.dataset.mid)">&#128196; Report</button>';
         h+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad)" data-id="'+pair.id+'" onclick="removeMentoringPair(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-trash"/></svg></button>';
         h+='</div>';
       }
@@ -4346,6 +4349,18 @@ function rMentor(){
       h+='</div>';
     }
 
+    // Report by personal mentor
+    var mentorsWithMentees={};
+    MENTORING_PAIRS.forEach(function(p){ if(p.personalMentor)mentorsWithMentees[p.personalMentor]=true; });
+    if(Object.keys(mentorsWithMentees).length){
+      h+='<div class="stitle">Report by personal mentor</div>';
+      h+='<div class="card" style="display:flex;gap:8px;align-items:center;margin-bottom:12px">';
+      h+='<select id="pm-report-sel" style="flex:1"><option value="">— Select a personal mentor —</option>';
+      Object.keys(mentorsWithMentees).forEach(function(mid){ var mm=gm(mid); if(mm)h+='<option value="'+mid+'">'+gn(mm)+'</option>'; });
+      h+='</select>';
+      h+='<button class="btn btn-navy btn-sm" onclick="var s=document.getElementById(\'pm-report-sel\');if(s&&s.value)personalMentorReport(s.value);else alert(\'Select a personal mentor.\');">&#128196; Report</button>';
+      h+='</div>';
+    }
     // Assign new pair
     h+='<div class="stitle">Assign new pair</div>';
     h+='<div class="card">';
@@ -4466,7 +4481,24 @@ function saveLodgeMentorData(pid){
   if(!p)return;
   var pm=document.getElementById('pm-sel-'+pid);
   var lnotes=document.getElementById('lm-notes-'+pid);
-  if(pm)p.personalMentor=pm.value;
+  var oldMentor=p.personalMentor||'';
+  var newMentor=pm?pm.value:oldMentor;
+  // If the personal mentor is being changed, require a reason and log it
+  if(pm && newMentor!==oldMentor && oldMentor!==''){
+    var reasons=['Mentor unavailable','Better fit','Mentee request','Mentor left lodge','Other'];
+    var pick=prompt('Reason for changing personal mentor:\n1. Mentor unavailable\n2. Better fit\n3. Mentee request\n4. Mentor left lodge\n5. Other\n\nEnter 1-5:');
+    if(pick===null){ rMentor(); return; } // cancelled
+    var ri=parseInt(pick)-1;
+    var reason=(ri>=0&&ri<reasons.length)?reasons[ri]:'Other';
+    var note=prompt('Add a brief note (optional):')||'';
+    // Log the change
+    supa('mentor_changes',{method:'POST',
+      body:JSON.stringify({pair_id:pid,mentee_id:p.mentee,
+        old_mentor:oldMentor||null,new_mentor:newMentor||null,
+        reason:reason,reason_note:note,changed_by:CU.id})
+    }).catch(function(e){console.warn('Change log failed:',e);});
+  }
+  if(pm)p.personalMentor=newMentor;
   if(lnotes)p.lodgeNotes=lnotes.value;
   supa('mentoring_pairs?id=eq.'+pid,{method:'PATCH',
     body:JSON.stringify({
@@ -5115,6 +5147,54 @@ function rHome(){
     h+='</div>';
   }catch(e){}
 
+  // ── Your personal mentor (mentee view) ───────────────────────────────
+  try{
+    var myPair=(typeof MENTORING_PAIRS!=='undefined')?MENTORING_PAIRS.find(function(p){return p.mentee===CU.id;}):null;
+    if(myPair&&myPair.personalMentor){
+      var mentorM=gm(myPair.personalMentor);
+      if(mentorM){
+        h+='<div class="card" style="border-top:4px solid var(--info);margin-bottom:10px">';
+        h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Your personal mentor</div>';
+        h+='<div style="display:flex;align-items:center;gap:10px">';
+        h+='<div style="width:36px;height:36px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">'+(gn(mentorM)||'?').replace(/^Bro\.?\s*/i,'').charAt(0)+'</div>';
+        h+='<div><div style="font-weight:700;font-size:14px;color:var(--navy)">'+gn(mentorM)+'</div>';
+        if(mentorM.phone)h+='<div style="font-size:12px;color:var(--t3)">'+mentorM.phone+'</div>';
+        h+='</div></div>';
+        h+='</div>';
+      }
+    }
+  }catch(e){}
+
+  // ── My mentees (personal mentor view) ────────────────────────────────
+  try{
+    var myMentees=(typeof MENTORING_PAIRS!=='undefined')?MENTORING_PAIRS.filter(function(p){return p.personalMentor===CU.id;}):[];
+    if(myMentees.length){
+      h+='<div class="card" style="border-top:4px solid var(--gold);margin-bottom:10px">';
+      h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">My mentee'+(myMentees.length!==1?'s':'')+'</div>';
+      h+='<div id="home-mentees">';
+      myMentees.forEach(function(pr){
+        var m=gm(pr.mentee);
+        var name=m?gn(m):'Brother';
+        var deg=m?m.deg:'';
+        // assigned (not-yet-delivered) charge for this mentee
+        var charge=(typeof CHARGE_ASSIGNMENTS!=='undefined')?CHARGE_ASSIGNMENTS.find(function(a){return (a.prim===pr.mentee||a.back===pr.mentee)&&a.status!=='Delivered';}):null;
+        var chTitle='';
+        if(charge){ var lib=(typeof LIBRARY!=='undefined')?LIBRARY.find(function(l){return l.id===charge.pid;}):null; chTitle=(lib&&lib.title)||charge.ptitle||'a charge'; }
+        h+='<div style="padding:8px 0;border-top:1px solid var(--bdr)" data-mentee="'+pr.mentee+'">';
+        h+='<div style="display:flex;justify-content:space-between;align-items:center">';
+        h+='<div style="font-weight:700;font-size:14px;color:var(--navy)">'+name+'</div>';
+        h+='<span class="badge" style="background:var(--goldbg);color:var(--gold)">'+deg+'</span>';
+        h+='</div>';
+        if(charge)h+='<div style="font-size:11px;color:var(--warn);margin-top:2px">Preparing: '+chTitle+' &middot; '+charge.mdate+'</div>';
+        h+='<div class="mentee-prog" style="font-size:11px;color:var(--t3);margin-top:4px">Practice: loading…</div>';
+        h+='</div>';
+      });
+      h+='</div>';
+      h+='<div style="font-size:10px;color:var(--t3);margin-top:8px;font-style:italic">Read-only. Guidance happens in person.</div>';
+      h+='</div>';
+    }
+  }catch(e){}
+
   // ── 5. OFFICER QUICK CARDS ───────────────────────────────────────────
   if(CU.role==='dc'){
     var pending=CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Assigned';}).length;
@@ -5166,6 +5246,7 @@ function rHome(){
 
   try{document.getElementById('pane-home').innerHTML='<div style="padding:4px">'+h+'</div>';}
   catch(e){document.getElementById('pane-home').innerHTML='<div style="padding:20px;color:red">'+e.message+'</div>';}
+  if(document.getElementById('home-mentees'))loadHomeMenteeProgress();
 }
 
 
@@ -6304,7 +6385,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-05 10:55:59</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-05 11:36:23</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -9037,7 +9118,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-05 10:55:59');
+console.log('Portal build 2026-10-05 11:36:23');
 
 function toggleSharePractice(){
   if(!CU)return;
@@ -9097,6 +9178,117 @@ function fillMenteeProgress(){
           hh+='</div>';
         });
         box.innerHTML=hh;
+      });
+    }).catch(function(){});
+}
+
+// ── Mentor progress reports ─────────────────────────────────────────────────
+function _mentorProgressRows(mid, cb){
+  // fetch practice progress for one member
+  supa('practice_progress?member_id=eq.'+mid,{method:'GET'})
+    .then(function(r){return r.json();}).then(function(d){cb(Array.isArray(d)?d:[]);})
+    .catch(function(){cb([]);});
+}
+
+function _renderBrotherSection(doc, y, m, prog){
+  var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  doc.setFontSize(12); doc.setTextColor(14,31,69);
+  doc.text(m?m.name:'Member', 14, y); y+=6;
+  doc.setFontSize(9); doc.setTextColor(90,90,90);
+  doc.text('Degree: '+((m&&m.deg)||'—')+'   Initiated: '+((m&&m.init)||'—')+'   Passed: '+((m&&m.pass_)||'—')+'   Raised: '+((m&&m.raise)||'—'), 14, y); y+=7;
+  // Practice progress
+  doc.setTextColor(14,31,69); doc.setFontSize(10); doc.text('Practice progress', 14, y); y+=5;
+  doc.setFontSize(9);
+  if(prog.length){
+    prog.sort(function(a,b){return (b.last_practised||'').localeCompare(a.last_practised||'');});
+    prog.forEach(function(p){
+      if(y>275){doc.addPage();y=20;}
+      var total=p.total_chunks||1, reached=(p.last_chunk_opened||p.furthest_chunk||0);
+      var pct=Math.min(100,Math.round((reached/Math.max(1,total-1))*100)); if(isNaN(pct))pct=0;
+      doc.setTextColor(30,30,30);
+      doc.text('• '+(p.passage_title||'Passage'), 16, y);
+      doc.setTextColor(120,120,120);
+      var meta=pct+'% · '+(p.sessions||0)+' sessions'+(p.times_completed?' · '+p.times_completed+' completed':'')+(p.blind_attempts?' · blind '+p.blind_accuracy+'%':'');
+      doc.text(meta, 120, y); y+=5;
+    });
+  } else { doc.setTextColor(120,120,120); doc.text('No shared practice progress.', 16, y); y+=5; }
+  y+=2;
+  // Charges delivered
+  var delivered=(typeof CHARGE_ASSIGNMENTS!=='undefined')?CHARGE_ASSIGNMENTS.filter(function(a){return a.status==='Delivered'&&a.dby===m.id;}):[];
+  doc.setTextColor(14,31,69); doc.setFontSize(10); doc.text('Charges delivered', 14, y); y+=5;
+  doc.setFontSize(9);
+  if(delivered.length){
+    delivered.forEach(function(a){
+      if(y>275){doc.addPage();y=20;}
+      var lib=(typeof LIBRARY!=='undefined')?LIBRARY.find(function(l){return l.id===a.pid;}):null;
+      doc.setTextColor(30,30,30); doc.text('• '+((lib&&lib.title)||a.ptitle||'Charge'), 16, y);
+      doc.setTextColor(120,120,120); doc.text((a.mdate||'')+' · '+(a.prim===m.id?'Primary':'Standby'), 120, y); y+=5;
+    });
+  } else { doc.setTextColor(120,120,120); doc.text('None recorded.', 16, y); y+=5; }
+  y+=2;
+  // Mentor change history for this mentee
+  var changes=(typeof MENTOR_CHANGES!=='undefined')?MENTOR_CHANGES.filter(function(x){return x.mentee_id===m.id;}):[];
+  if(changes.length){
+    doc.setTextColor(14,31,69); doc.setFontSize(10); doc.text('Personal mentor changes', 14, y); y+=5;
+    doc.setFontSize(9);
+    changes.forEach(function(ch){
+      if(y>275){doc.addPage();y=20;}
+      var om=gm(ch.old_mentor), nm=gm(ch.new_mentor);
+      doc.setTextColor(30,30,30);
+      doc.text('• '+(ch.changed_at||'').split('T')[0]+': '+((om&&gn(om))||'—')+' → '+((nm&&gn(nm))||'—'), 16, y); y+=5;
+      doc.setTextColor(120,120,120);
+      doc.text('   '+(ch.reason||'')+(ch.reason_note?' — '+ch.reason_note:''), 16, y); y+=5;
+    });
+  }
+  y+=6; doc.setDrawColor(210,210,210); doc.line(14,y-3,196,y-3);
+  return y;
+}
+
+function menteeReport(mid){
+  if(!window.jspdf){alert('PDF library still loading — try again.');return;}
+  var m=gm(mid); if(!m)return;
+  var doc=_pdfDoc('Mentoring Progress — '+m.name);
+  _mentorProgressRows(mid, function(prog){
+    _renderBrotherSection(doc, 48, m, prog);
+    doc.save('mentoring-'+m.name.replace(/[^a-z0-9]/gi,'-').toLowerCase()+'.pdf');
+  });
+}
+
+function personalMentorReport(mentorId){
+  if(!window.jspdf){alert('PDF library still loading — try again.');return;}
+  var mentor=gm(mentorId);
+  var pairs=MENTORING_PAIRS.filter(function(p){return p.personalMentor===mentorId;});
+  if(!pairs.length){alert('No mentees assigned to this mentor.');return;}
+  var doc=_pdfDoc('Mentees of '+(mentor?gn(mentor):'Mentor'));
+  var y=48;
+  // Fetch progress for each mentee sequentially
+  var i=0;
+  function next(){
+    if(i>=pairs.length){ doc.save('mentees-'+((mentor&&mentor.name)||'mentor').replace(/[^a-z0-9]/gi,'-').toLowerCase()+'.pdf'); return; }
+    var m=gm(pairs[i].mentee);
+    _mentorProgressRows(pairs[i].mentee, function(prog){
+      if(y>250){doc.addPage();y=20;}
+      y=_renderBrotherSection(doc, y, m, prog);
+      i++; next();
+    });
+  }
+  next();
+}
+
+function loadHomeMenteeProgress(){
+  supa('practice_progress?select=member_id,sessions,times_completed,last_practised',{method:'GET'})
+    .then(function(r){return r.json();})
+    .then(function(rows){
+      if(!Array.isArray(rows))return;
+      var by={};
+      rows.forEach(function(r){ var b=by[r.member_id]=by[r.member_id]||{s:0,c:0,last:''}; b.s+=(r.sessions||0); b.c+=(r.times_completed||0); if((r.last_practised||'')>b.last)b.last=r.last_practised||''; });
+      document.querySelectorAll('#home-mentees [data-mentee]').forEach(function(row){
+        var mid=row.getAttribute('data-mentee');
+        var el=row.querySelector('.mentee-prog');
+        if(!el)return;
+        var b=by[mid];
+        if(b){ el.textContent='Practice: '+b.s+' session'+(b.s!==1?'s':'')+(b.c?' · '+b.c+' completed':'')+(b.last?' · last '+b.last:''); }
+        else { el.textContent='Practice: no shared progress'; }
       });
     }).catch(function(){});
 }
