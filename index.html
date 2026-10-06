@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-05 11:36:23 -->
+  <!-- build: 2026-10-06 07:09:17 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -2064,7 +2064,7 @@ var NAV_ROLES={
   master:    ['home','members','duties','library','practice','mentor','almoner','agenda','reports','summons','calendar','notices'],
   secretary: ['home','members','duties','library','agenda','reports','summons','practice','calendar','notices'],
   dc:        ['home','members','duties','library','practice','reports','summons','calendar','notices'],
-  mentor:    ['home','members','library','practice','mentor','reports','summons','calendar','notices'],
+  mentor:    ['home','members','library','practice','mentor','summons','calendar','notices'],
   almoner:   ['home','almoner','library','reports','summons','practice','calendar','notices'],
   treasurer: ['home','members','library','reports','summons','practice','calendar','notices'],
   steward:   ['home','polls','library','summons','practice','calendar','notices'],
@@ -6385,7 +6385,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-05 11:36:23</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-06 07:09:17</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -9118,7 +9118,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-05 11:36:23');
+console.log('Portal build 2026-10-06 07:09:17');
 
 function toggleSharePractice(){
   if(!CU)return;
