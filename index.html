@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-06 07:09:17 -->
+  <!-- build: 2026-10-06 10:16:23 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -1417,7 +1417,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
       </div>
       <div class="section-label">Format</div>
       <div class="format-row" id="formatRow">
-        <div class="format-btn active" onclick="setFormat('recite',this)">Recite</div>
+        <div class="format-btn active" onclick="setFormat('recite',this)">Learn</div>
         <div class="format-btn" onclick="setFormat('blind',this)">Blind</div>
         <div class="format-btn" onclick="setFormat('fillin',this)">Fill blanks</div>
         <div class="format-btn" onclick="setFormat('listen',this)">Listen</div>
@@ -1490,7 +1490,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
       </div>
 
       <!-- Mic control -->
-      <div class="mic-control">
+      <div class="mic-control" id="micControl">
         <div class="mic-control-row">
           <div class="mic-btn" id="practiceMic" onclick="togglePracticeRecord()" style="width:56px;height:56px;">
             <svg class="mic-svg" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.92V20H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-3.08A7 7 0 0 0 19 10z"/></svg>
@@ -6385,7 +6385,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-06 07:09:17</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-06 10:16:23</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -7936,6 +7936,12 @@ function renderChunk(){
   const p=st.activePassage; if(!p) return;
   const chunks=getChunks();
   const chunk=chunks[st.chunkIdx]||'';
+  // Microphone only appears in scored memory modes (Blind, Listen & Recite, hidden catechism)
+  var _mc=document.getElementById('micControl');
+  if(_mc){
+    var scored=(st.format==='blind'||st.format==='listenrecite'||(p.format==='catechism'&&st.level>1));
+    _mc.style.display=scored?'':'none';
+  }
   // Track progress position (resume point + furthest reached)
   if(!st.progressMap[p.id]) st.progressMap[p.id]={sessions:0,accuracy:0,furthestChunk:0,totalChunks:chunks.length,timesCompleted:0,blindAccuracy:0,blindAttempts:0,lastChunkOpened:0,lastPractised:''};
   var _pm=st.progressMap[p.id];
@@ -9118,7 +9124,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-06 07:09:17');
+console.log('Portal build 2026-10-06 10:16:23');
 
 function toggleSharePractice(){
   if(!CU)return;
@@ -9292,6 +9298,7 @@ function loadHomeMenteeProgress(){
       });
     }).catch(function(){});
 }
+
 </script>
 </body>
 </html
