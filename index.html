@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-06 10:53:28 -->
+  <!-- build: 2026-10-06 10:58:13 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -6384,7 +6384,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-06 10:53:28</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-06 10:58:13</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -7987,11 +7987,15 @@ function renderStandardChunk(chunk){
     html=words.map((w,i)=>i%3===2?`<span class="word-token hidden">${esc(w)}</span> `:`<span class="word-token pending" onclick="toggleWord(this)">${esc(w)}</span> `).join('');
   } else if(st.format==='listen'){
     html='<em style="color:var(--text3);">Listen to the reference, then recite when ready.</em>';
-  } else if(st.format==='blind'||st.format==='listenrecite'){
-    // Show placeholder boxes
-    const boxId=st.format==='blind'?'blindBox':'listenReciteBox';
-    document.getElementById(boxId).style.display='block';
-    // Pre-build invisible chunk display for scoring
+  } else if(st.format==='blind'){
+    // Blind: show the text to study first; it will hide when the mic starts
+    document.getElementById('chunkDisplay').innerHTML=words.map(w=>`<span class="word-token pending">${esc(w)}</span> `).join('');
+    document.getElementById('chunkBox').style.display='block';
+    var bb=document.getElementById('blindBox'); if(bb)bb.style.display='none';
+    return;
+  } else if(st.format==='listenrecite'){
+    // Listen & Recite: hear the reference first, then recite
+    document.getElementById('listenReciteBox').style.display='block';
     document.getElementById('chunkDisplay').innerHTML=words.map(w=>`<span class="word-token pending" onclick="toggleWord(this)">${esc(w)}</span> `).join('');
     return;
   } else {
@@ -8259,6 +8263,11 @@ function startPracticeRecording(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ alert('Speech recognition requires Chrome on Android or Safari on iOS (14.5+).'); return; }
   st.practiceActive=true;
+  // Blind mode: hide the text while reciting from memory
+  if(st.format==='blind'){
+    var cb=document.getElementById('chunkBox'); if(cb)cb.style.display='none';
+    var bb=document.getElementById('blindBox'); if(bb)bb.style.display='block';
+  }
   const btn=document.getElementById('practiceMic');
   const live=document.getElementById('micLive');
   btn.classList.add('listening');
@@ -9135,7 +9144,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-06 10:53:28');
+console.log('Portal build 2026-10-06 10:58:13');
 
 function toggleSharePractice(){
   if(!CU)return;
