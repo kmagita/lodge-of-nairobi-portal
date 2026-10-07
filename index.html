@@ -1456,7 +1456,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
       <!-- Listen & Recite mode -->
       <div class="mode-box listen-recite-box" id="listenReciteBox" style="display:none;">
         <div class="mode-box-title">Listen &amp; Recite</div>
-        <div class="mode-box-sub" id="listenReciteStatus">Tap Play Chunk — mic opens automatically when audio ends.</div>
+        <div class="mode-box-sub" id="listenReciteStatus">Tap <b>Listen</b> to hear the chunk, then tap <b>Recite</b> to say it from memory.</div>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+          <button id="lrListenBtn" onclick="lrListen()" style="flex:1;padding:13px;border-radius:10px;border:2px solid #1a3060;background:#1a3060;color:#f0d080;font-weight:600;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#f0d080"><path d="M8 5v14l11-7z"/></svg> Listen
+          </button>
+          <button id="lrReciteBtn" onclick="lrRecite()" disabled style="flex:1;padding:13px;border-radius:10px;border:2px solid #ccc;background:#eee;color:#999;font-weight:600;font-size:14px;cursor:not-allowed;display:flex;align-items:center;justify-content:center;gap:7px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="#999"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.92V20H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-3.08A7 7 0 0 0 19 10z"/></svg> Recite
+          </button>
+        </div>
       </div>
 
       <!-- Catechism Q panel -->
@@ -1472,7 +1480,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
       <div id="respDisplay" style="display:none;padding:0.5rem 0;"></div>
 
       <!-- Playback bar -->
-      <div class="playback-bar">
+      <div class="playback-bar" id="playbackBar">
         <div class="playback-bar-top">
           <div class="play-btn navy" onclick="playChunk()" title="Play chunk">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--gold-light)"><path d="M8 5v14l11-7z"/></svg>
@@ -7980,12 +7988,16 @@ function renderChunk(){
   const p=st.activePassage; if(!p) return;
   const chunks=getChunks();
   const chunk=chunks[st.chunkIdx]||'';
-  // Microphone only appears in scored memory modes (Blind, Listen & Recite, hidden catechism)
+  // Microphone only appears in scored memory modes (Blind, hidden catechism).
+  // Listen & Recite has its own dedicated Listen/Recite buttons, so no shared mic.
   var _mc=document.getElementById('micControl');
   if(_mc){
-    var scored=(st.format==='blind'||st.format==='listenrecite'||(p.format==='catechism'&&st.level>1));
+    var scored=(st.format==='blind'||(p.format==='catechism'&&st.level>1));
     _mc.style.display=scored?'':'none';
   }
+  // Listen & Recite hides the shared playback bar (Play chunk / Play full / Stop)
+  var _pb=document.getElementById('playbackBar');
+  if(_pb) _pb.style.display=(st.format==='listenrecite')?'none':'';
   // Track progress position (resume point + furthest reached)
   if(!st.progressMap[p.id]) st.progressMap[p.id]={sessions:0,accuracy:0,furthestChunk:0,totalChunks:chunks.length,timesCompleted:0,blindAccuracy:0,blindAttempts:0,lastChunkOpened:0,lastPractised:''};
   var _pm=st.progressMap[p.id];
@@ -8039,9 +8051,11 @@ function renderStandardChunk(chunk){
     var bb=document.getElementById('blindBox'); if(bb)bb.style.display='none';
     return;
   } else if(st.format==='listenrecite'){
-    // Listen & Recite: hear the reference first, then recite
+    // Listen & Recite: hear the reference first, then recite (text stays hidden until check)
     document.getElementById('listenReciteBox').style.display='block';
     document.getElementById('chunkDisplay').innerHTML=words.map(w=>`<span class="word-token pending" onclick="toggleWord(this)">${esc(w)}</span> `).join('');
+    document.getElementById('listenReciteStatus').innerHTML='Tap <b>Listen</b> to hear the chunk, then tap <b>Recite</b> to say it from memory.';
+    lrReciteReset(); lrSetReciteEnabled(false);
     return;
   } else {
     html=words.map(w=>`<span class="word-token pending" onclick="toggleWord(this)">${esc(w)}</span> `).join('');
@@ -8240,10 +8254,7 @@ function playChunk(){
     document.getElementById('playbackStatus').textContent='Playing chunk '+(st.chunkIdx+1)+'...';
     speakText(chunk, p.refVoiceIndex||0, st.speed, function(){
       stopPlayback();
-      if((st.format==='listenrecite')&&!st.practiceActive){
-        document.getElementById('listenReciteStatus').textContent='Now recite — mic opening...';
-        setTimeout(function(){ if(st.format==='listenrecite'){ startPracticeRecording(); document.getElementById('listenReciteStatus').textContent='Reciting... tap mic to stop.'; } },700);
-      }
+      if(st.format==='listenrecite') lrOnListenEnded();
     });
     return;
   }
@@ -8264,16 +8275,13 @@ function playChunk(){
         if(!st.currentAudio||audio.paused){ clearInterval(check); stopPlayback(); return; }
         if(audio.currentTime>=endTime){
           clearInterval(check); stopPlayback();
-          // Auto-mic for listen & recite
-          if((st.format==='listenrecite')&&!st.practiceActive){
-            document.getElementById('listenReciteStatus').textContent='Now recite — mic opening...';
-            setTimeout(()=>{ if(st.format==='listenrecite'){ startPracticeRecording(); document.getElementById('listenReciteStatus').textContent='Reciting... tap mic to stop.'; } },700);
-          }
+          // Listen & Recite: enable the Recite button once the reference has played
+          if(st.format==='listenrecite') lrOnListenEnded();
         }
       },80);
     }
   });
-  audio.onended=()=>stopPlayback();
+  audio.onended=()=>{ stopPlayback(); if(st.format==='listenrecite') lrOnListenEnded(); };
   audio.onerror=()=>stopPlayback();
 }
 
@@ -8350,6 +8358,51 @@ function stopPracticeRecording(){
   clearTimeout(st.restartTimer);
   if(st.practiceRecognition){ try{st.practiceRecognition.stop();}catch(e){} st.practiceRecognition=null; }
   document.getElementById('practiceMic').classList.remove('listening');
+}
+
+// ═══════════════════════════════════════════════════════
+// LISTEN & RECITE — dedicated two-button control
+// ═══════════════════════════════════════════════════════
+function lrSetReciteEnabled(on){
+  var b=document.getElementById('lrReciteBtn'); if(!b) return;
+  b.disabled=!on;
+  var svg=b.querySelector('svg');
+  if(on){
+    b.style.background='#c0392b'; b.style.borderColor='#c0392b'; b.style.color='#fff'; b.style.cursor='pointer';
+    if(svg) svg.setAttribute('fill','#fff');
+  } else {
+    b.style.background='#eee'; b.style.borderColor='#ccc'; b.style.color='#999'; b.style.cursor='not-allowed';
+    if(svg) svg.setAttribute('fill','#999');
+  }
+}
+function lrReciteReset(){
+  var b=document.getElementById('lrReciteBtn'); if(!b) return;
+  b.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="#999"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.92V20H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-3.08A7 7 0 0 0 19 10z"/></svg> Recite';
+}
+function lrListen(){
+  // Replay is allowed; reset the recite button while the reference plays
+  lrReciteReset(); lrSetReciteEnabled(false);
+  document.getElementById('listenReciteStatus').textContent='Listening to the reference...';
+  playChunk(); // plays the chunk; lrOnListenEnded() fires when the audio finishes
+}
+function lrOnListenEnded(){
+  document.getElementById('listenReciteStatus').innerHTML='Ready — tap <b>Recite</b> to say it from memory.';
+  lrSetReciteEnabled(true);
+}
+function lrRecite(){
+  if(st.practiceActive){
+    // Finish reciting: stop, reset the button, reveal text and score
+    stopPracticeRecording();
+    lrReciteReset(); lrSetReciteEnabled(false);
+    document.getElementById('listenReciteStatus').textContent='Checking your recital...';
+    checkAttempt();
+  } else {
+    startPracticeRecording();
+    document.getElementById('listenReciteStatus').textContent='Reciting... tap Stop & check when you are done.';
+    var b=document.getElementById('lrReciteBtn');
+    b.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><rect x="6" y="6" width="12" height="12" rx="2"/></svg> Stop &amp; check';
+    b.style.background='#c0392b'; b.style.borderColor='#c0392b'; b.style.color='#fff'; b.style.cursor='pointer';
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -8451,8 +8504,11 @@ function checkAttempt(){
         hint.className='heard-hint';
         hint.textContent=heardWord;
         el.appendChild(hint);  // sits above the word (absolute)
-        // Learn from it: log heard→expected for later approval into the map
-        try{ recordMismatch(rw, applyMasonicMap(normWord(heardWord))); }catch(e){}
+        // Remember what was heard vs expected on the token itself, so that
+        // if the brother taps this word to mark it correct, we learn the
+        // correction (heard → expected) right there — no separate review list.
+        el.setAttribute('data-expected', rw);
+        el.setAttribute('data-heard', normWord(heardWord));
       }
     }
     if(bestIdx!==-1) _spokenCursor=bestIdx+1;
@@ -8490,8 +8546,19 @@ function updateScore(correct,close,wrong,total){
 
 function toggleWord(el){
   const cur=el.getAttribute('data-state')||'pending';
-  const next=cur==='pending'?'correct':cur==='correct'?'wrong':'pending';
+  // One tap: anything not already correct becomes correct; a correct word becomes wrong.
+  const next=cur==='correct'?'wrong':'correct';
   el.className='word-token '+next; el.setAttribute('data-state',next);
+  // If the brother marks a word correct that the app had misheard, that means
+  // he said it right — learn it so the same hearing is accepted next time.
+  var _hint=el.querySelector('.heard-hint');
+  if(next==='correct'){
+    var heard=el.getAttribute('data-heard'), expected=el.getAttribute('data-expected');
+    if(heard&&expected){ try{ learnCorrection(heard, expected); }catch(e){} }
+    if(_hint) _hint.style.display='none';   // accepted — no longer a correction to show
+  } else {
+    if(_hint) _hint.style.display='';        // back to wrong — show what was heard again
+  }
   // Recalculate
   const all=document.querySelectorAll('.word-token');
   let c=0,cl=0,w=0,t=0;
@@ -9129,29 +9196,6 @@ function showPracticeLanding(){
     });
   }
 
-  // Pronunciation corrections — frequent mismatches to approve into the map
-  try{
-    var ml=(typeof MISMATCH_LOG!=='undefined')?MISMATCH_LOG:{};
-    var items=Object.keys(ml).map(function(k){return ml[k];})
-      .filter(function(m){return m.count>=2;})   // only show if seen twice+
-      .sort(function(a,b){return b.count-a.count;})
-      .slice(0,12);
-    if(items.length){
-      h+='<div class="stitle">Pronunciation corrections</div>';
-      h+='<div class="card" style="padding:14px">';
-      h+='<div style="font-size:12px;color:var(--t3);margin-bottom:10px">These words were often heard differently from the text. Approve a correction so it\'s accepted in future, or dismiss it.</div>';
-      items.forEach(function(m){
-        h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--bdr)">';
-        h+='<div style="font-size:13px"><span style="color:var(--bad)">'+m.heard+'</span> <span style="color:var(--t3)">heard for</span> <span style="color:var(--navy);font-weight:600">'+m.expected+'</span> <span style="font-size:11px;color:var(--t3)">(&times;'+m.count+')</span></div>';
-        h+='<div style="display:flex;gap:6px;flex-shrink:0">';
-        h+='<button class="btn btn-navy btn-sm" data-h="'+m.heard+'" data-e="'+m.expected+'" onclick="approveCorrection(this.dataset.h,this.dataset.e)">Approve</button>';
-        h+='<button class="btn btn-n btn-sm" data-h="'+m.heard+'" data-e="'+m.expected+'" onclick="dismissCorrection(this.dataset.h,this.dataset.e)">Dismiss</button>';
-        h+='</div></div>';
-      });
-      h+='</div>';
-    }
-  }catch(e){}
-
   // Library link
   h+='<div class="stitle">Browse the library</div>';
   h+='<div class="card" style="text-align:center;padding:16px">';
@@ -9248,7 +9292,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-07 15:10:05');
+console.log('Portal build 2026-10-07 16:02:00');
 
 function toggleSharePractice(){
   if(!CU)return;
@@ -9424,24 +9468,22 @@ function loadHomeMenteeProgress(){
 }
 
 
-function approveCorrection(heard, expected){
-  if(!heard||!expected)return;
+// Learn a correction directly from the feedback review: when the brother marks
+// a misheard word correct, remember heard \u2192 expected so it's accepted next time.
+function learnCorrection(heard, expected){
+  heard=(heard||'').toLowerCase().replace(/[^a-z']/g,'');
+  expected=(expected||'').toLowerCase().replace(/[^a-z']/g,'');
+  if(!heard||!expected||heard===expected) return;
+  if(LEARNED_MAP[heard]===expected) return;            // already known
   LEARNED_MAP[heard]=expected;
   saveLearnedMap();
-  // Remove from the mismatch log
-  var key=heard+'\u2192'+expected;
-  if(MISMATCH_LOG[key]){ delete MISMATCH_LOG[key]; try{localStorage.setItem('mismatch_log',JSON.stringify(MISMATCH_LOG));}catch(e){} }
-  // Sync to Supabase so the whole lodge benefits (best-effort)
+  // Sync to Supabase so the whole lodge benefits (best-effort; optional table)
   try{
-    supa('voice_corrections',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
-      body:JSON.stringify({heard:heard,expected:expected,added_by:CU?CU.id:null})}).catch(function(){});
+    if(typeof supa==='function'){
+      supa('voice_corrections',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
+        body:JSON.stringify({heard:heard,expected:expected,added_by:(typeof CU!=='undefined'&&CU)?CU.id:null})}).catch(function(){});
+    }
   }catch(e){}
-  showPracticeLanding();
-}
-function dismissCorrection(heard, expected){
-  var key=heard+'\u2192'+expected;
-  if(MISMATCH_LOG[key]){ delete MISMATCH_LOG[key]; try{localStorage.setItem('mismatch_log',JSON.stringify(MISMATCH_LOG));}catch(e){} }
-  showPracticeLanding();
 }
 </script>
 </body>
