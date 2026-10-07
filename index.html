@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-06 11:06:52 -->
+  <!-- build: 2026-10-07 10:13:00 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -6384,7 +6384,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-06 11:06:52</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-07 10:13:00</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -7129,6 +7129,33 @@ function createMemberProfile(){
     });
   }).catch(function(e){reset();alert('Network error: '+e.message);});
 }
+const MASONIC_MAP = {
+  // Numbers spoken as digits vs words
+  '1st':'first','2nd':'second','3rd':'third','4th':'fourth','5th':'fifth',
+  '1':'one','2':'two','3':'three','4':'four','5':'five','6':'six','7':'seven',
+  // Common homophones / recognition slips
+  'your':'your','youre':'your','yore':'your',
+  'their':'their','there':'their','theyre':'their',
+  'to':'to','too':'to','two':'to',
+  'whilst':'whilst','wilst':'whilst',
+  'thee':'thee','the':'the',
+  'thou':'thou','though':'thou',
+  'unto':'unto','into':'unto',
+  'wherefore':'wherefore','therefore':'therefore',
+  'freemason':'freemason','free':'free','mason':'mason','masons':'mason',
+  'apprentice':'apprentice','apprentices':'apprentice',
+  'entered':'entered','enter':'entered',
+  'worshipful':'worshipful','worshipfull':'worshipful',
+  'brethren':'brethren','brother':'brother','brothers':'brethren',
+  'lodge':'lodge','lord':'lodge',
+  'cable':'cable','cabletow':'cabletow','tow':'tow',
+  'ashlar':'ashlar','ashler':'ashlar',
+  'gavel':'gavel','gravel':'gavel',
+  'tracing':'tracing','trestle':'trestle',
+  'gauge':'gauge','gage':'gauge',
+  'wages':'wages','wage':'wages'
+};
+
 function applyMasonicMap(w){ return MASONIC_MAP[w.toLowerCase()]||w; }
 
 // ═══════════════════════════════════════════════════════
@@ -8398,7 +8425,7 @@ function checkAttempt(){
   document.getElementById('scoreArea').style.display='block';
   document.getElementById('practiceActions').style.display='flex';
   resetMicUI();
-  }catch(_scoreErr){ alert('Scoring error: '+_scoreErr.message); resetMicUI(); }
+  }catch(_scoreErr){ console.warn('Scoring error:',_scoreErr); resetMicUI(); }
 
   const pid=p.id;
   const acc=refWords.length?Math.round(((correct+close*0.5)/refWords.length)*100):0;
@@ -9149,7 +9176,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-06 11:06:52');
+console.log('Portal build 2026-10-07 10:13:00');
 
 function toggleSharePractice(){
   if(!CU)return;
