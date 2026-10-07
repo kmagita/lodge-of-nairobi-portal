@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-07 10:13:00 -->
+  <!-- build: 2026-10-07 13:35:13 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -279,6 +279,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 #pane-practice .word-token.correct{background:#d4edda;color:#155724;}
 #pane-practice .word-token.wrong{background:#f8d7da;color:#721c24;text-decoration:line-through;}
 #pane-practice .word-token.close{background:#fff3cd;color:#856404;}
+#pane-practice .word-token.wrong, #pane-practice .word-token.close{position:relative;margin-top:16px;}
+#pane-practice .heard-hint{position:absolute;left:50%;transform:translateX(-50%);bottom:100%;margin-bottom:1px;white-space:nowrap;font-size:10px;font-style:italic;color:#8a6d3b;background:#fff7e6;border:1px solid #e8d4a0;border-radius:3px;padding:0 4px;line-height:1.4;pointer-events:none;}
 #pane-practice .word-token.pending{color:var(--text);background:transparent;}
 #pane-practice .word-token.hidden{background:#e8e0cc;color:#e8e0cc;padding:2px 10px;cursor:default;}
 #pane-practice .tap-hint{font-size:11px;color:var(--text3);text-align:center;margin:-0.25rem 1rem 0.5rem;font-style:italic;}
@@ -6384,7 +6386,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-07 10:13:00</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-07 13:35:13</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -8391,7 +8393,8 @@ function checkAttempt(){
 
   const refWords=chunk.split(/\s+/).map(normWord).filter(Boolean);
   var _heard=st.practiceTranscript.trim();
-  const spokenWords=_heard?_heard.split(/\s+/).map(w=>applyMasonicMap(normWord(w))):[];
+  const spokenRaw=_heard?_heard.split(/\s+/).filter(Boolean):[];
+  const spokenWords=_heard?spokenRaw.map(w=>applyMasonicMap(normWord(w))):[];
   if(!_heard){
     // Nothing captured — reveal the text neutrally for self-checking, no score
     var mt=document.getElementById('micTitle'); if(mt)mt.textContent='Didn\u2019t catch that — here\u2019s the text to check yourself.';
@@ -8404,6 +8407,7 @@ function checkAttempt(){
   let correct=0,close=0,wrong=0;
 
   try{
+  var _spokenCursor=0;  // rough position tracker to pick a nearby heard word
   refWords.forEach((rw,ri)=>{
     const el=tokensEl[ri]; if(!el||el.classList.contains('hidden')) return;
     let bestResult='wrong',bestScore=0,bestIdx=-1;
@@ -8416,9 +8420,24 @@ function checkAttempt(){
     if(bestIdx!==-1&&bestResult!=='wrong') used[bestIdx]=true;
     el.className='word-token '+bestResult;
     el.setAttribute('data-state',bestResult);
-    if(bestResult==='correct') correct++;
-    else if(bestResult==='close') close++;
-    else wrong++;
+    // Strip any previous heard-hint
+    var oldHint=el.querySelector('.heard-hint'); if(oldHint)oldHint.remove();
+    if(bestResult==='correct'){ correct++; }
+    else {
+      if(bestResult==='close') close++; else wrong++;
+      // Show what was heard for this word, if we can identify it
+      var heardWord='';
+      if(bestIdx!==-1 && spokenRaw[bestIdx]) heardWord=spokenRaw[bestIdx];
+      else if(spokenRaw[_spokenCursor]) heardWord=spokenRaw[_spokenCursor];
+      if(heardWord){
+        el.setAttribute('title','Heard: '+heardWord);
+        var hint=document.createElement('span');
+        hint.className='heard-hint';
+        hint.textContent=heardWord;
+        el.appendChild(hint);  // sits above the word (absolute)
+      }
+    }
+    if(bestIdx!==-1) _spokenCursor=bestIdx+1;
   });
 
   updateScore(correct,close,wrong,refWords.length);
@@ -9176,7 +9195,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-07 10:13:00');
+console.log('Portal build 2026-10-07 13:35:13');
 
 function toggleSharePractice(){
   if(!CU)return;
