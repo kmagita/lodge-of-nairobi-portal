@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-07 13:35:13 -->
+  <!-- build: 2026-10-07 14:20:29 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -1075,6 +1075,66 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
 #pane-practice .feedback-msg{min-height:18px;margin-top:0.75rem;font-size:13px;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script type="module">
+// ── On-device Whisper engine (Transformers.js) ──────────────────────────────
+// Runs entirely in the browser; audio never leaves the device.
+window.WhisperEngine = (function(){
+  var _pipe=null, _loading=false, _loadPromise=null;
+  var MODEL='Xenova/whisper-small.en';  // English-only; change to whisper-base.en if too slow
+  var _status='idle';  // idle | loading | ready | error
+  var _onProgress=null;
+
+  function setProgress(cb){ _onProgress=cb; }
+
+  async function load(){
+    if(_pipe) return _pipe;
+    if(_loadPromise) return _loadPromise;
+    _loading=true; _status='loading';
+    _loadPromise=(async function(){
+      try{
+        var mod=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2');
+        var pipeline=mod.pipeline;
+        // env tweaks: allow remote model download, cache in browser
+        _pipe=await pipeline('automatic-speech-recognition', MODEL, {
+          progress_callback:function(p){
+            if(_onProgress && p && p.status){
+              if(p.status==='progress' && p.total){
+                _onProgress({pct:Math.round((p.loaded/p.total)*100), file:p.file||''});
+              } else if(p.status==='done'){
+                _onProgress({pct:100, file:p.file||''});
+              }
+            }
+          }
+        });
+        _status='ready'; _loading=false;
+        return _pipe;
+      }catch(err){
+        _status='error'; _loading=false; _loadPromise=null;
+        console.error('Whisper load failed:',err);
+        throw err;
+      }
+    })();
+    return _loadPromise;
+  }
+
+  async function transcribe(blob){
+    var pipe=await load();
+    // Decode the audio blob to a Float32 mono waveform at 16kHz
+    var arrayBuf=await blob.arrayBuffer();
+    var audioCtx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
+    var decoded=await audioCtx.decodeAudioData(arrayBuf);
+    var raw=decoded.getChannelData(0);
+    try{ audioCtx.close(); }catch(e){}
+    var out=await pipe(raw, {chunk_length_s:30, stride_length_s:5, language:'english', task:'transcribe'});
+    return (out && out.text)?out.text.trim():'';
+  }
+
+  function status(){ return _status; }
+  function isReady(){ return _status==='ready'; }
+
+  return {load:load, transcribe:transcribe, setProgress:setProgress, status:status, isReady:isReady, MODEL:MODEL};
+})();
+</script>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
@@ -6386,7 +6446,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-07 13:35:13</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-07 14:20:29</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -8282,58 +8342,97 @@ function resetMicUI(){
 
 function togglePracticeRecord(){
   if(st.practiceActive){
-    stopPracticeRecording();
-    checkAttempt();  // always reveal the text; scores if speech was captured, else self-check
+    stopPracticeRecording();  // stops recorder; transcription + checkAttempt run on the recorder's onstop
   }
   else startPracticeRecording();
 }
 
+// Whisper-based recording: capture audio, transcribe on stop with the on-device model.
 function startPracticeRecording(){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ alert('Speech recognition requires Chrome on Android or Safari on iOS (14.5+).'); return; }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    alert('Microphone not available on this browser.'); return;
+  }
   st.practiceActive=true;
+  st.practiceTranscript=''; st.practiceInterim='';
   // Blind mode: hide the text while reciting from memory
   if(st.format==='blind'){
     var cb=document.getElementById('chunkBox'); if(cb)cb.style.display='none';
     var bb=document.getElementById('blindBox'); if(bb)bb.style.display='block';
   }
-  const btn=document.getElementById('practiceMic');
-  const live=document.getElementById('micLive');
+  var btn=document.getElementById('practiceMic');
+  var live=document.getElementById('micLive');
   btn.classList.add('listening');
-  live.style.display='block'; live.textContent='Listening...';
-  document.getElementById('micTitle').textContent='Listening — tap mic to stop and check';
-  document.getElementById('micSub').textContent='Speak clearly. Mic stays on.';
+  live.style.display='block'; live.textContent='Recording… tap mic to stop';
+  document.getElementById('micTitle').textContent='Recording — tap mic to stop and check';
+  document.getElementById('micSub').textContent='Recite now. Your voice stays on your device.';
 
-  const rec=new SR(); rec.continuous=true; rec.interimResults=true; rec.lang='en-US';
-  rec.onresult=e=>{
-    let final='', interim='';
-    for(let i=e.resultIndex;i<e.results.length;i++){
-      if(e.results[i].isFinal) final+=e.results[i][0].transcript+' ';
-      else interim+=e.results[i][0].transcript+' ';
+  navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
+    if(!st.practiceActive){ stream.getTracks().forEach(function(t){t.stop();}); return; }
+    var mr=new MediaRecorder(stream);
+    st._recChunks=[];
+    mr.ondataavailable=function(e){ if(e.data&&e.data.size>0) st._recChunks.push(e.data); };
+    mr.onstop=function(){
+      stream.getTracks().forEach(function(t){t.stop();});
+      var blob=new Blob(st._recChunks,{type:mr.mimeType||'audio/webm'});
+      st._recChunks=[];
+      transcribeAndCheck(blob);
+    };
+    mr.start();
+    st._mediaRecorder=mr;
+    // Begin loading the model now (if not already) so it overlaps with reciting
+    if(window.WhisperEngine && !window.WhisperEngine.isReady()){
+      window.WhisperEngine.setProgress(function(p){
+        var lv=document.getElementById('micLive');
+        if(lv && st.practiceActive) lv.textContent='Recording… (voice engine downloading '+(p.pct||0)+'%)';
+      });
+      window.WhisperEngine.load().catch(function(){});
     }
-    if(final) st.practiceTranscript+=final;
-    st.practiceInterim=interim;  // keep latest interim as a fallback
-    // Neutral listening indicator (don't show the words — reciting from memory)
-    var combined=(st.practiceTranscript+' '+interim).trim();
-    var wc=combined?combined.split(/\s+/).filter(Boolean).length:0;
-    live.textContent='Listening'+(wc?' \u00b7 '+wc+' word'+(wc!==1?'s':'')+' heard':'...');
-  };
-  rec.onend=()=>{
-    if(st.practiceActive){ clearTimeout(st.restartTimer); st.restartTimer=setTimeout(()=>{ if(st.practiceActive) try{ rec.start(); }catch(e){ startPracticeRecording(); } },300); }
-  };
-  rec.onerror=e=>{
-    if(e.error==='not-allowed'){ stopPracticeRecording(); alert('Microphone access denied.'); }
-    else if(st.practiceActive){ clearTimeout(st.restartTimer); st.restartTimer=setTimeout(()=>{ if(st.practiceActive) startPracticeRecording(); },500); }
-  };
-  try{ rec.start(); st.practiceRecognition=rec; }catch(e){ stopPracticeRecording(); alert('Speech recognition error: '+e.message); }
+  }).catch(function(err){
+    st.practiceActive=false;
+    document.getElementById('practiceMic').classList.remove('listening');
+    alert('Microphone access denied or unavailable: '+err.message);
+  });
 }
 
 function stopPracticeRecording(){
-  if(st.practiceInterim && st.practiceInterim.trim()){ st.practiceTranscript+=' '+st.practiceInterim; st.practiceInterim=''; }
   st.practiceActive=false;
-  clearTimeout(st.restartTimer);
-  if(st.practiceRecognition){ try{st.practiceRecognition.stop();}catch(e){} st.practiceRecognition=null; }
   document.getElementById('practiceMic').classList.remove('listening');
+  if(st._mediaRecorder && st._mediaRecorder.state!=='inactive'){
+    try{ st._mediaRecorder.stop(); }catch(e){}  // triggers onstop → transcribeAndCheck
+  }
+  st._mediaRecorder=null;
+}
+
+// Transcribe the recorded clip on-device, then run the existing scoring (checkAttempt).
+function transcribeAndCheck(blob){
+  var live=document.getElementById('micLive');
+  var title=document.getElementById('micTitle');
+  if(!window.WhisperEngine){
+    if(title)title.textContent='Voice engine unavailable.';
+    checkAttempt();  // reveal text for self-check
+    return;
+  }
+  // Loading/first-run download indicator
+  if(!window.WhisperEngine.isReady()){
+    if(live)live.textContent='Preparing voice engine (first use downloads it)…';
+    if(title)title.textContent='Setting up the voice engine…';
+    window.WhisperEngine.setProgress(function(p){
+      if(live)live.textContent='Downloading voice engine… '+(p.pct||0)+'%';
+    });
+  } else {
+    if(live)live.textContent='Transcribing…';
+    if(title)title.textContent='Checking your recitation…';
+  }
+  window.WhisperEngine.transcribe(blob).then(function(text){
+    st.practiceTranscript=text||'';
+    if(live)live.style.display='none';
+    checkAttempt();  // existing scoring: MASONIC_MAP, colouring, heard-hints
+  }).catch(function(err){
+    console.error('Transcription failed:',err);
+    if(title)title.textContent='Could not transcribe. Here is the text to check yourself.';
+    st.practiceTranscript='';
+    checkAttempt();
+  });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -9195,7 +9294,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-07 13:35:13');
+console.log('Portal build 2026-10-07 14:20:29');
 
 function toggleSharePractice(){
   if(!CU)return;
