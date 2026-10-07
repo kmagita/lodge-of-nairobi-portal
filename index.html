@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- build: 2026-10-07 14:34:29 -->
+  <!-- build: 2026-10-07 14:52:21 -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lodge of Nairobi № 7187 — Member Portal</title>
 <style>
@@ -1095,6 +1095,14 @@ window.WhisperEngine = (function(){
         var mod=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/dist/transformers.min.js');
         var pipeline=mod.pipeline;
         if(!pipeline) throw new Error('pipeline not found in module');
+        // Persist downloaded model files in the browser Cache Storage across reloads
+        try{
+          if(mod.env){
+            mod.env.useBrowserCache=true;        // use Cache Storage
+            mod.env.allowLocalModels=false;      // always fetch from hub, but cache it
+            mod.env.useCustomCache=false;
+          }
+        }catch(e){ console.warn('cache env set failed',e); }
         // env tweaks: allow remote model download, cache in browser
         _pipe=await pipeline('automatic-speech-recognition', MODEL, {
           progress_callback:function(p){
@@ -1500,7 +1508,7 @@ window.WhisperEngine = (function(){
         <span id="chunkLabel">Chunk 1</span>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-sm" onclick="prevChunk()">&#8592; Prev</button>
-          <button class="btn btn-sm" onclick="nextChunk()">Next &#8594;</button>
+          <button class="btn btn-sm" onclick="nextChunk()">Skip &#8594;</button>
         </div>
       </div>
 
@@ -1553,6 +1561,16 @@ window.WhisperEngine = (function(){
         </div>
       </div>
 
+      <!-- Voice engine download panel (shown until model is cached) -->
+      <div id="voiceDlPanel" style="display:none;background:var(--goldbg);border:1px solid var(--gb);border-radius:12px;padding:14px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px">Voice engine not yet installed</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Reciting with scoring needs a one-time download (about 240&nbsp;MB) that runs entirely on your device. Best done on Wi-Fi. Once installed it works offline.</div>
+        <button id="voiceDlBtn" class="btn btn-navy btn-sm" onclick="downloadVoiceEngine()">&#8681; Download voice engine</button>
+        <div id="voiceDlProgress" style="display:none;margin-top:10px">
+          <div style="height:8px;background:var(--bg2);border-radius:4px;overflow:hidden"><div id="voiceDlBar" style="height:100%;width:0%;background:var(--gold);transition:width .2s"></div></div>
+          <div id="voiceDlPct" style="font-size:11px;color:var(--t3);margin-top:4px">Starting…</div>
+        </div>
+      </div>
       <!-- Mic control -->
       <div class="mic-control" id="micControl">
         <div class="mic-control-row">
@@ -6449,7 +6467,7 @@ function rProfile(){
   h+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Lets the Lodge Mentor see your practice progress to support your ritual work.</div></div>';
   h+='<button id="share-toggle" class="btn btn-sm '+(CU.sharePractice?'btn-navy':'btn-n')+'" onclick="toggleSharePractice()">'+(CU.sharePractice?'On':'Off')+'</button>';
   h+='</div>';
-  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-07 14:34:29</div>';
+  h+='<div style="text-align:center;margin-top:24px;font-size:11px;color:var(--t3);line-height:1.5">This application was developed with the assistance of artificial intelligence (AI) tools. &middot; Build 2026-10-07 14:52:21</div>';
   document.getElementById('pane-profile').innerHTML=h;
 }
 
@@ -7998,6 +8016,7 @@ function openPractice(id){
   persist();
   if(typeof queueProgressSync==='function')queueProgressSync();
   showTab('practice'); renderChunk();
+  if(typeof refreshVoicePanel==='function')refreshVoicePanel();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -8355,6 +8374,11 @@ function startPracticeRecording(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
     alert('Microphone not available on this browser.'); return;
   }
+  if(!voiceEngineInstalled() && window.WhisperEngine && !window.WhisperEngine.isReady()){
+    refreshVoicePanel();
+    alert('Please install the voice engine first (the download button above the mic).');
+    return;
+  }
   st.practiceActive=true;
   st.practiceTranscript=''; st.practiceInterim='';
   // Blind mode: hide the text while reciting from memory
@@ -8428,6 +8452,7 @@ function transcribeAndCheck(blob){
   }
   window.WhisperEngine.transcribe(blob).then(function(text){
     st.practiceTranscript=text||'';
+    try{ localStorage.setItem('voice_engine_ready','1'); }catch(e){}
     if(live)live.style.display='none';
     checkAttempt();  // existing scoring: MASONIC_MAP, colouring, heard-hints
   }).catch(function(err){
@@ -8547,6 +8572,12 @@ function checkAttempt(){
   updateScore(correct,close,wrong,refWords.length);
   document.getElementById('scoreArea').style.display='block';
   document.getElementById('practiceActions').style.display='flex';
+  // Ensure the coloured text is visible (belt-and-braces for blind/listenrecite)
+  if(st.format==='blind'||st.format==='listenrecite'){
+    var _cb=document.getElementById('chunkBox'); if(_cb)_cb.style.display='block';
+    var _bb=document.getElementById('blindBox'); if(_bb)_bb.style.display='none';
+    var _lb=document.getElementById('listenReciteBox'); if(_lb)_lb.style.display='none';
+  }
   resetMicUI();
   }catch(_scoreErr){ console.warn('Scoring error:',_scoreErr); resetMicUI(); }
 
@@ -9299,7 +9330,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-07 14:34:29');
+console.log('Portal build 2026-10-07 14:52:21');
 
 function toggleSharePractice(){
   if(!CU)return;
@@ -9474,6 +9505,44 @@ function loadHomeMenteeProgress(){
     }).catch(function(){});
 }
 
+
+function voiceEngineInstalled(){
+  try{ return localStorage.getItem('voice_engine_ready')==='1'; }catch(e){ return false; }
+}
+function refreshVoicePanel(){
+  var panel=document.getElementById('voiceDlPanel');
+  var mic=document.getElementById('micControl');
+  if(!panel)return;
+  if(voiceEngineInstalled()){
+    panel.style.display='none';
+    if(mic)mic.style.display='';
+  } else {
+    panel.style.display='block';
+    // keep mic visible but it will prompt to download if tapped
+  }
+}
+function downloadVoiceEngine(){
+  var btn=document.getElementById('voiceDlBtn');
+  var prog=document.getElementById('voiceDlProgress');
+  var bar=document.getElementById('voiceDlBar');
+  var pct=document.getElementById('voiceDlPct');
+  if(!window.WhisperEngine){ alert('Voice engine unavailable on this browser.'); return; }
+  if(btn)btn.style.display='none';
+  if(prog)prog.style.display='block';
+  window.WhisperEngine.setProgress(function(p){
+    if(bar)bar.style.width=(p.pct||0)+'%';
+    if(pct)pct.textContent='Downloading… '+(p.pct||0)+'%';
+  });
+  window.WhisperEngine.load().then(function(){
+    try{ localStorage.setItem('voice_engine_ready','1'); }catch(e){}
+    if(pct)pct.textContent='Installed ✓';
+    setTimeout(refreshVoicePanel, 600);
+  }).catch(function(err){
+    if(prog)prog.style.display='none';
+    if(btn)btn.style.display='';
+    alert('Download failed: '+((window.WhisperEngine.lastError&&window.WhisperEngine.lastError())||err.message||'unknown'));
+  });
+}
 </script>
 </body>
 </html
