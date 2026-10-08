@@ -4558,7 +4558,8 @@ function loadMentorProgress(){
           h+='<div style="margin-bottom:6px">';
           h+='<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--t2)"><span>'+(x.passage_title||'Passage')+'</span><span style="color:var(--t3)">'+pct+'%'+(x.times_completed?' &middot; '+x.times_completed+'\u2713':'')+'</span></div>';
           h+='<div style="height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-top:2px"><div style="height:100%;width:'+pct+'%;background:var(--gold)"></div></div>';
-          if(x.blind_attempts>0)h+='<div style="font-size:10px;color:var(--t3);margin-top:1px">Blind accuracy '+x.blind_accuracy+'% over '+x.blind_attempts+' attempt'+(x.blind_attempts!==1?'s':'')+'</div>';
+          if(x.practice_attempts>0)h+='<div style="font-size:10px;color:var(--t3);margin-top:1px">Learn accuracy '+x.practice_accuracy+'% over '+x.practice_attempts+' attempt'+(x.practice_attempts!==1?'s':'')+'</div>';
+          if(x.blind_attempts>0)h+='<div style="font-size:10px;color:var(--t3);margin-top:1px">Mastery (blind) '+x.blind_accuracy+'% over '+x.blind_attempts+' attempt'+(x.blind_attempts!==1?'s':'')+'</div>';
           h+='</div>';
         });
         h+='</div>';
@@ -8736,12 +8737,17 @@ function checkAttempt(){
   const prev=st.progressMap[pid];
   prev.lastPractised=new Date().toISOString().split('T')[0];
   prev.lastTouched=Date.now();
-  // Read-back accuracy counts only in no-text modes (blind / listen-recite / hidden catechism)
+  // Blind (no text, no reference) builds MASTERY; Learn (with the reference
+  // available) builds a running practice ACCURACY. Both come from real mic input.
   var noText=(st.format==='blind'||(st.activePassage&&st.activePassage.format==='catechism'&&st.format==='blind'));
   if(noText){
     prev.blindAttempts=(prev.blindAttempts||0)+1;
     prev.blindAccuracy=Math.round(((prev.blindAccuracy||0)*(prev.blindAttempts-1)+acc)/prev.blindAttempts);
-    prev.accuracy=prev.blindAccuracy; // keep legacy field in sync for the library badge
+    prev.accuracy=prev.blindAccuracy; // badge prefers mastery when we have it
+  } else {
+    prev.practiceAttempts=(prev.practiceAttempts||0)+1;
+    prev.practiceAccuracy=Math.round(((prev.practiceAccuracy||0)*(prev.practiceAttempts-1)+acc)/prev.practiceAttempts);
+    if(!prev.blindAttempts) prev.accuracy=prev.practiceAccuracy; // badge falls back to practice accuracy
   }
   persist();
   if(typeof queueProgressSync==='function')queueProgressSync();
@@ -9381,7 +9387,8 @@ function showPracticeLanding(){
       var meta2=(it.pr.sessions||0)+' session'+((it.pr.sessions||0)!==1?'s':'');
       meta2+=' &middot; '+pct+'% through';
       if(it.pr.timesCompleted)meta2+=' &middot; completed '+it.pr.timesCompleted+'\u00d7';
-      if(it.pr.blindAttempts>0)meta2+=' &middot; blind '+it.pr.blindAccuracy+'%';
+      if(it.pr.practiceAttempts>0)meta2+=' &middot; learn '+it.pr.practiceAccuracy+'%';
+      if(it.pr.blindAttempts>0)meta2+=' &middot; mastery '+it.pr.blindAccuracy+'%';
       h+='<div style="font-size:11px;color:var(--t3)">'+meta2+'</div></div>';
       h+='<button class="btn btn-navy btn-sm" data-pid="'+it.pid+'" onclick="resumePractice(this.dataset.pid)">&#9654; Resume</button>';
       h+='</div>';
@@ -9459,6 +9466,7 @@ function syncProgressUp(){
       times_completed:p.timesCompleted||0, sessions:p.sessions||0,
       last_practised:p.lastPractised||null,
       blind_accuracy:p.blindAccuracy||0, blind_attempts:p.blindAttempts||0,
+      practice_accuracy:p.practiceAccuracy||0, practice_attempts:p.practiceAttempts||0,
       last_chunk_opened:p.lastChunkOpened||0,
       updated_at:new Date().toISOString()};
   });
@@ -9486,8 +9494,10 @@ function syncProgressDown(){
         var remote={furthestChunk:row.furthest_chunk,totalChunks:row.total_chunks,
           timesCompleted:row.times_completed,sessions:row.sessions,
           lastPractised:row.last_practised,blindAccuracy:row.blind_accuracy,
-          blindAttempts:row.blind_attempts,lastChunkOpened:row.last_chunk_opened,
-          accuracy:row.blind_accuracy};
+          blindAttempts:row.blind_attempts,
+          practiceAccuracy:row.practice_accuracy||0,practiceAttempts:row.practice_attempts||0,
+          lastChunkOpened:row.last_chunk_opened,
+          accuracy:(row.blind_attempts? row.blind_accuracy : (row.practice_accuracy||row.blind_accuracy))};
         // newest-wins by lastPractised
         if(!loc || (row.last_practised||'')>=(loc.lastPractised||'')){
           local[row.passage_id]=remote;
@@ -9502,7 +9512,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-08 10:40:00');
+console.log('Portal build 2026-10-08 11:05:00');
 
 function toggleSharePractice(){
   if(!CU)return;
@@ -9559,6 +9569,10 @@ function fillMenteeProgress(){
           hh+='<div style="margin-bottom:6px">';
           hh+='<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--t2)"><span>'+(x.passage_title||'Passage')+'</span><span style="color:var(--t3)">'+pct+'%'+(x.times_completed?' &middot; '+x.times_completed+'\u00d7':'')+'</span></div>';
           hh+='<div style="height:5px;background:var(--white);border-radius:3px;overflow:hidden;margin-top:2px"><div style="height:100%;width:'+pct+'%;background:var(--gold)"></div></div>';
+          var accbits=[];
+          if(x.practice_attempts>0)accbits.push('learn '+x.practice_accuracy+'%');
+          if(x.blind_attempts>0)accbits.push('mastery '+x.blind_accuracy+'%');
+          if(accbits.length)hh+='<div style="font-size:10px;color:var(--t3);margin-top:1px">'+accbits.join(' &middot; ')+'</div>';
           hh+='</div>';
         });
         box.innerHTML=hh;
@@ -9592,7 +9606,7 @@ function _renderBrotherSection(doc, y, m, prog){
       doc.setTextColor(30,30,30);
       doc.text('• '+(p.passage_title||'Passage'), 16, y);
       doc.setTextColor(120,120,120);
-      var meta=pct+'% · '+(p.sessions||0)+' sessions'+(p.times_completed?' · '+p.times_completed+' completed':'')+(p.blind_attempts?' · blind '+p.blind_accuracy+'%':'');
+      var meta=pct+'% · '+(p.sessions||0)+' sessions'+(p.times_completed?' · '+p.times_completed+' completed':'')+(p.practice_attempts?' · learn '+p.practice_accuracy+'%':'')+(p.blind_attempts?' · mastery '+p.blind_accuracy+'%':'');
       doc.text(meta, 120, y); y+=5;
     });
   } else { doc.setTextColor(120,120,120); doc.text('No shared practice progress.', 16, y); y+=5; }
@@ -9660,18 +9674,27 @@ function personalMentorReport(mentorId){
 }
 
 function loadHomeMenteeProgress(){
-  supa('practice_progress?select=member_id,sessions,times_completed,last_practised',{method:'GET'})
+  supa('practice_progress?select=member_id,sessions,times_completed,last_practised,blind_accuracy,blind_attempts',{method:'GET'})
     .then(function(r){return r.json();})
     .then(function(rows){
       if(!Array.isArray(rows))return;
       var by={};
-      rows.forEach(function(r){ var b=by[r.member_id]=by[r.member_id]||{s:0,c:0,last:''}; b.s+=(r.sessions||0); b.c+=(r.times_completed||0); if((r.last_practised||'')>b.last)b.last=r.last_practised||''; });
+      rows.forEach(function(r){
+        var b=by[r.member_id]=by[r.member_id]||{s:0,c:0,last:'',ba:0,bn:0};
+        b.s+=(r.sessions||0); b.c+=(r.times_completed||0);
+        if((r.last_practised||'')>b.last)b.last=r.last_practised||'';
+        // weighted mastery across the mentee's passages
+        b.ba+=(r.blind_accuracy||0)*(r.blind_attempts||0); b.bn+=(r.blind_attempts||0);
+      });
       document.querySelectorAll('#home-mentees [data-mentee]').forEach(function(row){
         var mid=row.getAttribute('data-mentee');
         var el=row.querySelector('.mentee-prog');
         if(!el)return;
         var b=by[mid];
-        if(b){ el.textContent='Practice: '+b.s+' session'+(b.s!==1?'s':'')+(b.c?' · '+b.c+' completed':'')+(b.last?' · last '+b.last:''); }
+        if(b){
+          var mastery=b.bn?Math.round(b.ba/b.bn):null;
+          el.textContent='Practice: '+b.s+' session'+(b.s!==1?'s':'')+(b.c?' · '+b.c+' completed':'')+(mastery!=null?' · mastery '+mastery+'%':'')+(b.last?' · last '+b.last:'');
+        }
         else { el.textContent='Practice: no shared progress'; }
       });
     }).catch(function(){});
