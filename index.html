@@ -1469,10 +1469,12 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
       <div id="catQBox" style="display:none;">
         <div class="cat-q-box"><div class="cat-q-label">Question</div><div class="cat-q-text" id="catQText"></div></div>
         <button id="catRevealBtn" onclick="catReveal()" style="display:none;width:100%;margin:10px 0 2px;padding:12px;border-radius:10px;border:2px solid #1a3060;background:#1a3060;color:#f0d080;font-weight:600;font-size:14px;cursor:pointer;">Reveal answer</button>
+        <div id="catSessionCtrl" style="display:none;margin-top:10px;"></div>
         <div class="cat-a-box" id="catABox" style="display:none;">
           <div class="cat-a-label">Answer</div>
           <div class="chunk-text" id="catADisplay"></div>
         </div>
+        <div id="catSummary" style="display:none;margin-top:10px;"></div>
       </div>
 
       <!-- Responsive display -->
@@ -8224,9 +8226,17 @@ function renderChunk(){
   document.getElementById('catPhaseBar').style.display='none';
   document.getElementById('catABox').style.display='none';
   var _rev=document.getElementById('catRevealBtn'); if(_rev) _rev.style.display='none';
+  var _cs=document.getElementById('catSessionCtrl'); if(_cs) _cs.style.display='none';
+  var _csm=document.getElementById('catSummary'); if(_csm) _csm.style.display='none';
+  st.catSession=null;
+  // The generic chunk nav (Prev/Next) is hidden during the catechism Blind run,
+  // which drives itself with its own Start / Next buttons.
+  var _nav=document.querySelector('#pane-practice .chunk-nav')||document.querySelector('.chunk-nav');
+  if(_nav) _nav.style.display=(isCat&&st.format==='blind')?'none':'';
 
   if(isCat){
-    renderCatChunk(chunk);
+    if(st.format==='blind'){ renderCatSessionStart(); }
+    else { renderCatChunk(chunk); }
   } else if(isResp){
     renderRespChunk();
   } else {
@@ -8288,6 +8298,112 @@ function catReveal(){
   var showing=ab.style.display!=='none';
   ab.style.display=showing?'none':'block';
   if(b) b.textContent=showing?'Reveal answer':'Hide answer';
+}
+
+// ═══════════════════════════════════════════════════════
+// CATECHISM BLIND — continuous examination run
+//  Start → question plays → mic opens → tap Next (scores silently, next Q) →
+//  … → Finish → one summary; the whole run counts as one mastery attempt.
+// ═══════════════════════════════════════════════════════
+function renderCatSessionStart(){
+  var p=st.activePassage; if(!p) return;
+  document.getElementById('catQBox').style.display='block';
+  document.getElementById('catQText').textContent='Catechism examination';
+  document.getElementById('catPhaseBar').style.display='block';
+  document.getElementById('catPhaseBar').textContent=p.qnaPairs.length+' question'+(p.qnaPairs.length!==1?'s':'')+' — hear each one, recite the answer, tap Next.';
+  document.getElementById('catABox').style.display='none';
+  var rev=document.getElementById('catRevealBtn'); if(rev) rev.style.display='none';
+  var sum=document.getElementById('catSummary'); if(sum) sum.style.display='none';
+  var box=document.getElementById('listenReciteBox'); if(box) box.style.display='none';
+  var ctrl=document.getElementById('catSessionCtrl'); ctrl.style.display='block';
+  ctrl.innerHTML='<button class="btn btn-primary" style="width:100%;justify-content:center;padding:13px;font-size:15px" onclick="catSessionStart()">&#9654; Start examination</button>';
+}
+function catSessionStart(){
+  st.catSession={active:true,idx:0,results:[]};
+  catSessionAsk();
+}
+function catSessionAsk(){
+  var p=st.activePassage, i=st.catSession.idx, pair=p.qnaPairs[i];
+  var last=(i>=p.qnaPairs.length-1);
+  document.getElementById('catQText').textContent='Q'+(i+1)+' of '+p.qnaPairs.length+': '+pair.q;
+  document.getElementById('catPhaseBar').textContent='Listen to the question…';
+  var ctrl=document.getElementById('catSessionCtrl');
+  ctrl.innerHTML='<div id="catSessStatus" style="font-size:12px;color:var(--text3);margin-bottom:8px;text-align:center">Playing question…</div>'
+    +'<button class="btn btn-primary" style="width:100%;justify-content:center;padding:13px" onclick="catSessionNext()">'+(last?'Finish &amp; see results':'Next question &#9656;')+'</button>';
+  st.practiceTranscript=''; st.practiceInterim='';
+  playCatQuestion(pair, function(){
+    var s=document.getElementById('catSessStatus');
+    if(s) s.innerHTML='&#127908; Reciting — tap <b>'+(last?'Finish':'Next')+'</b> when you have answered.';
+    document.getElementById('catPhaseBar').textContent='Recite the answer from memory.';
+    startPracticeRecording();
+  });
+}
+function catSessionNext(){
+  stopPracticeRecording();
+  var p=st.activePassage, i=st.catSession.idx, pair=p.qnaPairs[i];
+  var res=scoreAnswer(pair.a, st.practiceTranscript);
+  st.catSession.results.push({q:pair.q,a:pair.a,heard:(st.practiceTranscript||'').trim(),acc:res.acc});
+  st.catSession.idx++;
+  if(st.catSession.idx<p.qnaPairs.length) catSessionAsk();
+  else catSessionSummary();
+}
+function playCatQuestion(pair, onEnd){
+  stopPlayback();
+  try{ playVoiceItem(pair.qVoiceType, pair.qRecKey, pair.q, pair.qVoiceIndex, st.activePassage.itemRecordings, onEnd); }
+  catch(e){ if(onEnd)onEnd(); }
+}
+// Headless scorer (no DOM) — reuses the same matching as checkAttempt
+function scoreAnswer(answerText, transcript){
+  var refWords=(answerText||'').split(/\s+/).map(normWord).filter(Boolean);
+  var heard=(transcript||'').trim();
+  var spoken=heard?heard.split(/\s+/).filter(Boolean).map(function(w){return applyMasonicMap(normWord(w));}):[];
+  var used=new Array(spoken.length).fill(false);
+  var correct=0,close=0,wrong=0;
+  refWords.forEach(function(rw){
+    var best='wrong',bestScore=0,bestIdx=-1;
+    spoken.forEach(function(sw,si){ if(used[si])return; var r=resolveWord(rw,sw); var sc=r==='correct'?1:r==='close'?0.6:similarity(rw,sw); if(sc>bestScore){bestScore=sc;best=r;bestIdx=si;} });
+    if(bestIdx!==-1&&best!=='wrong')used[bestIdx]=true;
+    if(best==='correct')correct++; else if(best==='close')close++; else wrong++;
+  });
+  var acc=refWords.length?Math.round(((correct+close*0.5)/refWords.length)*100):0;
+  return {correct:correct,close:close,wrong:wrong,acc:acc,total:refWords.length};
+}
+function catSessionSummary(){
+  var p=st.activePassage, rs=st.catSession.results;
+  // Overall weighted by the scoring of each answer
+  var tot=0,sc=0;
+  rs.forEach(function(r){ var sa=scoreAnswer(r.a, r.heard); tot+=sa.total; sc+=(sa.correct+sa.close*0.5); });
+  var overall=tot?Math.round((sc/tot)*100):0;
+  recordCatMastery(overall);
+  document.getElementById('catQText').textContent='Examination complete';
+  document.getElementById('catPhaseBar').textContent='One run of '+rs.length+' question'+(rs.length!==1?'s':'')+'.';
+  document.getElementById('catSessionCtrl').innerHTML='<button class="btn btn-primary" style="width:100%;justify-content:center" onclick="renderCatSessionStart()">Run again</button>';
+  var sum=document.getElementById('catSummary'); sum.style.display='block';
+  var h='<div class="score-row" style="margin-bottom:8px"><div class="score-card ac" style="flex:1"><div class="score-val">'+overall+'%</div><div class="score-lbl">overall mastery</div></div></div>';
+  rs.forEach(function(r,i){
+    var col=r.acc>=80?'#2d6a3f':r.acc>=50?'#8a6d00':'#8b2020';
+    h+='<details style="border-top:1px solid var(--border);padding:8px 0">';
+    h+='<summary style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;list-style:none">';
+    h+='<span style="font-size:13px;color:var(--navy);font-weight:600;flex:1;padding-right:8px">Q'+(i+1)+'. '+esc(r.q)+'</span>';
+    h+='<span style="color:'+col+';font-weight:700;font-size:13px;flex-shrink:0">'+r.acc+'%</span></summary>';
+    h+='<div style="font-size:12px;margin-top:6px;color:var(--text2)"><b>Answer:</b> '+esc(r.a)+'</div>';
+    h+='<div style="font-size:12px;margin-top:2px;color:var(--text3)"><b>Heard:</b> '+(r.heard?esc(r.heard):'<i>nothing captured</i>')+'</div>';
+    h+='</details>';
+  });
+  sum.innerHTML=h;
+}
+function recordCatMastery(acc){
+  var p=st.activePassage; if(!p) return; var pid=p.id;
+  if(!st.progressMap[pid]) st.progressMap[pid]={sessions:0,accuracy:0,furthestChunk:0,totalChunks:0,timesCompleted:0,blindAccuracy:0,blindAttempts:0,lastChunkOpened:0,lastPractised:''};
+  var prev=st.progressMap[pid];
+  prev.blindAttempts=(prev.blindAttempts||0)+1;
+  prev.blindAccuracy=Math.round(((prev.blindAccuracy||0)*(prev.blindAttempts-1)+acc)/prev.blindAttempts);
+  prev.accuracy=prev.blindAccuracy;
+  prev.timesCompleted=(prev.timesCompleted||0)+1;
+  prev.lastPractised=new Date().toISOString().split('T')[0];
+  prev.lastTouched=Date.now();
+  persist();
+  if(typeof queueProgressSync==='function')queueProgressSync();
 }
 
 // Configure the Listen/Recite control for the current mode
@@ -9525,7 +9641,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-08 12:25:00');
+console.log('Portal build 2026-10-08 14:45:00');
 
 function toggleSharePractice(){
   if(!CU)return;
