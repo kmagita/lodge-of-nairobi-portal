@@ -3264,20 +3264,42 @@ var newPollDraft={fields:[]};
 function pmInit(){if(!window._pmLoaded){window._pmLoaded=true;load();}loadVoices&&loadVoices();}
 
 
-// Parse portal catechism text (Q: ... / A: ... format) into PM qnaPairs
+// Parse portal catechism text into PM qnaPairs. Accepts three input styles:
+//  1. Q:/A: markers, same line or separate lines ("Q: ... A: ...")
+//  2. Blank-line-separated blocks: first line = question, rest = answer
+//  3. Plain alternating lines: Q, A, Q, A, ...
 function parsePMCatechism(text){
-  if(!text)return [];
+  if(!text) return [];
+  function mk(q,a){ return {q:String(q).trim(),a:String(a).trim(),qVoiceType:'tts',qVoiceIndex:0,recKey:null}; }
   var pairs=[];
-  var blocks=text.split(/\n\n+/);
-  blocks.forEach(function(block){
-    var lines=block.trim().split(/\n/);
-    var q='',a='';
-    lines.forEach(function(line){
-      if(/^Q:/i.test(line))q=line.replace(/^Q:\s*/i,'').trim();
-      else if(/^A:/i.test(line))a=line.replace(/^A:\s*/i,'').trim();
+  // Style 1 — explicit Q:/A: markers anywhere in the text
+  if(/\b[QA]\s*[:.)]/i.test(text)){
+    // Force every marker to the start of its own line, then scan
+    var norm=text.replace(/\s*\bQ\s*[:.)]\s*/gi,'\nQ: ').replace(/\s*\bA\s*[:.)]\s*/gi,'\nA: ');
+    var q=null,a=null,mode=null;
+    norm.split(/\n/).forEach(function(raw){
+      var line=raw.trim(); if(!line) return;
+      var mq=line.match(/^Q:\s*(.*)$/), ma=line.match(/^A:\s*(.*)$/);
+      if(mq){ if(q!==null&&a!==null){ pairs.push(mk(q,a)); } q=mq[1]; a=null; mode='q'; }
+      else if(ma){ a=ma[1]; mode='a'; }
+      else if(mode==='a'&&a!==null){ a+=' '+line; }
+      else if(mode==='q'&&q!==null){ q+=' '+line; }
     });
-    if(q&&a)pairs.push({q:q,a:a,qVoiceType:'tts',qVoiceIndex:0,recKey:null});
-  });
+    if(q!==null&&a!==null) pairs.push(mk(q,a));
+    if(pairs.length) return pairs;
+  }
+  // Style 2 — blank-line-separated blocks (first line Q, remaining lines A)
+  var blocks=text.split(/\n\s*\n+/).map(function(b){return b.trim();}).filter(Boolean);
+  if(blocks.length>1){
+    blocks.forEach(function(block){
+      var lines=block.split(/\n/).map(function(l){return l.trim();}).filter(Boolean);
+      if(lines.length>=2) pairs.push(mk(lines[0], lines.slice(1).join(' ')));
+    });
+    if(pairs.length) return pairs;
+  }
+  // Style 3 — plain alternating lines: Q, A, Q, A, ...
+  var lines=text.split(/\n/).map(function(l){return l.trim();}).filter(Boolean);
+  for(var i=0;i+1<lines.length;i+=2) pairs.push(mk(lines[i], lines[i+1]));
   return pairs;
 }
 
@@ -3337,23 +3359,50 @@ function rPractice(){
     if(typeof st!=='undefined' && LIBRARY && LIBRARY.length){
       var myRank={EA:1,FC:2,MM:3}[CU.deg]||1;
       var myLib=LIBRARY.filter(function(l){
-        return ({EA:1,FC:2,MM:3}[l.degree]||1)<=myRank && l.content && l.content.trim();
+        var inRange=({EA:1,FC:2,MM:3}[l.degree]||1)<=myRank;
+        var hasStruct=(l.qa&&(l.qa.length||l.qa.speakers))||(l.qna&&l.qna.length);
+        return inRange && ((l.content && l.content.trim()) || hasStruct);
       });
       if(myLib.length){
         // Merge with any passages the member added themselves
         var existingIds=st.passages.map(function(p){return p.id;});
         myLib.forEach(function(l){
           if(existingIds.indexOf(l.id)===-1){
+            // Catechism pairs: use the stored structured pairs (PM-style) when
+            // present (l.qa from the DB, l.qna from seed data); fall back to
+            // parsing the text only for older entries that have neither.
+            var qpairs=[], spk=[], lines=[];
+            if(l.type==='catechism'){
+              var stored=(l.qa&&l.qa.length)?l.qa:((l.qna&&l.qna.length)?l.qna:null);
+              qpairs=stored
+                ? stored.map(function(x){return {q:x.q,a:x.a,qVoiceType:'tts',qVoiceIndex:0,recKey:null};})
+                : parsePMCatechism(l.content);
+            } else if(l.type==='responsive'){
+              // Dialogue: map stored speakers/lines into PM's speaker + respLine shape
+              var rd=(l.qa&&!Array.isArray(l.qa))?l.qa:null;
+              if(rd&&rd.speakers){
+                // Give each part a distinct synthetic voice: a different voice
+                // slot where the device has several, plus a distinct pitch so
+                // parts still sound different when few voices are installed.
+                var PITCHES=[1.0,0.8,1.2,0.9,1.1,0.7,1.3,0.85];
+                spk=rd.speakers.map(function(s,i){
+                  return {sid:s.id, name:s.name, isSelf:!!s.isSelf,
+                          color:SPEAKER_COLORS[i%SPEAKER_COLORS.length], bg:SPEAKER_BG[i%SPEAKER_BG.length],
+                          voiceType:'tts', voiceIndex:i, voicePitch:PITCHES[i%PITCHES.length], recKey:null};
+                });
+                lines=(rd.lines||[]).map(function(ln){ return {speakerId:ln.spk, text:ln.text}; });
+              }
+            }
             st.passages.push({
-              id:l.id, title:l.title, text:l.content,
-              // format: charge/oration supports TTS; catechism for Q&A
+              id:l.id, title:l.title, text:l.content||'',
+              // format: charge/oration supports TTS; catechism for Q&A; responsive for dialogue
               format:l.type==='catechism'?'catechism':
                      l.type==='responsive'?'responsive':'charge',
               refVoiceType:'tts',   // use device voices — no recording needed
               refVoiceIndex:0,      // first available TTS voice
               refAudio:null,
-              qnaPairs:l.type==='catechism'?parsePMCatechism(l.content):[],
-              speakers:[], respLines:[]
+              qnaPairs:qpairs,
+              speakers:spk, respLines:lines
             });
           }
         });
@@ -3599,13 +3648,13 @@ function rLibrary(){
         // Expand/collapse button (title area only — no nested buttons)
         h+='<button data-lid="'+l.id+'" onclick="window._libOpen=(window._libOpen===this.dataset.lid?null:this.dataset.lid);rLibrary()" style="flex:1;display:flex;flex-direction:column;align-items:flex-start;background:none;border:none;cursor:pointer;padding:0;text-align:left;touch-action:manipulation;min-width:0">';
         h+='<div style="font-weight:700;font-size:14px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">'+l.title+'</div>';
-        h+='<div style="font-size:11px;color:var(--t3)">'+(l.type||'charge')+'</div>';
+        h+='<div style="font-size:11px;color:var(--t3)">'+typeLabel(l.type)+'</div>';
         h+='</button>';
         // Practice button — available to all members
         h+='<button class="btn btn-n btn-sm" style="padding:3px 8px;font-size:11px;flex-shrink:0" data-pid="'+l.id+'" onclick="practicePassage(this.dataset.pid)">&#9654; Practise</button>';
         // Action buttons outside the expand button
         if(isDC){
-          h+='<button class="btn btn-n btn-sm" style="padding:3px 8px;font-size:11px;flex-shrink:0" data-id="'+l.id+'" onclick="libContentId=(libContentId===this.dataset.id?null:this.dataset.id);rLibrary()">'+( isEditContent?'Done':'Edit')+'</button>';
+          h+='<button class="btn btn-n btn-sm" style="padding:3px 8px;font-size:11px;flex-shrink:0" data-id="'+l.id+'" onclick="libEditPassage(this.dataset.id)">Edit</button>';
           h+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad);padding:3px 6px;flex-shrink:0" data-id="'+l.id+'" onclick="removeLibItem(this.dataset.id)"><svg class="ico" width="12" height="12"><use href="#ico-trash"/></svg></button>';
         }
         h+='<button data-lid="'+l.id+'" onclick="window._libOpen=(window._libOpen===this.dataset.lid?null:this.dataset.lid);rLibrary()" style="background:none;border:none;cursor:pointer;padding:4px;touch-action:manipulation;flex-shrink:0">';
@@ -3641,33 +3690,75 @@ function rLibrary(){
     var libAddOpen=typeof libImportVisible!=='undefined'&&libImportVisible;
     h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;margin-bottom:8px">';
     h+='<div class="stitle" style="margin:0">Add passage</div>';
-    h+='<button class="btn btn-navy btn-sm" onclick="libImportVisible=!libImportVisible;rLibrary()"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Add passage</button>';
+    h+='<button class="btn btn-navy btn-sm" onclick="libToggleAdd()"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Add passage</button>';
     h+='</div>';
     if(libAddOpen){
-      h+='<div class="card">';
+      var isCatType=(libImportType==='catechism');
+      var isRespType=(libImportType==='responsive');
+      h+='<div class="card" id="lib-edit-form">';
+      h+='<div style="font-weight:700;color:var(--navy);margin-bottom:10px">'+(libEditingId?'Edit passage':'New passage')+'</div>';
       h+='<div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:10px">';
-      h+='<div class="fg" style="margin:0"><label class="lbl">Passage title</label><input id="li-title" placeholder="e.g. Third Degree Charge"></div>';
-      h+='<div class="fg" style="margin:0"><label class="lbl">Degree</label><select id="li-degree"><option value="EA">1° EA</option><option value="FC">2° FC</option><option value="MM">3° MM</option></select></div>';
+      h+='<div class="fg" style="margin:0"><label class="lbl">Passage title</label><input id="li-title" value="'+esc(libDraftTitle||'')+'" oninput="libDraftTitle=this.value" placeholder="e.g. Third Degree Charge"></div>';
+      h+='<div class="fg" style="margin:0"><label class="lbl">Degree</label><select id="li-degree" onchange="libDraftDegree=this.value">';
+      [['EA','1° EA'],['FC','2° FC'],['MM','3° MM']].forEach(function(d){
+        h+='<option value="'+d[0]+'"'+((libDraftDegree||'EA')===d[0]?' selected':'')+'>'+d[1]+'</option>';
+      });
+      h+='</select></div>';
       h+='</div>';
       h+='<div class="fg" style="margin-bottom:10px"><label class="lbl">Type</label><select id="li-type" onchange="libImportType=this.value;rLibrary()">';
       ['charge','oration','catechism','prayer','responsive','other'].forEach(function(t){
-        var sel=(typeof libImportType!=='undefined'&&libImportType===t)?' selected':'';
-        h+='<option value="'+t+'"'+sel+'>'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>';
+        h+='<option value="'+t+'"'+(libImportType===t?' selected':'')+'>'+typeLabel(t)+'</option>';
       });
       h+='</select></div>';
-      h+='<div class="fg">';
-      h+='<label class="lbl">Ritual text</label>';
-      h+='<textarea id="li-content" style="min-height:220px;font-family:Georgia,serif;font-size:13px;line-height:1.8" placeholder="Paste the full text here..."></textarea>';
-      if(typeof libImportType!=='undefined'&&libImportType==='catechism'){
-        h+='<div style="margin-top:8px;padding:10px 12px;background:var(--infobg);border-radius:8px;font-size:12px;color:var(--info);line-height:1.7">';
-        h+='<strong>Catechism format:</strong> Each Q&amp;A pair on its own line, separated by a blank line:<br>';
-        h+='<code style="font-size:11px;background:rgba(0,0,0,.06);padding:2px 6px;border-radius:4px">Q: How were you prepared?<br>A: By being divested of all metals.</code>';
+
+      if(isCatType){
+        // PM-style structured Q&A builder — one Question + Answer per pair
+        if(!libQnaPairs.length) libQnaPairs.push({q:'',a:''});
+        h+='<div class="fg"><label class="lbl">Questions &amp; Answers</label>';
+        libQnaPairs.forEach(function(pr,i){
+          h+='<div class="card" style="padding:10px 10px 12px;margin-bottom:8px;position:relative;background:var(--cream2,#f7f1e0)">';
+          h+='<button onclick="libRemoveQna('+i+')" title="Remove" style="position:absolute;top:6px;right:8px;background:none;border:none;color:var(--t3);font-size:20px;line-height:1;cursor:pointer;padding:2px 6px">&times;</button>';
+          h+='<label class="lbl" style="margin-bottom:4px">Question '+(i+1)+'</label>';
+          h+='<input id="li-q-'+i+'" value="'+esc(pr.q||'')+'" oninput="libQnaPairs['+i+'].q=this.value" placeholder="Type the question...">';
+          h+='<label class="lbl" style="margin:8px 0 4px">Answer (recited by the brother)</label>';
+          h+='<textarea id="li-a-'+i+'" style="min-height:70px;line-height:1.7" oninput="libQnaPairs['+i+'].a=this.value" placeholder="Type the answer...">'+esc(pr.a||'')+'</textarea>';
+          h+='</div>';
+        });
+        h+='<button class="btn btn-n btn-sm" style="width:100%;justify-content:center" onclick="libAddQna()"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Add Q&amp;A pair</button>';
         h+='</div>';
+      } else if(isRespType){
+        // Dialogue builder — several parts; mark the one you recite
+        if(!libSpeakers.length){ libAddSpeakerSilent('Worshipful Master',true); libAddSpeakerSilent('Brethren',false); }
+        if(!libLines.length){ libLines.push({spk:(libSpeakers[0]?libSpeakers[0].id:''),text:''}); }
+        h+='<div class="fg"><label class="lbl">Parts / speakers</label>';
+        h+='<div style="font-size:11px;color:var(--t3);margin-bottom:6px">Mark the part <b>you</b> recite. The app reads the other parts aloud; you speak yours.</div>';
+        libSpeakers.forEach(function(s,i){
+          h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">';
+          h+='<input value="'+esc(s.name||'')+'" oninput="libSpeakers['+i+'].name=this.value" placeholder="Part name (e.g. S.W.)" style="flex:1">';
+          h+='<label style="font-size:11px;color:var(--t2);display:flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer"><input type="radio" name="libself" '+(s.isSelf?'checked':'')+' onclick="libSetSelf(\''+s.id+'\')"> My part</label>';
+          h+='<button onclick="libRemoveSpeaker(\''+s.id+'\')" title="Remove" style="background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer;padding:0 4px">&times;</button>';
+          h+='</div>';
+        });
+        h+='<button class="btn btn-n btn-sm" style="margin-bottom:14px" onclick="libAddSpeaker()"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Add part</button>';
+        h+='<label class="lbl">Lines (in spoken order)</label>';
+        libLines.forEach(function(ln,i){
+          h+='<div class="card" style="padding:8px 10px 10px;margin-bottom:8px;position:relative;background:var(--cream2,#f7f1e0)">';
+          h+='<button onclick="libRemoveLine('+i+')" title="Remove" style="position:absolute;top:4px;right:6px;background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer;padding:2px 6px">&times;</button>';
+          h+='<select onchange="libLines['+i+'].spk=this.value" style="margin-bottom:6px;max-width:72%">';
+          libSpeakers.forEach(function(s){ h+='<option value="'+s.id+'"'+(ln.spk===s.id?' selected':'')+'>'+esc(s.name||'(unnamed)')+(s.isSelf?' — you':'')+'</option>'; });
+          h+='</select>';
+          h+='<textarea oninput="libLines['+i+'].text=this.value" style="min-height:54px;line-height:1.6" placeholder="This part\'s line...">'+esc(ln.text||'')+'</textarea>';
+          h+='</div>';
+        });
+        h+='<button class="btn btn-n btn-sm" style="width:100%;justify-content:center" onclick="libAddLine()"><svg class="ico" width="14" height="14"><use href="#ico-plus"/></svg> Add line</button>';
+        h+='</div>';
+      } else {
+        h+='<div class="fg"><label class="lbl">Ritual text</label>';
+        h+='<textarea id="li-content" style="min-height:220px;font-family:Georgia,serif;font-size:13px;line-height:1.8" oninput="libDraftContent=this.value" placeholder="Paste the full text here...">'+esc(libDraftContent||'')+'</textarea></div>';
       }
-      h+='</div>';
       h+='<div style="display:flex;gap:8px;margin-top:4px">';
-      h+='<button class="btn btn-navy" style="flex:1;justify-content:center" onclick="importLibPassage()"><svg class="ico" width="16" height="16"><use href="#ico-check"/></svg> Save passage</button>';
-      h+='<button class="btn btn-n btn-sm" onclick="libImportVisible=false;rLibrary()">Cancel</button>';
+      h+='<button class="btn btn-navy" style="flex:1;justify-content:center" onclick="importLibPassage()"><svg class="ico" width="16" height="16"><use href="#ico-check"/></svg> '+(libEditingId?'Save changes':'Save passage')+'</button>';
+      h+='<button class="btn btn-n btn-sm" onclick="libResetDraft();libImportVisible=false;rLibrary()">Cancel</button>';
       h+='</div></div>';
     }
   }
@@ -5837,23 +5928,122 @@ var libContentId=null;
 var _libOpen=null;
 var _correctOpen=null;
 var libEditId=null;
+// Add/edit-passage draft state (survives the form's re-renders)
+var libDraftTitle='';
+var libDraftDegree='EA';
+var libDraftContent='';
+var libQnaPairs=[];   // [{q,a}] — PM-style structured catechism pairs
+var libSpeakers=[];   // [{id,name,isSelf}] — dialogue parts
+var libLines=[];      // [{spk,text}] — dialogue lines (spk = speaker id)
+var libSpkSeq=0;
+var libEditingId=null; // when set, Save updates this library item instead of adding
+
+function typeLabel(t){
+  return ({charge:'Charge',oration:'Oration',catechism:'Catechism',prayer:'Prayer',responsive:'Dialogue',other:'Other'})[t]||'Charge';
+}
+
+function libResetDraft(){
+  libDraftTitle=''; libDraftDegree='EA'; libDraftContent='';
+  libQnaPairs=[]; libSpeakers=[]; libLines=[]; libImportType='charge'; libEditingId=null;
+}
+function libToggleAdd(){
+  libImportVisible=!libImportVisible;
+  if(libImportVisible) libResetDraft();   // fresh draft each time the form opens
+  rLibrary();
+}
+// Catechism pair helpers
+function libAddQna(){ libQnaPairs.push({q:'',a:''}); rLibrary(); }
+function libRemoveQna(i){ libQnaPairs.splice(i,1); if(!libQnaPairs.length) libQnaPairs.push({q:'',a:''}); rLibrary(); }
+// Dialogue speaker/line helpers
+function libAddSpeakerSilent(name,isSelf){ libSpeakers.push({id:'s'+(libSpkSeq++),name:name||'',isSelf:!!isSelf}); }
+function libAddSpeaker(){ libAddSpeakerSilent('',false); rLibrary(); }
+function libRemoveSpeaker(id){
+  libSpeakers=libSpeakers.filter(function(s){return s.id!==id;});
+  libLines.forEach(function(ln){ if(ln.spk===id) ln.spk=(libSpeakers[0]?libSpeakers[0].id:''); });
+  if(!libSpeakers.length) libAddSpeakerSilent('',true);
+  if(!libSpeakers.some(function(s){return s.isSelf;})) libSpeakers[0].isSelf=true;
+  rLibrary();
+}
+function libSetSelf(id){ libSpeakers.forEach(function(s){ s.isSelf=(s.id===id); }); rLibrary(); }
+function libAddLine(){ libLines.push({spk:(libSpeakers[0]?libSpeakers[0].id:''),text:''}); rLibrary(); }
+function libRemoveLine(i){ libLines.splice(i,1); rLibrary(); }
+
+function libEditPassage(id){
+  var l=LIBRARY.find(function(x){return x.id===id;}); if(!l) return;
+  libResetDraft();
+  libEditingId=id;
+  libDraftTitle=l.title||'';
+  libDraftDegree=l.degree||'EA';
+  libImportType=l.type||'charge';
+  libDraftContent=l.content||'';
+  if(libImportType==='catechism'){
+    var stored=(l.qa&&l.qa.length)?l.qa:((l.qna&&l.qna.length)?l.qna:null);
+    libQnaPairs=stored?stored.map(function(p){return {q:p.q||'',a:p.a||''};})
+                      :parsePMCatechism(l.content).map(function(p){return {q:p.q,a:p.a};});
+    if(!libQnaPairs.length) libQnaPairs=[{q:'',a:''}];
+  } else if(libImportType==='responsive'){
+    var rd=(l.qa&&!Array.isArray(l.qa))?l.qa:null;
+    if(rd&&rd.speakers&&rd.speakers.length){
+      var omap={};
+      libSpeakers=rd.speakers.map(function(s){ var nid='s'+(libSpkSeq++); omap[s.id]=nid; return {id:nid,name:s.name||'',isSelf:!!s.isSelf}; });
+      if(!libSpeakers.some(function(s){return s.isSelf;})) libSpeakers[0].isSelf=true;
+      libLines=(rd.lines||[]).map(function(ln){ return {spk:omap[ln.spk]||(libSpeakers[0]?libSpeakers[0].id:''),text:ln.text||''}; });
+    }
+  }
+  libImportVisible=true;
+  rLibrary();
+  try{ var f=document.getElementById('lib-edit-form'); if(f) f.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
+}
 
 function importLibPassage(){
-  var title=document.getElementById('li-title');
-  var content=document.getElementById('li-content');
-  var degEl=document.getElementById('li-degree');
-  if(!title||!title.value.trim()){alert('Enter a passage title.');return;}
-  if(!content||!content.value.trim()){alert('Enter the passage content.');return;}
-  var deg=degEl?degEl.value:'EA';
-  var item={id:'lib'+Date.now(),title:title.value.trim(),
-    content:content.value.trim(),degree:deg,qa:[]};
-  LIBRARY.push(item);
-  supa('library',{method:'POST',
-    body:JSON.stringify({title:item.title,content:item.content,degree:deg,qa:[]})
-  }).then(function(r){return r.json();})
-  .then(function(d){if(d&&d[0])item.id=d[0].id;})
-  .catch(function(e){console.warn('Import failed:',e);});
-  title.value='';content.value='';
+  var ptype=libImportType||'charge';
+  var ttl=(libDraftTitle||'').trim();
+  if(!ttl){ alert('Enter a passage title.'); return; }
+  var deg=libDraftDegree||'EA';
+  var qa=[], content='';
+
+  if(ptype==='catechism'){
+    // Structured Q&A pairs (PM-style); both question and answer required
+    qa=libQnaPairs.map(function(p){return {q:(p.q||'').trim(),a:(p.a||'').trim()};})
+                  .filter(function(p){return p.q||p.a;});
+    if(!qa.length){ alert('Add at least one question and answer.'); return; }
+    if(qa.some(function(p){return !p.q||!p.a;})){ alert('Fill in both the question and the answer for every pair.'); return; }
+    content=qa.map(function(p){return 'Q: '+p.q+'\nA: '+p.a;}).join('\n\n');
+  } else if(ptype==='responsive'){
+    // Dialogue: structured speakers + ordered lines
+    var speakers=libSpeakers.map(function(s){return {id:s.id,name:(s.name||'').trim(),isSelf:!!s.isSelf};})
+                            .filter(function(s){return s.name;});
+    if(speakers.length<2){ alert('Add at least two parts/speakers.'); return; }
+    if(!speakers.some(function(s){return s.isSelf;})){ alert('Mark which part you recite ("My part").'); return; }
+    var validId={}; speakers.forEach(function(s){validId[s.id]=1;});
+    var lines=libLines.map(function(ln){return {spk:ln.spk,text:(ln.text||'').trim()};})
+                      .filter(function(ln){return ln.text&&validId[ln.spk];});
+    if(!lines.length){ alert('Add at least one line.'); return; }
+    var selfId=speakers.find(function(s){return s.isSelf;}).id;
+    if(!lines.some(function(ln){return ln.spk===selfId;})){ alert('At least one line must be assigned to your part.'); return; }
+    qa={speakers:speakers,lines:lines};
+    var nameById={}; speakers.forEach(function(s){nameById[s.id]=s.name;});
+    content=lines.map(function(ln){return (nameById[ln.spk]||'?')+': '+ln.text;}).join('\n');
+  } else {
+    content=(libDraftContent||'').trim();
+    if(!content){ alert('Enter the passage content.'); return; }
+  }
+
+  var payload={title:ttl,content:content,degree:deg,type:ptype,qa:qa};
+  if(libEditingId){
+    var it=LIBRARY.find(function(x){return x.id===libEditingId;});
+    if(it){ it.title=ttl; it.content=content; it.degree=deg; it.type=ptype; it.qa=qa; delete it.qna; }
+    supa('library?id=eq.'+encodeURIComponent(libEditingId),{method:'PATCH',
+      body:JSON.stringify(payload)}).catch(function(e){console.warn('Update failed:',e);});
+  } else {
+    var item={id:'lib'+Date.now(),title:ttl,content:content,degree:deg,type:ptype,qa:qa};
+    LIBRARY.push(item);
+    supa('library',{method:'POST',body:JSON.stringify(payload)})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d&&d[0])item.id=d[0].id;})
+      .catch(function(e){console.warn('Import failed:',e);});
+  }
+  libResetDraft(); libImportVisible=false;
   rLibrary();
 }
 function readPDF(inputId, callback){
@@ -7201,7 +7391,7 @@ function loadVoices() {
 window.speechSynthesis.onvoiceschanged = loadVoices;
 loadVoices();
 
-function speakText(text, voiceIndex, rate, onEnd) {
+function speakText(text, voiceIndex, rate, onEnd, pitch) {
   if(!('speechSynthesis' in window)){
     alert('Text-to-speech is not supported on this browser. Please record a reference reading instead.');
     if(onEnd)onEnd();
@@ -7215,6 +7405,7 @@ function speakText(text, voiceIndex, rate, onEnd) {
     if (ttsVoices[voiceIndex]) utt.voice = ttsVoices[voiceIndex];
     else if (ttsVoices[0]) utt.voice = ttsVoices[0];
     utt.rate = rate || 1.0;
+    if (pitch) utt.pitch = pitch;   // distinguish different speakers' voices
     utt.lang = 'en-US';
     if (onEnd) utt.onend = onEnd;
     utt.onerror = function(e){ console.warn('TTS error:', e.error); if(onEnd)onEnd(); };
@@ -8177,28 +8368,28 @@ function playItemSequence(p, idx){
     if(spk){
       playVoiceItem(spk.voiceType, spk.recKey, line.text, spk.voiceIndex, p.itemRecordings, ()=>{
         setTimeout(()=>playItemSequence(p,idx+1),300);
-      });
+      }, spk.voicePitch);
     } else {
       playItemSequence(p,idx+1);
     }
   }
 }
 
-function playVoiceItem(voiceType, recKey, text, voiceIndex, itemRecordings, onEnd){
+function playVoiceItem(voiceType, recKey, text, voiceIndex, itemRecordings, onEnd, pitch){
   if(voiceType==='tts'||voiceType==='self'&&(!itemRecordings||!itemRecordings[recKey])){
     // Use TTS
-    speakText(text, voiceIndex||0, st.speed, onEnd);
+    speakText(text, voiceIndex||0, st.speed, onEnd, pitch);
   } else {
     // Use recording — but only if it's a real audio source (data/blob URL)
     const audio=itemRecordings&&itemRecordings[recKey];
     const isReal = audio && typeof audio==='string' && (audio.indexOf('data:')===0||audio.indexOf('blob:')===0);
     if(isReal){
       const a=new Audio(audio); a.playbackRate=st.speed; st.currentAudio=a;
-      a.onended=onEnd; a.onerror=function(){ speakText(text, voiceIndex||0, st.speed, onEnd); };
-      a.play().catch(function(){ speakText(text, voiceIndex||0, st.speed, onEnd); });
+      a.onended=onEnd; a.onerror=function(){ speakText(text, voiceIndex||0, st.speed, onEnd, pitch); };
+      a.play().catch(function(){ speakText(text, voiceIndex||0, st.speed, onEnd, pitch); });
     } else {
       // No real recording — fall back to TTS
-      speakText(text, voiceIndex||0, st.speed, onEnd);
+      speakText(text, voiceIndex||0, st.speed, onEnd, pitch);
     }
   }
 }
@@ -8240,7 +8431,7 @@ function playChunk(){
       playVoiceItem(prevSpk?prevSpk.voiceType:'tts', prevSpk?prevSpk.recKey:null, prevLine.text, prevSpk?prevSpk.voiceIndex:0, p.itemRecordings, ()=>{
         stopPlayback();
         if(!st.practiceActive){ setTimeout(()=>startPracticeRecording(),500); }
-      });
+      }, prevSpk?prevSpk.voicePitch:1);
     } else {
       // No preceding line — just start mic
       if(!st.practiceActive) startPracticeRecording();
@@ -9292,7 +9483,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-07 16:02:00');
+console.log('Portal build 2026-10-08 10:05:00');
 
 function toggleSharePractice(){
   if(!CU)return;
