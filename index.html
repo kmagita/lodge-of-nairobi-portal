@@ -1421,8 +1421,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
       <div class="format-row" id="formatRow">
         <div class="format-btn active" onclick="setFormat('recite',this)">Learn</div>
         <div class="format-btn" onclick="setFormat('blind',this)">Blind</div>
-        <div class="format-btn" onclick="setFormat('fillin',this)">Fill blanks</div>
-        <div class="format-btn" onclick="setFormat('listenrecite',this)">Listen &amp; Recite</div>
       </div>
       <div class="speed-row">
         <span class="speed-label">Speed:</span>
@@ -1453,9 +1451,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
         <div class="mode-box-sub">Text hidden. Tap Play Chunk to hear reference, then recite from memory. Text reveals with results.</div>
       </div>
 
-      <!-- Listen & Recite mode -->
+      <!-- Recital control (Learn / Blind / catechism Blind) -->
       <div class="mode-box listen-recite-box" id="listenReciteBox" style="display:none;">
-        <div class="mode-box-title">Listen &amp; Recite</div>
+        <div class="mode-box-title" id="lrTitle">Recite</div>
         <div class="mode-box-sub" id="listenReciteStatus">Tap <b>Listen</b> to hear the chunk, then tap <b>Recite</b> to say it from memory.</div>
         <div style="display:flex;gap:10px;margin-top:14px;">
           <button id="lrListenBtn" onclick="lrListen()" style="flex:1;padding:13px;border-radius:10px;border:2px solid #1a3060;background:#1a3060;color:#f0d080;font-weight:600;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;">
@@ -1470,6 +1468,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--navy)}
       <!-- Catechism Q panel -->
       <div id="catQBox" style="display:none;">
         <div class="cat-q-box"><div class="cat-q-label">Question</div><div class="cat-q-text" id="catQText"></div></div>
+        <button id="catRevealBtn" onclick="catReveal()" style="display:none;width:100%;margin:10px 0 2px;padding:12px;border-radius:10px;border:2px solid #1a3060;background:#1a3060;color:#f0d080;font-weight:600;font-size:14px;cursor:pointer;">Reveal answer</button>
         <div class="cat-a-box" id="catABox" style="display:none;">
           <div class="cat-a-label">Answer</div>
           <div class="chunk-text" id="catADisplay"></div>
@@ -8138,9 +8137,11 @@ function openPractice(id){
   document.querySelectorAll('.format-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
   document.querySelectorAll('.speed-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
 
-  // Format buttons — hide level selector for catechism/responsive (each Q or line is one chunk)
+  // Level applies to charges only (each Q or dialogue line is already one chunk).
+  // Learn/Blind format row shows for charges and catechism; dialogue has its own flow.
   const isCatOrResp=p.format==='catechism'||p.format==='responsive';
-  document.querySelector('.level-row').style.display=isCatOrResp?'none':'flex';
+  document.querySelector('.level-row').style.display=(p.format==='responsive'||p.format==='catechism')?'none':'flex';
+  var _fr=document.getElementById('formatRow'); if(_fr) _fr.style.display=(p.format==='responsive')?'none':'flex';
 
   // Count a practice session (one per passage opening)
   if(!st.progressMap[p.id]) st.progressMap[p.id]={sessions:0,accuracy:0,furthestChunk:0,totalChunks:0,timesCompleted:0,blindAccuracy:0,blindAttempts:0,lastChunkOpened:0,lastPractised:''};
@@ -8179,16 +8180,13 @@ function renderChunk(){
   const p=st.activePassage; if(!p) return;
   const chunks=getChunks();
   const chunk=chunks[st.chunkIdx]||'';
-  // Microphone only appears in scored memory modes (Blind, hidden catechism).
-  // Listen & Recite has its own dedicated Listen/Recite buttons, so no shared mic.
+  // Charge + catechism use the dedicated Listen/Recite buttons, so the shared
+  // big mic is only needed for dialogue (responsive). The shared playback bar
+  // is replaced by the Listen button everywhere.
   var _mc=document.getElementById('micControl');
-  if(_mc){
-    var scored=(st.format==='blind'||(p.format==='catechism'&&st.level>1));
-    _mc.style.display=scored?'':'none';
-  }
-  // Listen & Recite hides the shared playback bar (Play chunk / Play full / Stop)
+  if(_mc) _mc.style.display=(p.format==='responsive')?'':'none';
   var _pb=document.getElementById('playbackBar');
-  if(_pb) _pb.style.display=(st.format==='listenrecite')?'none':'';
+  if(_pb) _pb.style.display=(p.format==='responsive')?'':'none';
   // Track progress position (resume point + furthest reached)
   if(!st.progressMap[p.id]) st.progressMap[p.id]={sessions:0,accuracy:0,furthestChunk:0,totalChunks:chunks.length,timesCompleted:0,blindAccuracy:0,blindAttempts:0,lastChunkOpened:0,lastPractised:''};
   var _pm=st.progressMap[p.id];
@@ -8211,6 +8209,7 @@ function renderChunk(){
   ['chunkBox','blindBox','listenReciteBox','catQBox','respDisplay'].forEach(id=>{ document.getElementById(id).style.display='none'; });
   document.getElementById('catPhaseBar').style.display='none';
   document.getElementById('catABox').style.display='none';
+  var _rev=document.getElementById('catRevealBtn'); if(_rev) _rev.style.display='none';
 
   if(isCat){
     renderCatChunk(chunk);
@@ -8230,47 +8229,72 @@ function renderChunk(){
 
 function renderStandardChunk(chunk){
   const words=chunk.split(/\s+/).filter(Boolean);
-  let html='';
-  if(st.format==='fillin'){
-    html=words.map((w,i)=>i%3===2?`<span class="word-token hidden">${esc(w)}</span> `:`<span class="word-token pending" onclick="toggleWord(this)">${esc(w)}</span> `).join('');
-  } else if(st.format==='listen'){
-    html='<em style="color:var(--text3);">Listen to the reference, then recite when ready.</em>';
-  } else if(st.format==='blind'){
-    // Blind: show the text to study first; it will hide when the mic starts
-    document.getElementById('chunkDisplay').innerHTML=words.map(w=>`<span class="word-token pending">${esc(w)}</span> `).join('');
-    document.getElementById('chunkBox').style.display='block';
-    var bb=document.getElementById('blindBox'); if(bb)bb.style.display='none';
-    return;
-  } else if(st.format==='listenrecite'){
-    // Listen & Recite: hear the reference first, then recite (text stays hidden until check)
-    document.getElementById('listenReciteBox').style.display='block';
-    document.getElementById('chunkDisplay').innerHTML=words.map(w=>`<span class="word-token pending" onclick="toggleWord(this)">${esc(w)}</span> `).join('');
-    document.getElementById('listenReciteStatus').innerHTML='Tap <b>Listen</b> to hear the chunk, then tap <b>Recite</b> to say it from memory.';
-    lrReciteReset(); lrSetReciteEnabled(false);
-    return;
+  // Build the text tokens (shown in Learn for study; revealed with scoring after reciting)
+  document.getElementById('chunkDisplay').innerHTML=words.map(w=>`<span class="word-token pending" onclick="toggleWord(this)">${esc(w)}</span> `).join('');
+  if(st.format==='blind'){
+    // Blind (test): no text, no reference — recite from memory
+    document.getElementById('chunkBox').style.display='none';
+    lrSetup('blind');
   } else {
-    html=words.map(w=>`<span class="word-token pending" onclick="toggleWord(this)">${esc(w)}</span> `).join('');
+    // Learn: study the text, optionally hear it, then recite (text hides while reciting)
+    document.getElementById('chunkBox').style.display='block';
+    lrSetup('learn');
   }
-  document.getElementById('chunkDisplay').innerHTML=html;
-  document.getElementById('chunkBox').style.display='block';
 }
 
 function renderCatChunk(answerText){
   const p=st.activePassage;
   const pair=p.qnaPairs[st.chunkIdx];
   if(!pair) return;
-  const isEasy=st.level===1;
   document.getElementById('catQText').textContent=pair.q;
   document.getElementById('catQBox').style.display='block';
   document.getElementById('catPhaseBar').style.display='block';
-  document.getElementById('catPhaseBar').textContent=isEasy
-    ?'Reading mode — question and answer visible'
-    :'Practice mode — read/hear question, then recite the answer from memory';
-  if(isEasy){
-    // Show answer too
-    const words=answerText.split(/\s+/).filter(Boolean);
-    document.getElementById('catADisplay').innerHTML=words.map(w=>`<span class="word-token pending" onclick="toggleWord(this)">${esc(w)}</span> `).join('');
-    document.getElementById('catABox').style.display='block';
+  // Build the answer tokens up front (kept hidden until revealed / checked)
+  const words=answerText.split(/\s+/).filter(Boolean);
+  document.getElementById('catADisplay').innerHTML=words.map(w=>`<span class="word-token pending" onclick="toggleWord(this)">${esc(w)}</span> `).join('');
+  document.getElementById('catABox').style.display='none';
+  var rev=document.getElementById('catRevealBtn');
+  if(st.format==='blind'){
+    // Blind: answer stays hidden; recite it from memory, scored on check
+    document.getElementById('catPhaseBar').textContent='Recite the answer from memory, then check.';
+    if(rev) rev.style.display='none';
+    lrSetup('catblind');
+  } else {
+    // Learn: question shown, answer hidden behind a Reveal button (self-study)
+    document.getElementById('catPhaseBar').textContent='Recall the answer, then tap Reveal to check.';
+    if(rev){ rev.style.display='block'; rev.textContent='Reveal answer'; }
+    var box=document.getElementById('listenReciteBox'); if(box) box.style.display='none';
+  }
+}
+
+// Reveal / hide the catechism answer in Learn mode
+function catReveal(){
+  var ab=document.getElementById('catABox'), b=document.getElementById('catRevealBtn');
+  if(!ab) return;
+  var showing=ab.style.display!=='none';
+  ab.style.display=showing?'none':'block';
+  if(b) b.textContent=showing?'Reveal answer':'Hide answer';
+}
+
+// Configure the Listen/Recite control for the current mode
+function lrSetup(mode){
+  var box=document.getElementById('listenReciteBox'); if(box) box.style.display='block';
+  var lb=document.getElementById('lrListenBtn');
+  var title=document.getElementById('lrTitle');
+  var status=document.getElementById('listenReciteStatus');
+  lrReciteReset(); lrSetReciteEnabled(true);   // Recite available immediately
+  if(mode==='learn'){
+    if(lb) lb.style.display='';
+    if(title) title.textContent='Learn';
+    if(status) status.innerHTML='Study the text. Tap <b>Listen</b> to hear it, then <b>Recite</b> — the text hides while you speak and your score shows after.';
+  } else if(mode==='blind'){
+    if(lb) lb.style.display='none';
+    if(title) title.textContent='Blind recital';
+    if(status) status.innerHTML='Recite from memory. Tap <b>Recite</b> when ready — the text reveals with your score.';
+  } else if(mode==='catblind'){
+    if(lb) lb.style.display='';
+    if(title) title.textContent='Recite the answer';
+    if(status) status.innerHTML='Tap <b>Listen</b> to hear the question, then <b>Recite</b> the answer from memory.';
   }
 }
 
@@ -8406,11 +8430,8 @@ function playChunk(){
     document.getElementById('playbackStatus').textContent='Playing question '+(st.chunkIdx+1)+'...';
     playVoiceItem(pair.qVoiceType, pair.qRecKey, pair.q, pair.qVoiceIndex, p.itemRecordings, ()=>{
       stopPlayback();
-      // Auto-open mic for answer if not easy mode
-      if(st.level>1&&!st.practiceActive){
-        document.getElementById('catPhaseBar').textContent='Now recite the answer — mic opening...';
-        setTimeout(()=>{ if(st.activePassage&&st.activePassage.format==='catechism'){ startPracticeRecording(); document.getElementById('catPhaseBar').textContent='Reciting... tap mic to stop.'; } },700);
-      }
+      // Blind: question finished — enable Recite (manual, via the Recite button)
+      if(st.format==='blind') lrOnListenEnded();
     });
     return;
   }
@@ -8445,7 +8466,7 @@ function playChunk(){
     document.getElementById('playbackStatus').textContent='Playing chunk '+(st.chunkIdx+1)+'...';
     speakText(chunk, p.refVoiceIndex||0, st.speed, function(){
       stopPlayback();
-      if(st.format==='listenrecite') lrOnListenEnded();
+      if(st.format==='recite') lrOnListenEnded();
     });
     return;
   }
@@ -8467,12 +8488,12 @@ function playChunk(){
         if(audio.currentTime>=endTime){
           clearInterval(check); stopPlayback();
           // Listen & Recite: enable the Recite button once the reference has played
-          if(st.format==='listenrecite') lrOnListenEnded();
+          if(st.format==='recite') lrOnListenEnded();
         }
       },80);
     }
   });
-  audio.onended=()=>{ stopPlayback(); if(st.format==='listenrecite') lrOnListenEnded(); };
+  audio.onended=()=>{ stopPlayback(); if(st.format==='recite') lrOnListenEnded(); };
   audio.onerror=()=>stopPlayback();
 }
 
@@ -8507,11 +8528,8 @@ function startPracticeRecording(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ alert('Speech recognition requires Chrome on Android or Safari on iOS (14.5+).'); return; }
   st.practiceActive=true;
-  // Blind mode: hide the text while reciting from memory
-  if(st.format==='blind'){
-    var cb=document.getElementById('chunkBox'); if(cb)cb.style.display='none';
-    var bb=document.getElementById('blindBox'); if(bb)bb.style.display='block';
-  }
+  // Keep the study text hidden while reciting from memory (Learn & Blind)
+  var _cb=document.getElementById('chunkBox'); if(_cb) _cb.style.display='none';
   const btn=document.getElementById('practiceMic');
   const live=document.getElementById('micLive');
   btn.classList.add('listening');
@@ -8571,10 +8589,8 @@ function lrReciteReset(){
   b.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="#999"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.92V20H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-3.08A7 7 0 0 0 19 10z"/></svg> Recite';
 }
 function lrListen(){
-  // Replay is allowed; reset the recite button while the reference plays
-  lrReciteReset(); lrSetReciteEnabled(false);
   document.getElementById('listenReciteStatus').textContent='Listening to the reference...';
-  playChunk(); // plays the chunk; lrOnListenEnded() fires when the audio finishes
+  playChunk(); // plays the chunk (or the question, for catechism); lrOnListenEnded() fires when it finishes
 }
 function lrOnListenEnded(){
   document.getElementById('listenReciteStatus').innerHTML='Ready — tap <b>Recite</b> to say it from memory.';
@@ -8588,6 +8604,8 @@ function lrRecite(){
     document.getElementById('listenReciteStatus').textContent='Checking your recital...';
     checkAttempt();
   } else {
+    // Hide the study text (Learn) while reciting; Blind already has it hidden
+    var cb=document.getElementById('chunkBox'); if(cb) cb.style.display='none';
     startPracticeRecording();
     document.getElementById('listenReciteStatus').textContent='Reciting... tap Stop & check when you are done.';
     var b=document.getElementById('lrReciteBtn');
@@ -8626,21 +8644,22 @@ function checkAttempt(){
   const chunks=getChunks();
   const chunk=chunks[st.chunkIdx]||'';
 
-  // Reveal hidden text panels
-  if(st.format==='blind'||st.format==='listenrecite'){
+  // Reveal the text with scoring. Charge (Learn & Blind) both hide while reciting.
+  if(p.format!=='catechism' && p.format!=='responsive'){
     const words=chunk.split(/\s+/).filter(Boolean);
     document.getElementById('chunkDisplay').innerHTML=words.map(w=>`<span class="word-token pending" onclick="toggleWord(this)">${esc(w)}</span> `).join('');
     document.getElementById('chunkBox').style.display='block';
     document.getElementById('blindBox').style.display='none';
     document.getElementById('listenReciteBox').style.display='none';
   }
-  if(p.format==='catechism'&&st.level>1){
+  if(p.format==='catechism'&&st.format==='blind'){
     const pair=p.qnaPairs[st.chunkIdx];
     if(pair){
       const words=pair.a.split(/\s+/).filter(Boolean);
       document.getElementById('catADisplay').innerHTML=words.map(w=>`<span class="word-token pending" onclick="toggleWord(this)">${esc(w)}</span> `).join('');
       document.getElementById('catABox').style.display='block';
       document.getElementById('catPhaseBar').textContent='Results — tap any word to correct it';
+      document.getElementById('listenReciteBox').style.display='none';
     }
   }
 
@@ -8718,7 +8737,7 @@ function checkAttempt(){
   prev.lastPractised=new Date().toISOString().split('T')[0];
   prev.lastTouched=Date.now();
   // Read-back accuracy counts only in no-text modes (blind / listen-recite / hidden catechism)
-  var noText=(st.format==='blind'||st.format==='listenrecite'||(st.activePassage&&st.activePassage.format==='catechism'&&st.level>1));
+  var noText=(st.format==='blind'||(st.activePassage&&st.activePassage.format==='catechism'&&st.format==='blind'));
   if(noText){
     prev.blindAttempts=(prev.blindAttempts||0)+1;
     prev.blindAccuracy=Math.round(((prev.blindAccuracy||0)*(prev.blindAttempts-1)+acc)/prev.blindAttempts);
@@ -8773,7 +8792,7 @@ function nextChunk(){
   else {
     // Reached the end. Count a completion only for a no-text (blind) run-through.
     var p=st.activePassage;
-    var noText=(st.format==='blind'||st.format==='listenrecite'||(p&&p.format==='catechism'&&st.level>1));
+    var noText=(st.format==='blind'||(p&&p.format==='catechism'&&st.format==='blind'));
     if(p){
       if(!st.progressMap[p.id]) st.progressMap[p.id]={sessions:0,accuracy:0,furthestChunk:0,totalChunks:ch.length,timesCompleted:0,blindAccuracy:0,blindAttempts:0,lastChunkOpened:0,lastPractised:''};
       var pm=st.progressMap[p.id];
@@ -9483,7 +9502,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-08 10:05:00');
+console.log('Portal build 2026-10-08 10:40:00');
 
 function toggleSharePractice(){
   if(!CU)return;
