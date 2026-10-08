@@ -4345,6 +4345,17 @@ function rMentor(){
     h+='<div style="text-align:center;background:'+(unmentored.length?'var(--badbg)':'var(--bg2)')+';border-radius:8px;padding:10px"><div style="font-size:22px;font-weight:700;color:'+(unmentored.length?'var(--bad)':'var(--t3)')+'">'+unmentored.length+'</div><div style="font-size:10px;color:'+(unmentored.length?'var(--bad)':'var(--t3)')+';font-weight:600">UNASSIGNED</div></div>';
     h+='</div>';
 
+    // Notes & commendations — on a personal mentor or any brother
+    h+='<div class="card" style="margin-bottom:12px">';
+    h+='<div class="stitle" style="margin-top:0">Notes &amp; commendations</div>';
+    h+='<div style="font-size:11px;color:var(--t3);margin-bottom:8px">A dated record about a personal mentor or any brother. Visible only to you and the entry\'s author.</div>';
+    h+='<div style="display:flex;gap:8px">';
+    h+='<select id="lm-note-sel" style="flex:1"><option value="">— Select a brother —</option>';
+    MEMBERS.slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'');}).forEach(function(m){ h+='<option value="'+m.id+'">'+esc(m.name||'')+'</option>'; });
+    h+='</select>';
+    h+='<button class="btn btn-navy btn-sm" onclick="var s=document.getElementById(\'lm-note-sel\');if(s&&s.value){openNotes(s.value,s.options[s.selectedIndex].text);}else alert(\'Select a brother first.\');">Open log</button>';
+    h+='</div></div>';
+
     // All pairs
     h+='<div class="stitle">Active pairs</div>';
     MENTORING_PAIRS.forEach(function(pair){
@@ -4432,6 +4443,7 @@ function rMentor(){
         h+='<div style="display:flex;gap:8px;margin-top:8px">';
         h+='<button class="btn btn-navy btn-sm" data-id="'+pair.id+'" onclick="saveLodgeMentorData(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-device-floppy"/></svg> Save</button>';
         h+='<button class="btn btn-n btn-sm" style="margin-left:6px" data-mid="'+pair.mentee+'" onclick="menteeReport(this.dataset.mid)">&#128196; Report</button>';
+        h+='<button class="btn btn-n btn-sm" data-sid="'+pair.mentee+'" data-nm="'+esc(menteeM?menteeM.name:'Mentee')+'" onclick="openNotes(this.dataset.sid,this.dataset.nm)">Notes</button>';
         h+='<button class="btn btn-sm" style="background:var(--badbg);color:var(--bad);border:1px solid var(--bad)" data-id="'+pair.id+'" onclick="removeMentoringPair(this.dataset.id)"><svg class="ico" width="14" height="14"><use href="#ico-trash"/></svg></button>';
         h+='</div>';
       }
@@ -5287,10 +5299,11 @@ function rHome(){
         h+='</div>';
         if(charge)h+='<div style="font-size:11px;color:var(--warn);margin-top:2px">Preparing: '+chTitle+' &middot; '+charge.mdate+'</div>';
         h+='<div class="mentee-prog" style="font-size:11px;color:var(--t3);margin-top:4px">Practice: loading…</div>';
+        h+='<button class="btn btn-n btn-sm" style="margin-top:6px;font-size:11px" data-sid="'+pr.mentee+'" data-nm="'+esc(name)+'" onclick="openNotes(this.dataset.sid,this.dataset.nm)"><svg class="ico" width="12" height="12"><use href="#ico-file-text"/></svg> Notes &amp; commendations</button>';
         h+='</div>';
       });
       h+='</div>';
-      h+='<div style="font-size:10px;color:var(--t3);margin-top:8px;font-style:italic">Read-only. Guidance happens in person.</div>';
+      h+='<div style="font-size:10px;color:var(--t3);margin-top:8px;font-style:italic">Progress is read-only. Notes you add are private to you and the Lodge Mentor.</div>';
       h+='</div>';
     }
   }catch(e){}
@@ -9512,7 +9525,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-08 11:05:00');
+console.log('Portal build 2026-10-08 12:25:00');
 
 function toggleSharePractice(){
   if(!CU)return;
@@ -9642,13 +9655,108 @@ function _renderBrotherSection(doc, y, m, prog){
   return y;
 }
 
+// ═══════════════════════════════════════════════════════
+// MENTORING NOTES & COMMENDATIONS  (dated, append-style log)
+//  Read: the author + the Lodge Mentor (enforced by RLS).
+//  Write: Lodge Mentor about anyone; a personal mentor about their own mentee.
+//  Delete: the author's own entries.
+// ═══════════════════════════════════════════════════════
+function _notesRows(subjectId, cb){
+  supa('mentor_notes?subject_id=eq.'+encodeURIComponent(subjectId)+'&order=created_at.desc',{method:'GET'})
+    .then(function(r){return r.json();}).then(function(d){cb(Array.isArray(d)?d:[]);})
+    .catch(function(){cb([]);});
+}
+function openNotes(subjectId, subjectName){
+  closeNotes();
+  var ov=document.createElement('div');
+  ov.id='notesOverlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(14,31,69,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  ov.onclick=function(e){ if(e.target===ov) closeNotes(); };
+  ov.innerHTML='<div style="background:#fff;width:100%;max-width:480px;max-height:85vh;border-radius:16px 16px 0 0;display:flex;flex-direction:column;overflow:hidden">'
+    +'<div style="padding:14px 16px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between">'
+      +'<div style="font-weight:700;color:var(--navy)">Notes &amp; commendations<br><span style="font-size:12px;font-weight:400;color:var(--t3)">'+esc(subjectName||'Brother')+'</span></div>'
+      +'<button onclick="closeNotes()" style="background:none;border:none;font-size:24px;color:var(--t3);cursor:pointer;line-height:1">&times;</button>'
+    +'</div>'
+    +'<div id="notesList" style="flex:1;overflow-y:auto;padding:12px 16px"><div style="color:var(--t3);font-size:13px">Loading…</div></div>'
+    +'<div style="padding:12px 16px;border-top:1px solid var(--bdr);background:var(--bg2)">'
+      +'<div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">'
+        +'<select id="noteKind" style="flex:0 0 auto"><option value="note">Note</option><option value="commendation">Commendation</option></select>'
+        +'<span style="font-size:11px;color:var(--t3)">dated automatically</span>'
+      +'</div>'
+      +'<textarea id="noteText" placeholder="Record progress, guidance given, or a commendation…" style="width:100%;min-height:62px;line-height:1.6"></textarea>'
+      +'<button class="btn btn-navy" style="width:100%;justify-content:center;margin-top:8px" data-sid="'+subjectId+'" onclick="addMentorNote(this.dataset.sid)">Add entry</button>'
+    +'</div>'
+  +'</div>';
+  document.body.appendChild(ov);
+  loadNotesList(subjectId);
+}
+function closeNotes(){ var o=document.getElementById('notesOverlay'); if(o)o.remove(); }
+function loadNotesList(subjectId){
+  _notesRows(subjectId, function(rows){
+    var box=document.getElementById('notesList'); if(!box)return;
+    if(!rows.length){ box.innerHTML='<div style="color:var(--t3);font-size:13px">No entries yet. Add the first one below.</div>'; return; }
+    var h='';
+    rows.forEach(function(n){
+      var am=gm(n.author_id); var who=am?gn(am):'—';
+      var d=(n.created_at||'').slice(0,10);
+      var mine=(CU&&n.author_id===CU.id);
+      var badge=n.kind==='commendation'
+        ? '<span class="badge" style="background:var(--okbg);color:var(--ok)">Commendation</span>'
+        : '<span class="badge" style="background:var(--goldbg);color:var(--gold)">Note</span>';
+      h+='<div style="border-bottom:1px solid var(--bdr);padding:9px 0">';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">';
+      h+='<div style="font-size:11px;color:var(--t3)">'+d+' &middot; '+esc(who)+' '+badge+'</div>';
+      if(mine)h+='<button data-id="'+n.id+'" data-sid="'+subjectId+'" onclick="deleteMentorNote(this.dataset.id,this.dataset.sid)" style="background:none;border:none;color:var(--bad);font-size:11px;cursor:pointer">Delete</button>';
+      h+='</div>';
+      h+='<div style="font-size:13px;color:var(--t1);line-height:1.5;white-space:pre-wrap">'+esc(n.note||'')+'</div>';
+      h+='</div>';
+    });
+    box.innerHTML=h;
+  });
+}
+function addMentorNote(subjectId){
+  var t=document.getElementById('noteText'), k=document.getElementById('noteKind');
+  var text=t?t.value.trim():''; if(!text){ alert('Write something first.'); return; }
+  var kind=k?k.value:'note';
+  supa('mentor_notes',{method:'POST',headers:{'Prefer':'return=minimal'},
+    body:JSON.stringify({subject_id:subjectId,author_id:CU?CU.id:null,kind:kind,note:text})
+  }).then(function(r){
+    if(r.ok){ if(t)t.value=''; loadNotesList(subjectId); }
+    else { r.text().then(function(x){ console.warn('note insert',r.status,x); }); alert('Could not save — you may not have permission to add a note for this brother.'); }
+  }).catch(function(){ alert('Could not save note.'); });
+}
+function deleteMentorNote(id, subjectId){
+  if(!confirm('Delete this entry? This cannot be undone.')) return;
+  supa('mentor_notes?id=eq.'+encodeURIComponent(id),{method:'DELETE'})
+    .then(function(){ loadNotesList(subjectId); }).catch(function(){});
+}
+function _renderNotesPdf(doc, y, notes, heading){
+  if(y>270){doc.addPage();y=20;}
+  doc.setTextColor(14,31,69); doc.setFontSize(10); doc.text(heading||'Notes & commendations', 14, y); y+=5;
+  doc.setFontSize(9);
+  if(!notes||!notes.length){ doc.setTextColor(120,120,120); doc.text('None recorded.',16,y); y+=5; return y+2; }
+  notes.forEach(function(n){
+    if(y>272){doc.addPage();y=20;}
+    var am=gm(n.author_id); var who=am?gn(am):'—';
+    var d=(n.created_at||'').slice(0,10);
+    doc.setTextColor(30,30,30);
+    doc.text('• '+(n.kind==='commendation'?'[Commendation] ':'')+d+' · '+who, 16, y); y+=5;
+    doc.setTextColor(80,80,80);
+    (doc.splitTextToSize(n.note||'', 172)||[]).forEach(function(ln){ if(y>278){doc.addPage();y=20;} doc.text('   '+ln,16,y); y+=5; });
+  });
+  return y+2;
+}
+
 function menteeReport(mid){
   if(!window.jspdf){alert('PDF library still loading — try again.');return;}
   var m=gm(mid); if(!m)return;
   var doc=_pdfDoc('Mentoring Progress — '+m.name);
   _mentorProgressRows(mid, function(prog){
-    _renderBrotherSection(doc, 48, m, prog);
-    doc.save('mentoring-'+m.name.replace(/[^a-z0-9]/gi,'-').toLowerCase()+'.pdf');
+    var y=_renderBrotherSection(doc, 48, m, prog);
+    _notesRows(mid, function(notes){
+      _renderNotesPdf(doc, y, notes, 'Notes & commendations');
+      doc.save('mentoring-'+m.name.replace(/[^a-z0-9]/gi,'-').toLowerCase()+'.pdf');
+    });
   });
 }
 
@@ -9659,18 +9767,26 @@ function personalMentorReport(mentorId){
   if(!pairs.length){alert('No mentees assigned to this mentor.');return;}
   var doc=_pdfDoc('Mentees of '+(mentor?gn(mentor):'Mentor'));
   var y=48;
-  // Fetch progress for each mentee sequentially
-  var i=0;
-  function next(){
-    if(i>=pairs.length){ doc.save('mentees-'+((mentor&&mentor.name)||'mentor').replace(/[^a-z0-9]/gi,'-').toLowerCase()+'.pdf'); return; }
-    var m=gm(pairs[i].mentee);
-    _mentorProgressRows(pairs[i].mentee, function(prog){
-      if(y>250){doc.addPage();y=20;}
-      y=_renderBrotherSection(doc, y, m, prog);
-      i++; next();
-    });
-  }
-  next();
+  // Lodge Mentor's own notes about this personal mentor come first
+  _notesRows(mentorId, function(mnotes){
+    y=_renderNotesPdf(doc, y, mnotes, 'Lodge Mentor notes on '+(mentor?gn(mentor):'this mentor'));
+    y+=4; doc.setDrawColor(210,210,210); doc.line(14,y-3,196,y-3);
+    // Then each mentee: progress + notes
+    var i=0;
+    function next(){
+      if(i>=pairs.length){ doc.save('mentees-'+((mentor&&mentor.name)||'mentor').replace(/[^a-z0-9]/gi,'-').toLowerCase()+'.pdf'); return; }
+      var m=gm(pairs[i].mentee);
+      _mentorProgressRows(pairs[i].mentee, function(prog){
+        if(y>250){doc.addPage();y=20;}
+        y=_renderBrotherSection(doc, y, m, prog);
+        _notesRows(pairs[i].mentee, function(nn){
+          y=_renderNotesPdf(doc, y, nn, 'Notes & commendations');
+          i++; next();
+        });
+      });
+    }
+    next();
+  });
 }
 
 function loadHomeMenteeProgress(){
