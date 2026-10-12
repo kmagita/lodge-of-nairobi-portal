@@ -9301,7 +9301,7 @@ function renderVisitorForm(e, ctx){
     h+='</select>';
   }
   if(allowNon){
-    h+='<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t2);margin-bottom:6px"><input type="checkbox" id="'+pfx+'mason"'+(isMasonInit?' checked':'')+' onchange="_visToggleMason(\''+ctx+'\',\''+e.id+'\')"> Mason (brother visiting)</label>';
+    h+='<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t2);margin-bottom:6px;cursor:pointer"><input type="checkbox" id="'+pfx+'mason"'+(isMasonInit?' checked':'')+' onchange="_visToggleMason(\''+ctx+'\',\''+e.id+'\')" style="width:18px;height:18px;flex:none;margin:0"><span>Mason (brother visiting)</span></label>';
   }
   h+='<div id="'+pfx+'masonwrap" style="display:'+(isMasonInit?'block':'none')+'">';
   h+='<input id="'+pfx+'lodge" placeholder="Lodge name" value="'+esc(pre('lodgeName'))+'" style="width:100%;margin-bottom:6px">';
@@ -10008,7 +10008,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-12 16:10:00');
+console.log('Portal build 2026-10-12 16:15:00');
 
 function toggleSharePractice(){
   if(!CU)return;
