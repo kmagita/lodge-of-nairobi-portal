@@ -2840,7 +2840,7 @@ function rPolls(){
 
     // ── New poll creation form ────────────────────────────────────────────
     // ── New poll creation form ─────────────────────────────────────────
-    h+='<div id="new-poll-form" style="display:none;margin-bottom:14px">';
+    h+='<div id="new-poll-form" style="display:'+(pollForm?'block':'none')+';margin-bottom:14px">';
     h+='<div class="card" style="border:2px solid var(--gold)">';
     h+='<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px">New poll</div>';
     h+='<div class="fg"><label class="lbl">Poll label</label><input id="poll-label" placeholder="e.g. October Rehearsal"></div>';
@@ -3145,11 +3145,16 @@ function removeDraftField(i){
 }
 
 function showCreatePoll(){
+  pollForm=true;
   var form=document.getElementById('new-poll-form');
-  if(!form){pollForm=true;rPolls();return;}
+  if(!form){rPolls();return;}
   form.style.display='block';
   form.scrollIntoView({behavior:'smooth',block:'start'});
 }
+// True when the steward is mid-create (form open) or typing in the polls pane —
+// the background refresh must not re-render over them.
+function _paneInputFocused(paneId){ var a=document.activeElement; if(!a)return false; var t=a.tagName; if(t!=='INPUT'&&t!=='TEXTAREA'&&t!=='SELECT')return false; var pane=document.getElementById(paneId); return pane?pane.contains(a):false; }
+function _pollBusy(){ if(pollForm)return true; var f=document.getElementById('new-poll-form'); if(f&&f.style.display!=='none')return true; return _paneInputFocused('pane-polls'); }
 
 function togglePollFieldOptions(type){
   var wrap=document.getElementById('pf-options-wrap');
@@ -3198,6 +3203,7 @@ function renderPollFieldsList(){
 }
 
 function hidePollForm(){
+  pollForm=false;
   var form=document.getElementById('new-poll-form');
   if(form)form.style.display='none';
   ['poll-label','poll-date','pf-label','pf-options'].forEach(function(id){
@@ -4335,12 +4341,15 @@ function rNotices(){
     // ── Expanded content ──────────────────────────────────────────────────
     if(isOpen){
       h+='<div style="padding:0 14px 14px;border-top:1px solid var(--bdr)">';
-      h+='<div style="font-size:13px;color:var(--t2);line-height:1.6;margin-top:12px">'+n.body+'</div>';
+      var _rMyV=relPoll?(relPoll.votes[CU.id]||{}):null;
+      var _rSubmitted=!!(relPoll&&_rMyV&&_rMyV._submitted===true);
+      var _rBody=(relPoll&&_rSubmitted)?('Poll for '+relPoll.label+' — you\'ve responded. You can change your response below.'):n.body;
+      h+='<div style="font-size:13px;color:var(--t2);line-height:1.6;margin-top:12px">'+_rBody+'</div>';
 
       // Poll notice — show submitted state or voting form
       if(relPoll){
-        var myV=relPoll.votes[CU.id]||{};
-        var submitted=myV._submitted===true;
+        var myV=_rMyV;
+        var submitted=_rSubmitted;
         var pollExpanded=window._pollExpanded===n.id;
         h+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--bdr)">';
         if(submitted){
@@ -4351,6 +4360,7 @@ function rNotices(){
           h+='<div><span style="color:var(--ok);font-weight:700">&#10003; Submitted</span><span style="font-size:12px;color:var(--t2)"> — '+att+meal+'</span></div>';
           h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-pid="'+relPoll.id+'" onclick="event.stopPropagation();changeVote(this.dataset.pid);rNotices()">Change</button>';
           h+='</div>';
+          h+=renderMealPaymentSelf(relPoll);
         } else {
           // Not yet responded — show expand toggle
           h+='<button data-nid="'+n.id+'" onclick="event.stopPropagation();window._pollExpanded=(window._pollExpanded===this.dataset.nid?null:this.dataset.nid);rNotices()" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--warnbg);border:none;border-radius:8px;padding:10px 12px;cursor:pointer;touch-action:manipulation">';
@@ -5852,6 +5862,7 @@ function pollMemberFee(poll){ return (poll&&poll.memberFee!=null)?poll.memberFee
 function pollGuestFee(poll){ return (poll&&poll.guestFee!=null)?poll.guestFee:(isMealPoll(poll)?MEAL_COSTS.guest_surcharge:0); }
 function pollHasFees(poll){ return pollMemberFee(poll)>0 || pollGuestFee(poll)>0; }
 function myGuestCount(poll){ var v=poll.votes[CU.id]||{}; var g=(v.guests||[]).filter(function(x){return x&&(x.name||x.phone);}); return g.length||(v.f3===true?1:0); }
+function myAmountDue(poll){ var mf=Math.max(0,pollMemberFee(poll)), gf=Math.max(0,pollGuestFee(poll)); return mf + myGuestCount(poll)*gf; }
 function pollFeeLine(poll){ var mf=pollMemberFee(poll), gf=pollGuestFee(poll); if(mf<=0&&gf<=0)return isMealPoll(poll)?'No charge':''; return 'Brother: '+(mf>0?'KShs '+mf:'waived')+' &middot; Guest: '+(gf>0?'KShs '+gf:'waived'); }
 
 // ── Brother self-declares a meal payment (M-Pesa) — status 'declared' until the
@@ -6974,6 +6985,15 @@ function renderPollVoter(poll,myV,isClosed){
     h+=renderPollGuests(poll);
   }
 
+  // ── Running amount due — live, when attending and the poll carries a fee ──
+  if(myV.f1===true && pollHasFees(poll)){
+    var _mf=Math.max(0,pollMemberFee(poll)), _gf=Math.max(0,pollGuestFee(poll)), _gc=myGuestCount(poll), _due=myAmountDue(poll);
+    h+='<div style="background:var(--goldbg);border-radius:8px;padding:8px 10px;margin-bottom:10px">';
+    h+='<div style="font-size:11px;color:var(--t3)">'+(isMealPoll(poll)?'Your meal':'Your fee')+': '+(_mf>0?'KShs '+_mf:'waived')+(_gc>0?' &middot; '+_gc+' guest'+(_gc!==1?'s':'')+': '+(_gf>0?'KShs '+(_gc*_gf):'waived'):'')+'</div>';
+    h+='<div style="font-size:14px;font-weight:700;color:var(--navy)">Amount due: KShs '+_due+'</div>';
+    h+='</div>';
+  }
+
   // Submit button — show once attending is answered
   if(myV.f1!==undefined){
     h+='<button class="btn btn-navy" style="width:100%;justify-content:center;margin-top:4px;padding:12px"';
@@ -7365,23 +7385,27 @@ function _rtTick(){
       }
     });
     buildNav();
-    if(pane==='notices') rNotices();
+    if(pane==='notices' && !_paneInputFocused('pane-notices')) rNotices();
     if(pane==='home') rHome();
   });
 
-  // Refresh polls
+  // Refresh polls (match the main loader's mapping so fees / showNames survive)
   _fetchIfChanged('polls', 'polls?select=*,poll_votes(*)&order=created_at.desc', function(d){
+    var prevShow={}; POLLS.forEach(function(p){prevShow[p.id]=p.showNames;});
     POLLS = d.map(function(p){
       var votes={};
       (p.poll_votes||[]).forEach(function(v){votes[v.member_id]=v.answers;});
+      var fields=p.fields; if(typeof fields==='string'){try{fields=JSON.parse(fields);}catch(e){fields=[];}} if(!Array.isArray(fields))fields=[];
       return {id:p.id, label:p.label, dayLabel:p.day_label||'', type:p.type||'rehearsal',
-              active:p.active, fields:p.fields||[], votes:votes,
-              mealOptions:(p.meal_options||'').split(',').map(function(s){return s.trim();}).filter(Boolean),
+              active:p.active===true||p.active==='true', fields:fields, votes:votes,
+              showNames:prevShow[p.id]||false,
+              memberFee:(p.member_fee!=null?p.member_fee:null), guestFee:(p.guest_fee!=null?p.guest_fee:null),
               createdAt:p.created_at};
     });
-    if(pane==='polls') rPolls();
+    // Don't re-render over a steward mid-create or anyone typing in these panes.
+    if(pane==='polls' && !_pollBusy()) rPolls();
     if(pane==='home') rHome();
-    if(pane==='notices') rNotices();
+    if(pane==='notices' && !_paneInputFocused('pane-notices')) rNotices();
   });
 
   // Refresh RSVP data
@@ -9819,7 +9843,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-12 12:10:00');
+console.log('Portal build 2026-10-12 13:10:00');
 
 function toggleSharePractice(){
   if(!CU)return;
