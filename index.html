@@ -1890,6 +1890,7 @@ function loadAppData() {
         ATTENDANCE_DATA[r.event_id][r.member_id]=true;
       });
     }),
+    safeFetch('event_guests?select=*', function(d){ _loadEventGuests(d); }),
     safeFetch('charge_assignments?select=*', function(d) {
       CHARGE_ASSIGNMENTS = d.map(function(a) {
         return {id:a.id, pid:a.passage_id, ptitle:'', mdate:a.meeting_date,
@@ -4175,12 +4176,16 @@ function rReports(){
           hh+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
           hh+='<div><span style="font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase">Present</span> ';
           hh+='<span style="font-size:18px;font-weight:700;color:var(--navy)">'+present.length+'</span>';
-          if(e.actual_visitors)hh+='<span style="font-size:12px;color:var(--t3)"> + '+e.actual_visitors+' visitor'+(e.actual_visitors!=1?'s':'')+'</span>';
+          var _cvc=eventGuests(e.id).length;
+          if(_cvc)hh+='<span style="font-size:12px;color:var(--t3)"> + '+_cvc+' visitor'+(_cvc!=1?'s':'')+'</span>';
+          else if(e.actual_visitors)hh+='<span style="font-size:12px;color:var(--t3)"> + '+e.actual_visitors+' visitor'+(e.actual_visitors!=1?'s':'')+'</span>';
           hh+='</div>';
           hh+='<div><span class="badge" style="background:var(--bg2);color:var(--t3)">Closed</span>';
           if(CU.role==='secretary')hh+='<button class="btn btn-n btn-sm" style="font-size:11px;margin-left:6px" data-eid="'+e.id+'" onclick="reopenEvent(this.dataset.eid)">Reopen</button>';
           hh+='</div></div>';
           if(present.length)hh+='<div style="font-size:12px;color:var(--navy)">'+present.map(gn).join(', ')+'</div>';
+          var _cg=eventGuests(e.id);
+          if(_cg.length){ hh+='<div style="margin-top:8px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase">Visitors</div>'+renderVisitorList(e,'sec',false); }
           hh+='</div>';
         } else {
           var eo=window._attRecordOpen===e.id;
@@ -4194,16 +4199,22 @@ function rReports(){
             MEMBERS.forEach(function(m){
               // pre-tick: if register has a value use it, otherwise use RSVP attending
               var checked;
-              if(reg[m.id]!==undefined)checked=reg[m.id];
+              if(_attTmp[e.id]&&_attTmp[e.id][m.id]!==undefined)checked=_attTmp[e.id][m.id];
+              else if(reg[m.id]!==undefined)checked=reg[m.id];
               else checked=(RSVP_DATA[e.id]&&RSVP_DATA[e.id][m.id]==='attending');
               hh+='<label style="display:flex;align-items:center;gap:10px;padding:6px 4px;cursor:pointer;border-bottom:1px solid var(--bg2)">';
-              hh+='<input type="checkbox" class="att-chk-'+e.id+'" data-mid="'+m.id+'"'+(checked?' checked':'')+' style="width:18px;height:18px">';
+              hh+='<input type="checkbox" class="att-chk-'+e.id+'" data-mid="'+m.id+'" data-eid="'+e.id+'"'+(checked?' checked':'')+' onchange="_attTick(this.dataset.eid,this.dataset.mid,this.checked)" style="width:18px;height:18px">';
               hh+='<span style="font-size:13px;color:var(--navy)">'+gn(m)+'</span>';
               hh+='<span style="font-size:11px;color:var(--t3);margin-left:auto">'+m.deg+'</span>';
               hh+='</label>';
             });
             hh+='</div>';
-            hh+='<div class="fg" style="margin-bottom:10px"><label class="lbl">Visitors (non-members)</label><input type="number" id="att-vis-'+e.id+'" min="0" value="'+(e.actual_visitors||0)+'"></div>';
+            hh+='<div style="margin:12px 0"><div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Visitor register</div>';
+            hh+='<div style="font-size:10px;color:var(--t3);margin-bottom:6px">'+(eventAllowsNonMason(e)?'Rehearsal — masons and non-mason guests allowed.':'Masons only at this event.')+' Members’ own entries appear here.</div>';
+            hh+=renderVisitorList(e,'sec',false);
+            hh+=renderVisitorForm(e,'sec');
+            var _vc=eventGuests(e.id).length, _vm=eventGuests(e.id).filter(function(g){return g.isMason;}).length;
+            hh+='<div style="font-size:11px;color:var(--t3);margin-top:6px">'+_vc+' visitor'+(_vc!=1?'s':'')+(_vc?(' — '+_vm+' mason'+(_vm!=1?'s':'')+', '+(_vc-_vm)+' guest'+((_vc-_vm)!=1?'s':'')):'')+'</div></div>';
             hh+='<button class="btn btn-navy btn-sm" style="width:100%;justify-content:center" data-eid="'+e.id+'" onclick="closeEventAttendance(this.dataset.eid)">Save register &amp; close event</button>';
           }
           hh+='</div>';
@@ -5247,7 +5258,7 @@ function rHome(){
       h+='<div style="flex:1;min-width:0">';
       h+='<div style="font-size:13px;font-weight:600;color:var(--navy)">'+e.title+'</div>';
       h+='<div style="font-size:11px;color:var(--t3)">'+days[d.getDay()]+(e.venue?' &middot; '+e.venue:'')+'</div>';
-      if(e.type==='meeting'||e.type==='rehearsal'||e.type==='installation'){h+=rsvpBtns(e,myRsvp);}
+      if(e.type==='meeting'||e.type==='rehearsal'||e.type==='installation'){h+=rsvpBtns(e,myRsvp);h+=renderMyVisitors(e,myRsvp);}
 
       // Rehearsal sub-line inside the meeting card
       if(rehearsal){
@@ -5260,6 +5271,7 @@ function rHome(){
           var rRsvp=(RSVP_DATA[rehearsal.id]&&RSVP_DATA[rehearsal.id][CU.id])||null;
           h+='<div style="font-size:12px;font-weight:600;color:var(--gold)">Rehearsal &middot; '+days[rd.getDay()]+' '+rd.getDate()+' '+months[rd.getMonth()]+'</div>';
           h+=rsvpBtns(rehearsal,rRsvp);
+          h+=renderMyVisitors(rehearsal,rRsvp);
         }
         h+='</div>';
       }
@@ -7415,7 +7427,14 @@ function _rtTick(){
       if(!RSVP_DATA[r.event_id])RSVP_DATA[r.event_id]={};
       RSVP_DATA[r.event_id][r.member_id]=r.status;
     });
-    if(pane==='home')rHome();
+    if(pane==='home' && !_paneInputFocused('pane-home'))rHome();
+  });
+
+  // Refresh the event visitor register
+  _fetchIfChanged('event_guests','event_guests?select=*',function(d){
+    _loadEventGuests(d);
+    if(pane==='reports' && !_paneInputFocused('pane-reports'))rReports();
+    if(pane==='home' && !_paneInputFocused('pane-home'))rHome();
   });
 
   // Refresh calendar events (less often — skip if timestamp same)
@@ -9231,11 +9250,140 @@ function pmInit(){
 }
 
 
+// ═══ Event visitor register (event_guests) ════════════════════════════════
+var EVENT_GUESTS={};   // eventId → [ {id,eventId,addedBy,name,phone,broughtBy,isMason,lodgeName,lodgeNumber,rank,rankTitle} ]
+var VISITOR_RANKS=['Entered Apprentice','Fellow Craft','Master Mason','Installed Master (WM)','Past Master','Provincial/District Grand Officer','Grand Officer','Other'];
+var _attTmp={};        // eid → {mid:bool} — holds manual attendance ticks across re-renders
+function _attTick(eid,mid,on){ if(!_attTmp[eid])_attTmp[eid]={}; _attTmp[eid][mid]=on; }
+function _rankNeedsTitle(r){ return r==='Provincial/District Grand Officer'||r==='Grand Officer'||r==='Other'; }
+function eventGuests(eid){ return (EVENT_GUESTS[eid]||[]).slice(); }
+function eventAllowsNonMason(e){ return !!(e&&e.type==='rehearsal'); }   // non-masons only at rehearsals
+function _mapEventGuest(g){ return {id:g.id,eventId:g.event_id,addedBy:g.added_by,name:g.name||'',phone:g.phone||'',broughtBy:g.brought_by||null,isMason:g.is_mason!==false,lodgeName:g.lodge_name||'',lodgeNumber:g.lodge_number||'',rank:g.rank||'',rankTitle:g.rank_title||''}; }
+function _loadEventGuests(d){ EVENT_GUESTS={}; (d||[]).forEach(function(g){ var o=_mapEventGuest(g); if(!EVENT_GUESTS[o.eventId])EVENT_GUESTS[o.eventId]=[]; EVENT_GUESTS[o.eventId].push(o); }); }
+
+function addOrUpdateEventGuest(eid, rec, existingId){
+  var body={event_id:eid, added_by:CU.id, name:rec.name, phone:rec.phone||null, brought_by:rec.broughtBy||null,
+    is_mason:rec.isMason, lodge_name:rec.lodgeName||null, lodge_number:rec.lodgeNumber||null,
+    rank:rec.rank||null, rank_title:rec.rankTitle||null};
+  if(existingId){
+    var arr=EVENT_GUESTS[eid]||[]; var it=arr.find(function(x){return x.id===existingId;});
+    if(it){ it.name=rec.name; it.phone=rec.phone; it.broughtBy=rec.broughtBy; it.isMason=rec.isMason; it.lodgeName=rec.lodgeName; it.lodgeNumber=rec.lodgeNumber; it.rank=rec.rank; it.rankTitle=rec.rankTitle; }
+    supa('event_guests?id=eq.'+encodeURIComponent(existingId),{method:'PATCH',body:JSON.stringify(body)}).catch(function(e){console.warn('Visitor save failed',e);});
+  } else {
+    var tmp={id:'eg'+Date.now(),eventId:eid,addedBy:CU.id,name:rec.name,phone:rec.phone,broughtBy:rec.broughtBy,isMason:rec.isMason,lodgeName:rec.lodgeName,lodgeNumber:rec.lodgeNumber,rank:rec.rank,rankTitle:rec.rankTitle};
+    if(!EVENT_GUESTS[eid])EVENT_GUESTS[eid]=[]; EVENT_GUESTS[eid].push(tmp);
+    supa('event_guests',{method:'POST',headers:{'Prefer':'return=representation'},body:JSON.stringify(body)})
+      .then(function(r){return r.json();}).then(function(dd){if(dd&&dd[0])tmp.id=dd[0].id;}).catch(function(e){console.warn('Visitor save failed',e);});
+  }
+}
+function removeEventGuest(eid,id){
+  EVENT_GUESTS[eid]=(EVENT_GUESTS[eid]||[]).filter(function(x){return x.id!==id;});
+  supa('event_guests?id=eq.'+encodeURIComponent(id),{method:'DELETE'}).catch(function(e){console.warn('Visitor delete failed',e);});
+}
+function _visToggleMason(ctx,eid){ var w=document.getElementById('vf-'+ctx+'-'+eid+'-masonwrap'); var c=document.getElementById('vf-'+ctx+'-'+eid+'-mason'); if(w)w.style.display=(c&&c.checked)?'block':'none'; }
+function _visToggleTitle(ctx,eid){ var s=document.getElementById('vf-'+ctx+'-'+eid+'-rank'); var t=document.getElementById('vf-'+ctx+'-'+eid+'-title'); if(t)t.style.display=(s&&_rankNeedsTitle(s.value))?'block':'none'; }
+
+function renderVisitorForm(e, ctx){
+  var allowNon=eventAllowsNonMason(e);
+  var editId=(window._visEditId&&window._visEditId.eid===e.id&&window._visEditId.ctx===ctx)?window._visEditId.id:null;
+  var ed=editId?(EVENT_GUESTS[e.id]||[]).find(function(x){return x.id===editId;}):null;
+  var pre=function(f){return ed?(ed[f]||''):'';};
+  var pfx='vf-'+ctx+'-'+e.id+'-';
+  var isMasonInit = ed?ed.isMason:true;   // meetings: always mason; rehearsals: default mason, toggle to switch
+  var h='<div style="border:1px dashed var(--bdr);border-radius:8px;padding:8px;margin-top:8px">';
+  h+='<div style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:6px">'+(ed?'Edit visitor':'Add a visitor')+'</div>';
+  if(!allowNon)h+='<div style="font-size:10px;color:var(--t3);margin-bottom:6px">Masons only at this event — lodge and rank required.</div>';
+  h+='<input id="'+pfx+'name" placeholder="Full name" value="'+esc(pre('name'))+'" style="width:100%;margin-bottom:6px">';
+  h+='<input id="'+pfx+'phone" placeholder="Phone" inputmode="tel" value="'+esc(pre('phone'))+'" style="width:100%;margin-bottom:6px">';
+  if(ctx==='sec'){
+    h+='<select id="'+pfx+'broughtby" style="width:100%;margin-bottom:6px"><option value="">Brought by… (optional)</option>';
+    MEMBERS.forEach(function(m){ h+='<option value="'+m.id+'"'+(pre('broughtBy')===m.id?' selected':'')+'>'+gn(m)+'</option>'; });
+    h+='</select>';
+  }
+  if(allowNon){
+    h+='<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t2);margin-bottom:6px"><input type="checkbox" id="'+pfx+'mason"'+(isMasonInit?' checked':'')+' onchange="_visToggleMason(\''+ctx+'\',\''+e.id+'\')"> Mason (brother visiting)</label>';
+  }
+  h+='<div id="'+pfx+'masonwrap" style="display:'+(isMasonInit?'block':'none')+'">';
+  h+='<input id="'+pfx+'lodge" placeholder="Lodge name" value="'+esc(pre('lodgeName'))+'" style="width:100%;margin-bottom:6px">';
+  h+='<input id="'+pfx+'lodgeno" placeholder="Lodge number" value="'+esc(pre('lodgeNumber'))+'" style="width:100%;margin-bottom:6px">';
+  h+='<select id="'+pfx+'rank" onchange="_visToggleTitle(\''+ctx+'\',\''+e.id+'\')" style="width:100%;margin-bottom:6px"><option value="">Rank…</option>';
+  VISITOR_RANKS.forEach(function(r){ h+='<option'+(pre('rank')===r?' selected':'')+'>'+r+'</option>'; });
+  h+='</select>';
+  var showTitle=_rankNeedsTitle(pre('rank'));
+  h+='<input id="'+pfx+'title" placeholder="Exact title / office (e.g. Past Prov. Grand Warden)" value="'+esc(pre('rankTitle'))+'" style="width:100%;margin-bottom:6px;display:'+(showTitle?'block':'none')+'">';
+  h+='</div>';
+  h+='<div style="display:flex;gap:6px">';
+  h+='<button class="btn btn-navy btn-sm" style="flex:1;justify-content:center" data-eid="'+e.id+'" onclick="submitVisitor(\''+ctx+'\',this.dataset.eid)">'+(ed?'Save changes':'Add visitor')+'</button>';
+  if(ed)h+='<button class="btn btn-n btn-sm" onclick="window._visEditId=null;'+(ctx==='sec'?'rReports()':'rHome()')+'">Cancel</button>';
+  h+='</div></div>';
+  return h;
+}
+function submitVisitor(ctx,eid){
+  var e=CALENDAR_EVENTS.find(function(x){return x.id===eid;}); if(!e)return;
+  var pfx='vf-'+ctx+'-'+eid+'-';
+  var g=function(f){var el=document.getElementById(pfx+f);return el?el.value.trim():'';};
+  var name=g('name'); if(!name){alert('Enter the visitor\'s name.');return;}
+  var allowNon=eventAllowsNonMason(e);
+  var masonChk=document.getElementById(pfx+'mason');
+  var isMason = allowNon ? (masonChk?masonChk.checked:true) : true;
+  var rec={name:name, phone:g('phone'), isMason:isMason, broughtBy:(ctx==='sec'?(g('broughtby')||null):CU.id), lodgeName:'', lodgeNumber:'', rank:'', rankTitle:''};
+  if(isMason){
+    rec.lodgeName=g('lodge'); rec.lodgeNumber=g('lodgeno'); rec.rank=g('rank'); rec.rankTitle=_rankNeedsTitle(g('rank'))?g('title'):'';
+    if(!rec.lodgeName||!rec.lodgeNumber||!rec.rank){ alert('For a mason visitor, enter lodge name, lodge number and rank.'); return; }
+    if(_rankNeedsTitle(rec.rank)&&!rec.rankTitle){ alert('Enter the exact title for that rank.'); return; }
+  }
+  var editId=(window._visEditId&&window._visEditId.eid===eid&&window._visEditId.ctx===ctx)?window._visEditId.id:null;
+  addOrUpdateEventGuest(eid, rec, editId);
+  window._visEditId=null;
+  if(ctx==='sec')rReports(); else rHome();
+}
+function _visRankLabel(g){ if(!g.isMason)return 'Guest (non-mason)'; var base=g.rank||'Mason'; if(g.rankTitle)base+=' — '+g.rankTitle; return base; }
+function renderVisitorList(e, ctx, mineOnly){
+  var list=eventGuests(e.id);
+  if(mineOnly)list=list.filter(function(g){return g.addedBy===CU.id;});
+  if(!list.length)return '<div style="font-size:11px;color:var(--t3);margin-bottom:4px">No visitors recorded yet.</div>';
+  var locked=!!e.closed;
+  var h='';
+  list.forEach(function(g){
+    var canEdit=!locked && (ctx==='sec' || g.addedBy===CU.id);
+    h+='<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--bg2)">';
+    h+='<div style="flex:1;min-width:0">';
+    h+='<div style="font-size:13px;color:var(--navy);font-weight:600">'+esc(g.name)+(g.phone?' <span style="font-weight:400;color:var(--t3);font-size:11px">'+esc(g.phone)+'</span>':'')+'</div>';
+    var det=_visRankLabel(g);
+    if(g.isMason&&g.lodgeName)det+=' &middot; '+esc(g.lodgeName)+(g.lodgeNumber?' № '+esc(g.lodgeNumber):'');
+    h+='<div style="font-size:11px;color:var(--t3)">'+det+'</div>';
+    if(g.broughtBy){ var bm=MEMBERS.find(function(m){return m.id===g.broughtBy;}); if(bm)h+='<div style="font-size:10px;color:var(--t3)">Brought by '+gn(bm)+'</div>'; }
+    h+='</div>';
+    if(canEdit){
+      h+='<div style="display:flex;gap:4px;flex-shrink:0">';
+      h+='<button class="btn btn-n btn-sm" style="font-size:10px;padding:2px 6px" data-eid="'+e.id+'" data-id="'+g.id+'" onclick="window._visEditId={ctx:\''+ctx+'\',eid:this.dataset.eid,id:this.dataset.id};'+(ctx==='sec'?'rReports()':'rHome()')+'">Edit</button>';
+      h+='<button class="btn btn-sm" style="font-size:12px;padding:2px 7px;background:var(--badbg);color:var(--bad)" data-eid="'+e.id+'" data-id="'+g.id+'" onclick="if(confirm(\'Remove this visitor?\')){removeEventGuest(this.dataset.eid,this.dataset.id);'+(ctx==='sec'?'rReports()':'rHome()')+'}">&times;</button>';
+      h+='</div>';
+    }
+    h+='</div>';
+  });
+  return h;
+}
+function renderMyVisitors(e, myRsvp){
+  if(myRsvp!=='attending' || e.closed)return '';
+  var mine=eventGuests(e.id).filter(function(g){return g.addedBy===CU.id;});
+  var open=window._visExpand===e.id;
+  var h='<div style="margin-top:6px">';
+  h+='<button class="btn btn-n btn-sm" style="font-size:11px" data-eid="'+e.id+'" onclick="window._visExpand=(window._visExpand===this.dataset.eid?null:this.dataset.eid);rHome()">'+(open?'&#9650; ':'&#9660; ')+'Visitors I\'m bringing'+(mine.length?' ('+mine.length+')':'')+'</button>';
+  if(open){
+    h+='<div style="margin-top:6px">';
+    h+=renderVisitorList(e,'mem',true);
+    h+=renderVisitorForm(e,'mem');
+    h+='</div>';
+  }
+  h+='</div>';
+  return h;
+}
+
 function closeEventAttendance(eid){
   var e=CALENDAR_EVENTS.find(function(x){return x.id===eid;});
   if(!e)return;
-  var vis=document.getElementById('att-vis-'+eid);
-  var visitors=vis&&vis.value!==''?parseInt(vis.value):0;
+  var visitors=eventGuests(eid).length;   // derived from the named register
   // Collect ticked members
   var boxes=document.querySelectorAll('.att-chk-'+eid);
   var present=[];
@@ -9459,10 +9607,27 @@ function secretaryAttendanceReport(){
     doc.setFontSize(10); doc.setTextColor(14,31,69);
     doc.text(e.title+' — '+d.getDate()+' '+months[d.getMonth()]+' '+d.getFullYear(), 14, y); y+=6;
     doc.setFontSize(8); doc.setTextColor(80,80,80);
-    doc.text('Present: '+present.length+(e.actual_visitors?' + '+e.actual_visitors+' visitors':''), 14, y); y+=5;
+    var _vg=eventGuests(e.id);
+    var _vm=_vg.filter(function(g){return g.isMason;}).length;
+    doc.text('Present: '+present.length+' members'+(_vg.length?(' + '+_vg.length+' visitors ('+_vm+' masons, '+(_vg.length-_vm)+' guests)'):''), 14, y); y+=5;
     var names=present.map(function(m){return m.name;}).join(', ')||'None recorded';
-    var lines=doc.splitTextToSize(names, 180);
-    doc.setTextColor(110,110,110); doc.text(lines, 14, y); y+=lines.length*4+6;
+    var lines=doc.splitTextToSize('Members: '+names, 180);
+    doc.setTextColor(110,110,110); doc.text(lines, 14, y); y+=lines.length*4+4;
+    if(_vg.length){
+      if(y>272){doc.addPage();y=20;}
+      doc.setTextColor(14,31,69); doc.text('Visitors:', 14, y); y+=4;
+      doc.setTextColor(110,110,110);
+      _vg.forEach(function(g){
+        if(y>278){doc.addPage();y=20;}
+        var line=g.name;
+        if(g.isMason){ line+=' — '+(g.rankTitle||g.rank||'Mason'); if(g.lodgeName)line+=', '+g.lodgeName+(g.lodgeNumber?' No. '+g.lodgeNumber:''); }
+        else { line+=' — Guest (non-mason)'; }
+        if(g.broughtBy){ var bm=MEMBERS.find(function(m){return m.id===g.broughtBy;}); if(bm)line+=' (by '+bm.name+')'; }
+        var vl=doc.splitTextToSize('• '+line, 176);
+        doc.text(vl, 18, y); y+=vl.length*4;
+      });
+    }
+    y+=6;
   });
   doc.save('attendance-report-'+new Date().toISOString().split('T')[0]+'.pdf');
 }
@@ -9843,7 +10008,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-12 13:30:00');
+console.log('Portal build 2026-10-12 16:10:00');
 
 function toggleSharePractice(){
   if(!CU)return;
