@@ -1830,7 +1830,8 @@ function loadAppData() {
         if(!Array.isArray(fields))fields=[];
         return {id:p.id, type:p.type, label:p.label, dayLabel:p.day_label,
                 date:p.date, active:p.active===true||p.active==='true',
-                fields:fields, votes:votes, showNames:false};
+                fields:fields, votes:votes, showNames:false,
+                memberFee:(p.member_fee!=null?p.member_fee:null), guestFee:(p.guest_fee!=null?p.guest_fee:null)};
       });
     }),
     safeFetch('sub_payments?select=*', function(d) {
@@ -2846,6 +2847,11 @@ function rPolls(){
     h+='<div class="fg"><label class="lbl">Meal options <span style="font-size:10px;color:var(--t3)">(comma-separated)</span></label>';
     h+='<input id="poll-meal-options" value="Chicken, Fish, Vegetarian">';
     h+='</div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+    h+='<div class="fg" style="margin:0"><label class="lbl">Fee per brother (KShs)</label><input id="poll-member-fee" type="number" inputmode="numeric" value="'+MEAL_COSTS.rehearsal+'" placeholder="0 = waived"></div>';
+    h+='<div class="fg" style="margin:0"><label class="lbl">Fee per guest (KShs)</label><input id="poll-guest-fee" type="number" inputmode="numeric" value="'+MEAL_COSTS.guest_surcharge+'" placeholder="0 = waived"></div>';
+    h+='</div>';
+    h+='<div style="font-size:11px;color:var(--t3);margin:2px 0 8px">Enter 0 to waive a fee (no charge for that line).</div>';
     h+='<div style="display:flex;gap:8px;margin-top:4px">';
     h+='<button class="btn btn-navy btn-sm" style="flex:1;justify-content:center" onclick="createPoll()"><svg class="ico" width="16" height="16"><use href="#ico-plus"/></svg> Create poll</button>';
     h+='<button class="btn btn-n btn-sm" onclick="hidePollForm()">Cancel</button>';
@@ -2858,7 +2864,9 @@ function rPolls(){
       var h2='<div class="card" style="margin-bottom:10px">';
       h2+='<div class="srow" style="margin-bottom:8px">';
       h2+='<div style="flex:1"><div style="font-weight:700;font-size:14px;color:var(--navy)">'+poll.label+'</div>';
-      h2+='<div style="font-size:11px;color:var(--t3)">'+poll.dayLabel+' &middot; '+(poll.active?'<span style="color:var(--ok)">Open</span>':'<span style="color:var(--t3)">Closed</span>')+'</div></div>';
+      h2+='<div style="font-size:11px;color:var(--t3)">'+poll.dayLabel+' &middot; '+(poll.active?'<span style="color:var(--ok)">Open</span>':'<span style="color:var(--t3)">Closed</span>')+'</div>';
+      if(poll.type==='rehearsal')h2+='<div style="font-size:10px;color:var(--t3);margin-top:1px">'+pollFeeLine(poll)+'</div>';
+      h2+='</div>';
       h2+='<span class="badge" style="background:var(--infobg);color:var(--info)">'+total+' response'+(total!==1?'s':'')+'</span>';
       h2+='</div>';
       // Response summary
@@ -2879,7 +2887,9 @@ function rPolls(){
           var isAttending=myV&&myV.f1===true;
           var mealPaid=STEWARD_PAYMENTS.find(function(p){return p.memberId===m.id&&p.pollId===poll.id&&p.type==='rehearsal_meal';});
           var guestPaid=STEWARD_PAYMENTS.find(function(p){return p.memberId===m.id&&p.pollId===poll.id&&p.type==='guest_surcharge';});
-          var hasGuest=myV&&myV.f3===true;
+          var guestList=(myV&&Array.isArray(myV.guests))?myV.guests.filter(function(g){return g&&(g.name||g.phone);}):[];
+          var guestCount=guestList.length||(myV&&myV.f3===true?1:0);  // f3 fallback for legacy
+          var hasGuest=guestCount>0;
           var spKey=poll.id+'|'+m.id;
           var isOpenPay=typeof stewardPayOpen!=='undefined'&&stewardPayOpen===spKey;
           h2+='<div style="padding:8px 12px;border-bottom:1px solid var(--bdr)">';
@@ -2899,22 +2909,35 @@ function rPolls(){
               var dispVal=typeof val==='boolean'?(val?'Yes':'No'):val;
               h2+='<div style="font-size:11px;color:var(--t2);margin-top:1px"><span style="color:var(--t3)">'+field.label+':</span> '+dispVal+'</div>';
             });
+            if(guestList.length){
+              h2+='<div style="font-size:11px;color:var(--t2);margin-top:2px"><span style="color:var(--t3)">Guests ('+guestList.length+'):</span> '+guestList.map(function(g){return esc(g.name||'?')+(g.phone?' ('+esc(g.phone)+')':'');}).join(', ')+'</div>';
+            }
             h2+='</div>';
             if(isAttending){
               h2+='<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">';
+              var _mf=pollMemberFee(poll), _gf=pollGuestFee(poll);
               if(poll.type==='rehearsal'){
-                var mSt=!mealPaid?'due':(mealPaid.status==='declared'?'declared':'confirmed');
-                var mC=mSt==='confirmed'?'var(--ok)':mSt==='declared'?'var(--warn)':'var(--bad)';
-                var mBg=mSt==='confirmed'?'var(--okbg)':mSt==='declared'?'var(--warnbg)':'var(--badbg)';
-                var mTxt=mSt==='confirmed'?'&#10003; Meal paid':mSt==='declared'?'&#8987; Declared':'Meal due';
-                h2+='<span class="badge" style="background:'+mBg+';color:'+mC+'">'+mTxt+'</span>';
+                if(_mf===0){
+                  h2+='<span class="badge" style="background:var(--bg2);color:var(--t3)">Meal waived</span>';
+                } else {
+                  var mSt=!mealPaid?'due':(mealPaid.status==='declared'?'declared':'confirmed');
+                  var mC=mSt==='confirmed'?'var(--ok)':mSt==='declared'?'var(--warn)':'var(--bad)';
+                  var mBg=mSt==='confirmed'?'var(--okbg)':mSt==='declared'?'var(--warnbg)':'var(--badbg)';
+                  var mTxt=mSt==='confirmed'?'&#10003; Meal paid':mSt==='declared'?'&#8987; Declared':'Meal due (KShs '+_mf+')';
+                  h2+='<span class="badge" style="background:'+mBg+';color:'+mC+'">'+mTxt+'</span>';
+                }
               }
               if(hasGuest){
-                var gSt=!guestPaid?'due':(guestPaid.status==='declared'?'declared':'confirmed');
-                var gC2=gSt==='confirmed'?'var(--ok)':gSt==='declared'?'var(--warn)':'var(--warn)';
-                var gBg2=gSt==='confirmed'?'var(--okbg)':'var(--warnbg)';
-                var gTxt=gSt==='confirmed'?'&#10003; Guest paid':gSt==='declared'?'&#8987; Guest declared':'Guest due';
-                h2+='<span class="badge" style="background:'+gBg2+';color:'+gC2+'">'+gTxt+'</span>';
+                var gN=guestCount>1?(' ('+guestCount+')'):'';
+                if(_gf===0){
+                  h2+='<span class="badge" style="background:var(--bg2);color:var(--t3)">Guests waived'+gN+'</span>';
+                } else {
+                  var gSt=!guestPaid?'due':(guestPaid.status==='declared'?'declared':'confirmed');
+                  var gC2=gSt==='confirmed'?'var(--ok)':'var(--warn)';
+                  var gBg2=gSt==='confirmed'?'var(--okbg)':'var(--warnbg)';
+                  var gTxt=(gSt==='confirmed'?'&#10003; Guests paid':gSt==='declared'?'&#8987; Guests declared':'Guests due (KShs '+(guestCount*_gf)+')')+gN;
+                  h2+='<span class="badge" style="background:'+gBg2+';color:'+gC2+'">'+gTxt+'</span>';
+                }
               }
               // M-Pesa code (for reconciliation) + Confirm, when the brother has self-declared
               var declRec=(mealPaid&&mealPaid.status==='declared')?mealPaid:((guestPaid&&guestPaid.status==='declared')?guestPaid:null);
@@ -2961,7 +2984,8 @@ function rPolls(){
       var isClosed=!poll.active;
       var myV=poll.votes[CU.id]||{};
       h+='<div class="card" style="margin-bottom:10px'+(isClosed?';opacity:.7':'')+'"><div style="font-weight:700;font-size:15px;color:var(--navy);margin-bottom:4px">'+poll.label+'</div>';
-      h+='<div style="font-size:12px;color:var(--t3);margin-bottom:10px">'+poll.dayLabel+(isClosed?' &middot; <span style="color:var(--bad)">Closed</span>':'')+'</div>';
+      h+='<div style="font-size:12px;color:var(--t3);margin-bottom:4px">'+poll.dayLabel+(isClosed?' &middot; <span style="color:var(--bad)">Closed</span>':'')+'</div>';
+      if(poll.type==='rehearsal')h+='<div style="font-size:11px;color:var(--t3);margin-bottom:10px">'+pollFeeLine(poll)+'</div>';
       h+=renderPollVoter(poll,myV,isClosed);
       h+='</div>';
     });
@@ -3044,17 +3068,19 @@ function createPoll(){
   }
   var fields=[
     {id:'f1',type:'yesno',label:'Attending?'},
-    {id:'f2',type:'choice',label:'Meal preference',options:mealOptsList,showIf:{fid:'f1',val:true}},
-    {id:'f3',type:'yesno',label:'Bringing a guest?',showIf:{fid:'f1',val:true}},
-    {id:'f4',type:'text',label:'Guest name',showIf:{fid:'f3',val:true}}
+    {id:'f2',type:'choice',label:'Meal preference',options:mealOptsList,showIf:{fid:'f1',val:true}}
+    // Guests are captured as a name + phone list (see the voter), not single fields
   ];
+  var mfEl=document.getElementById('poll-member-fee'), gfEl=document.getElementById('poll-guest-fee');
+  var memberFee=mfEl&&mfEl.value!==''?Math.max(0,parseInt(mfEl.value,10)||0):MEAL_COSTS.rehearsal;
+  var guestFee=gfEl&&gfEl.value!==''?Math.max(0,parseInt(gfEl.value,10)||0):MEAL_COSTS.guest_surcharge;
   var poll={id:'poll-tmp-'+Date.now(),type:type?type.value:'rehearsal',
     label:label.value.trim(),dayLabel:dayLabel,date:date.value,
-    active:true,fields:fields,votes:{},showNames:false};
+    active:true,fields:fields,votes:{},showNames:false,memberFee:memberFee,guestFee:guestFee};
   POLLS.unshift(poll);
   supa('polls',{method:'POST',
     body:JSON.stringify({type:poll.type,label:poll.label,day_label:dayLabel,
-      date:date.value,active:true,fields:fields,created_by:CU.id})
+      date:date.value,active:true,fields:fields,created_by:CU.id,member_fee:memberFee,guest_fee:guestFee})
   }).then(function(r){return r.json();})
   .then(function(data){
     if(data&&data.code){
@@ -4066,12 +4092,12 @@ function rReports(){
         h+='<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:10px">'+poll.label+'</div>';
         var ids=Object.keys(poll.votes);
         var att=ids.filter(function(k){return poll.votes[k].f1===true;});
-        var guests=att.filter(function(k){return poll.votes[k].f3===true;});
+        var guestCountTotal=att.reduce(function(s,k){var v=poll.votes[k];var g=(v.guests||[]).filter(function(x){return x&&(x.name||x.phone);}).length||(v.f3===true?1:0);return s+g;},0);
         var choices={};
         att.forEach(function(k){var v=poll.votes[k].f2||'—';choices[v]=(choices[v]||0)+1;});
         h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">';
         h+='<div style="text-align:center"><div style="font-size:24px;font-weight:700;color:var(--ok)">'+att.length+'</div><div style="font-size:11px;color:var(--t3)">Attending</div></div>';
-        h+='<div style="text-align:center"><div style="font-size:24px;font-weight:700;color:var(--warn)">'+guests.length+'</div><div style="font-size:11px;color:var(--t3)">Guests</div></div>';
+        h+='<div style="text-align:center"><div style="font-size:24px;font-weight:700;color:var(--warn)">'+guestCountTotal+'</div><div style="font-size:11px;color:var(--t3)">Guests</div></div>';
         var mealPaidCount=STEWARD_PAYMENTS.filter(function(p){return p.pollId===poll.id&&p.type==='rehearsal_meal';}).length;
         var mealDue=att.length-mealPaidCount;
         h+='<div style="text-align:center"><div style="font-size:24px;font-weight:700;color:'+(mealDue?'var(--bad)':'var(--ok)')+'">'+mealDue+'</div><div style="font-size:11px;color:var(--t3)">Meal due</div></div>';
@@ -5782,15 +5808,19 @@ function toggleStewardPay(key){stewardPayOpen=(stewardPayOpen===key?null:key);rP
 
 // Steward records a payment directly (e.g. cash on the night) — straight to confirmed.
 function recordMealPayment(pollId,mid){
+  var poll=POLLS.find(function(p){return p.id===pollId;});
   var methodEl=document.getElementById('sp-method-'+pollId+'|'+mid)||document.getElementById('sp-method-'+pollId+'-'+mid);
   var refEl=document.getElementById('sp-ref-'+pollId+'|'+mid)||document.getElementById('sp-ref-'+pollId+'-'+mid);
-  _stewardRecord(pollId, mid, 'rehearsal_meal', MEAL_COSTS.rehearsal, methodEl?methodEl.value:'Cash', refEl?refEl.value:'', false);
+  _stewardRecord(pollId, mid, 'rehearsal_meal', pollMemberFee(poll), methodEl?methodEl.value:'Cash', refEl?refEl.value:'', false);
   stewardPayOpen=null; rPolls();
 }
 function recordGuestPayment(pollId,mid,exempt){
+  var poll=POLLS.find(function(p){return p.id===pollId;});
+  var myV=poll?(poll.votes[mid]||{}):{};
+  var gc=(myV.guests||[]).filter(function(g){return g&&(g.name||g.phone);}).length||(myV.f3===true?1:0);
   var methodEl=document.getElementById('sp-method-'+pollId+'|'+mid)||document.getElementById('sp-method-'+pollId+'-'+mid);
   var refEl=document.getElementById('sp-ref-'+pollId+'|'+mid)||document.getElementById('sp-ref-'+pollId+'-'+mid);
-  _stewardRecord(pollId, mid, 'guest_surcharge', exempt?0:MEAL_COSTS.guest_surcharge, methodEl?methodEl.value:'Cash', refEl?refEl.value:'', exempt);
+  _stewardRecord(pollId, mid, 'guest_surcharge', exempt?0:(gc*pollGuestFee(poll)), methodEl?methodEl.value:'Cash', refEl?refEl.value:'', exempt);
   stewardPayOpen=null; rPolls();
 }
 function _stewardRecord(pollId, mid, type, amount, method, reference, exempt){
@@ -5805,21 +5835,28 @@ function _stewardRecord(pollId, mid, type, amount, method, reference, exempt){
   .catch(function(e){console.warn('Steward payment save failed:',e);});
 }
 
+// Per-poll fees (CS-set). 0 = waived. Fall back to the legacy constants for old polls.
+function pollMemberFee(poll){ return (poll&&poll.memberFee!=null)?poll.memberFee:MEAL_COSTS.rehearsal; }
+function pollGuestFee(poll){ return (poll&&poll.guestFee!=null)?poll.guestFee:MEAL_COSTS.guest_surcharge; }
+function myGuestCount(poll){ var v=poll.votes[CU.id]||{}; var g=(v.guests||[]).filter(function(x){return x&&(x.name||x.phone);}); return g.length||(v.f3===true?1:0); }
+function pollFeeLine(poll){ var mf=pollMemberFee(poll), gf=pollGuestFee(poll); return 'Brother: '+(mf>0?'KShs '+mf:'waived')+' &middot; Guest: '+(gf>0?'KShs '+gf:'waived'); }
+
 // ── Brother self-declares a meal payment (M-Pesa) — status 'declared' until the
-//    Chief Steward confirms it against the statement. Can cover a guest too.
+//    Chief Steward confirms it against the statement. One code covers self + guests.
 function declareMealPayment(pollId){
+  var poll=POLLS.find(function(p){return p.id===pollId;}); if(!poll)return;
   var codeEl=document.getElementById('decl-code-'+pollId);
-  var guestEl=document.getElementById('decl-guest-'+pollId);
   var code=codeEl?codeEl.value.trim().toUpperCase():'';
   if(!code){ alert('Enter your M-Pesa confirmation code so the Chief Steward can tick you off.'); return; }
-  var withGuest=guestEl?guestEl.checked:false;
-  _declareOne(pollId,'rehearsal_meal',MEAL_COSTS.rehearsal,code);
-  if(withGuest) _declareOne(pollId,'guest_surcharge',MEAL_COSTS.guest_surcharge,code);
+  var memberDue=pollMemberFee(poll);
+  var gc=myGuestCount(poll), guestDue=gc*pollGuestFee(poll);
+  if(memberDue>0) _declareOne(pollId,'rehearsal_meal',memberDue,code);
+  if(guestDue>0)  _declareOne(pollId,'guest_surcharge',guestDue,code);
   // Let the Chief Steward know there's something to confirm
   var stewardIds=MEMBERS.filter(function(m){return m.role==='steward'||officeToRole(m.office)==='steward';}).map(function(m){return m.id;});
   if(stewardIds.length){
     pushNotice('payment','Payment declared — '+gn(CU),
-      gn(CU)+' declared an M-Pesa payment ('+code+')'+(withGuest?' covering a guest':'')+' — please confirm against the statement.', stewardIds);
+      gn(CU)+' declared an M-Pesa payment ('+code+')'+(guestDue>0?' covering '+gc+' guest'+(gc!==1?'s':''):'')+' — please confirm against the statement.', stewardIds);
   }
   rPolls();
 }
@@ -5848,20 +5885,29 @@ function renderMealPaymentSelf(poll){
   if(!poll||poll.type!=='rehearsal') return '';
   var myV=poll.votes[CU.id]||{};
   if(myV.f1!==true) return '';   // only attendees pay for the meal
+  var memberFee=pollMemberFee(poll), guestFee=pollGuestFee(poll);
+  var gc=myGuestCount(poll);
+  var memberDue=memberFee, guestDue=gc*guestFee, total=memberDue+guestDue;
   var meal=STEWARD_PAYMENTS.find(function(p){return p.memberId===CU.id&&p.pollId===poll.id&&p.type==='rehearsal_meal';});
   var guest=STEWARD_PAYMENTS.find(function(p){return p.memberId===CU.id&&p.pollId===poll.id&&p.type==='guest_surcharge';});
   var h='<div style="border-top:1px solid var(--bdr);margin-top:8px;padding-top:8px">';
   h+='<div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:6px">Meal payment</div>';
-  if(meal){
-    if(meal.status==='confirmed') h+='<div style="font-size:13px;color:var(--ok)">&#10003; Confirmed by the Chief Steward'+(meal.reference?' &middot; '+esc(meal.reference):'')+'</div>';
-    else h+='<div style="font-size:13px;color:var(--warn)">&#8987; Declared'+(meal.reference?' (M-Pesa '+esc(meal.reference)+')':'')+' — awaiting confirmation</div>';
-    if(guest) h+='<div style="font-size:12px;color:'+(guest.status==='confirmed'?'var(--ok)':'var(--warn)')+';margin-top:2px">'+(guest.status==='confirmed'?'&#10003; Guest confirmed':'&#8987; Guest declared')+'</div>';
-    if(meal.status!=='confirmed') h+='<button class="btn btn-n btn-sm" style="margin-top:6px;font-size:11px" data-pid="'+poll.id+'" onclick="declareMealPayment(this.dataset.pid)">Update code</button>';
+  // Amount breakdown
+  h+='<div style="font-size:12px;color:var(--t2);margin-bottom:6px">';
+  h+='Your meal: '+(memberFee>0?'KShs '+memberFee:'waived');
+  if(gc>0) h+=' &middot; '+gc+' guest'+(gc!==1?'s':'')+': '+(guestFee>0?gc+' × KShs '+guestFee+' = KShs '+guestDue:'waived');
+  if(total>0) h+=' &middot; <b>Total KShs '+total+'</b>';
+  h+='</div>';
+  if(total===0){ h+='<div style="font-size:13px;color:var(--ok)">&#10003; No charge for this meal.</div></div>'; return h; }
+  if(meal||guest){
+    var anyDeclared=(meal&&meal.status==='declared')||(guest&&guest.status==='declared');
+    if(meal){ h+='<div style="font-size:13px;color:'+(meal.status==='confirmed'?'var(--ok)':'var(--warn)')+'">'+(meal.status==='confirmed'?'&#10003; Meal confirmed':'&#8987; Meal declared')+(meal.reference?' (M-Pesa '+esc(meal.reference)+')':'')+'</div>'; }
+    if(guest){ h+='<div style="font-size:12px;color:'+(guest.status==='confirmed'?'var(--ok)':'var(--warn)')+';margin-top:2px">'+(guest.status==='confirmed'?'&#10003; Guests confirmed':'&#8987; Guests declared')+'</div>'; }
+    if(anyDeclared) h+='<button class="btn btn-n btn-sm" style="margin-top:6px;font-size:11px" data-pid="'+poll.id+'" onclick="declareMealPayment(this.dataset.pid)">Update code</button>';
   } else {
     h+='<div style="font-size:11px;color:var(--t3);margin-bottom:6px">Paid by M-Pesa? Enter your confirmation code and the Chief Steward will tick you off.</div>';
     h+='<input id="decl-code-'+poll.id+'" placeholder="M-Pesa code e.g. SGH7X8K2QT" style="text-transform:uppercase;margin-bottom:6px">';
-    if(myV.f3===true) h+='<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);margin-bottom:6px;cursor:pointer"><input type="checkbox" id="decl-guest-'+poll.id+'" checked> This payment also covers my guest</label>';
-    h+='<button class="btn btn-navy btn-sm" style="width:100%;justify-content:center" data-pid="'+poll.id+'" onclick="declareMealPayment(this.dataset.pid)">Submit payment</button>';
+    h+='<button class="btn btn-navy btn-sm" style="width:100%;justify-content:center" data-pid="'+poll.id+'" onclick="declareMealPayment(this.dataset.pid)">Submit payment of KShs '+total+'</button>';
   }
   h+='</div>';
   return h;
@@ -6803,11 +6849,11 @@ function renderPollSummary(poll){
   if(!ids.length)return '<div style="font-size:12px;color:var(--t3);margin-bottom:10px">No responses yet.</div>';
   var attending=ids.filter(function(k){return votes[k].f1===true;});
   var declining=ids.filter(function(k){return votes[k].f1===false;});
-  var guests=ids.filter(function(k){return votes[k].f3===true;});
+  var guestTotal=attending.reduce(function(s,k){var v=votes[k];var g=(v.guests||[]).filter(function(x){return x&&(x.name||x.phone);}).length||(v.f3===true?1:0);return s+g;},0);
   var h='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
   h+='<span class="badge" style="background:var(--okbg);color:var(--ok)">'+attending.length+' attending</span>';
   h+='<span class="badge" style="background:var(--badbg);color:var(--bad)">'+declining.length+' declining</span>';
-  if(guests.length)h+='<span class="badge" style="background:var(--warnbg);color:var(--warn)">'+guests.length+' guest'+(guests.length!==1?'s':'')+'</span>';
+  if(guestTotal)h+='<span class="badge" style="background:var(--warnbg);color:var(--warn)">'+guestTotal+' guest'+(guestTotal!==1?'s':'')+'</span>';
   var choices={};
   attending.forEach(function(k){var v=votes[k].f2||'';choices[v]=(choices[v]||0)+1;});
   Object.keys(choices).sort().forEach(function(ch){
@@ -6827,7 +6873,8 @@ function renderPollVoter(poll,myV,isClosed){
   if(submitted && !isClosed){
     var attend  = myV.f1===true?'Attending':myV.f1===false?'Not attending':'—';
     var meal    = myV.f2||'';
-    var guest   = myV.f3===true?(myV.f4?'Guest: '+myV.f4:'Bringing a guest'):'';
+    var _gl=(myV.guests||[]).filter(function(g){return g&&(g.name||g.phone);});
+    var guest   = _gl.length?(_gl.length+' guest'+(_gl.length!==1?'s':'')+': '+_gl.map(function(g){return g.name||'?';}).join(', ')):(myV.f3===true?(myV.f4?'Guest: '+myV.f4:'Bringing a guest'):'');
     h+='<div style="background:var(--okbg);border-radius:8px;padding:10px 12px;margin-bottom:8px">';
     h+='<div style="font-weight:700;font-size:13px;color:var(--ok);margin-bottom:3px">&#10003; Response submitted</div>';
     h+='<div style="font-size:12px;color:var(--t2)">'+attend;
@@ -6866,6 +6913,7 @@ function renderPollVoter(poll,myV,isClosed){
 
   // ── Voting form ────────────────────────────────────────────────────────
   (Array.isArray(poll.fields)?poll.fields:[]).forEach(function(field){
+    if(field.id==='f3'||field.id==='f4') return;   // legacy single-guest fields — replaced by the guest list
     if(field.showIf){if(myV[field.showIf.fid]!==field.showIf.val)return;}
     h+='<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:6px">'+field.label+'</div>';
     if(field.type==='yesno'){
@@ -6898,6 +6946,11 @@ function renderPollVoter(poll,myV,isClosed){
     h+='</div>';
   });
 
+  // ── Guests (name + phone, several) — shown when attending ───────────────
+  if(myV.f1===true){
+    h+=renderPollGuests(poll);
+  }
+
   // Submit button — show once attending is answered
   if(myV.f1!==undefined){
     h+='<button class="btn btn-navy" style="width:100%;justify-content:center;margin-top:4px;padding:12px"';
@@ -6914,6 +6967,28 @@ function isPollLocked(poll){
   var lockDate  = new Date(eventDate.getTime() - 2*24*60*60*1000);
   return new Date() >= lockDate;
 }
+
+// ── Meal-poll guests: a brother's own list of guests (name + phone) ────────
+function _myVote(pid){ var p=POLLS.find(function(x){return x.id===pid;}); if(!p)return null; if(!p.votes[CU.id])p.votes[CU.id]={}; if(!Array.isArray(p.votes[CU.id].guests))p.votes[CU.id].guests=[]; return p.votes[CU.id]; }
+function renderPollGuests(poll){
+  var myV=poll.votes[CU.id]||{}; var guests=Array.isArray(myV.guests)?myV.guests:[];
+  var h='<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:6px">Guests</div>';
+  h+='<div style="font-size:11px;color:var(--t3);margin-bottom:6px">Add anyone you\'re bringing — you cover their meal. Name and phone each.</div>';
+  guests.forEach(function(g,i){
+    h+='<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">';
+    h+='<input value="'+esc(g.name||'')+'" placeholder="Guest name" style="flex:1" data-pid="'+poll.id+'" data-i="'+i+'" onchange="updatePollGuest(this.dataset.pid,+this.dataset.i,\'name\',this.value)">';
+    h+='<input value="'+esc(g.phone||'')+'" placeholder="Phone" inputmode="tel" style="flex:1" data-pid="'+poll.id+'" data-i="'+i+'" onchange="updatePollGuest(this.dataset.pid,+this.dataset.i,\'phone\',this.value)">';
+    h+='<button data-pid="'+poll.id+'" data-i="'+i+'" onclick="removePollGuest(this.dataset.pid,+this.dataset.i)" title="Remove" style="background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer;padding:0 4px">&times;</button>';
+    h+='</div>';
+  });
+  h+='<button class="btn btn-n btn-sm" style="font-size:12px" data-pid="'+poll.id+'" onclick="addPollGuest(this.dataset.pid)"><svg class="ico" width="12" height="12"><use href="#ico-plus"/></svg> Add guest</button>';
+  h+='</div>';
+  return h;
+}
+function addPollGuest(pid){ var v=_myVote(pid); if(!v)return; v.guests.push({name:'',phone:''}); supaUpsertVote(pid,v); _rerenderPoll(); }
+function removePollGuest(pid,i){ var v=_myVote(pid); if(!v)return; v.guests.splice(i,1); supaUpsertVote(pid,v); _rerenderPoll(); }
+function updatePollGuest(pid,i,field,val){ var v=_myVote(pid); if(!v||!v.guests[i])return; v.guests[i][field]=val; supaUpsertVote(pid,v); }
+function _rerenderPoll(){ var active=document.querySelector('.pane.on'); var id=active?active.id.replace('pane-',''):''; if(id==='polls')rPolls(); else if(id==='notices')rNotices(); else rHome(); }
 
 function submitVote(pollId){
   var poll = POLLS.find(function(p){return p.id===pollId;});
@@ -9711,7 +9786,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-12 09:50:00');
+console.log('Portal build 2026-10-12 10:55:00');
 
 function toggleSharePractice(){
   if(!CU)return;
