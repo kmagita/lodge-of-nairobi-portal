@@ -3017,7 +3017,8 @@ function castVote(pid,fid,val){
   // Save only on Submit — no Supabase call here to avoid race conditions
   var active=document.querySelector('.pane.on');
   var id=active?active.id.replace('pane-',''):'home';
-  if(id==='notices')rNotices();
+  if(id==='polls')rPolls();
+  else if(id==='notices')rNotices();
   else rHome();
 }
 
@@ -7026,14 +7027,14 @@ function changeVote(pollId){
     poll.votes[CU.id]._changeRequested = true;
     supaUpsertVote(pollId, poll.votes[CU.id]);
     alert('Change request sent to the Chief Steward. Your current response remains until they confirm.');
-    rPolls();
+    _rerenderPoll();
     return;
   }
   // Not locked — allow free editing
   poll.votes[CU.id]._submitted = false;
   poll.votes[CU.id]._changeRequested = false;
   supaUpsertVote(pollId, poll.votes[CU.id]);
-  rPolls();
+  _rerenderPoll();
 }
 
 
@@ -9786,7 +9787,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-12 10:55:00');
+console.log('Portal build 2026-10-12 11:40:00');
 
 function toggleSharePractice(){
   if(!CU)return;
