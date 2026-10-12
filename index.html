@@ -2398,9 +2398,16 @@ function unreadNotices(){
 
 // ── Notification feedback ─────────────────────────────────────────────────
 var _notifAudio = null;
+// Browsers block vibration until the user has interacted with the page; track
+// that so we only buzz after a real gesture (and skip the console intervention).
+var _userGestured=false;
+['pointerdown','touchstart','keydown','click'].forEach(function(ev){
+  window.addEventListener(ev,function(){_userGestured=true;},{passive:true});
+});
+function vibe(pattern){ if(_userGestured&&navigator.vibrate){ try{ navigator.vibrate(pattern); }catch(e){} } }
 function notifyUser(){
   // Vibrate (mobile)
-  if(navigator.vibrate) navigator.vibrate([100, 50, 100]);
+  vibe([100, 50, 100]);
   // Chime (simple beep via Web Audio)
   try{
     var ctx = new (window.AudioContext||window.webkitAudioContext)();
@@ -2455,7 +2462,7 @@ function buildNav(){
   }
   var prev=_prevUnread||0;
   var curr=unreadNotices().length;
-  if(curr>prev&&navigator.vibrate)navigator.vibrate([100,50,100]);
+  if(curr>prev)vibe([100,50,100]);
   _prevUnread=curr;
   var ok=NAV_ROLES[CU.role]||[];
   var unread=unreadNotices().length;
@@ -9812,7 +9819,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-12 12:05:00');
+console.log('Portal build 2026-10-12 12:10:00');
 
 function toggleSharePractice(){
   if(!CU)return;
