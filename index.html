@@ -7027,7 +7027,7 @@ function renderPollGuests(poll){
     h+='<button data-pid="'+poll.id+'" data-i="'+i+'" onclick="removePollGuest(this.dataset.pid,+this.dataset.i)" title="Remove" style="background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer;padding:0 4px">&times;</button>';
     h+='</div>';
     if(opts.length){
-      h+='<select style="width:100%;margin-top:6px" data-pid="'+poll.id+'" data-i="'+i+'" onchange="updatePollGuest(this.dataset.pid,+this.dataset.i,\'meal\',this.value)">';
+      h+='<select style="width:100%;margin-top:6px" data-pid="'+poll.id+'" data-i="'+i+'" onchange="updatePollGuest(this.dataset.pid,+this.dataset.i,\'meal\',this.value);_rerenderPoll()">';
       h+='<option value="">Meal preference…</option>';
       opts.forEach(function(o){ h+='<option value="'+esc(o)+'"'+(g.meal===o?' selected':'')+'>'+esc(o)+'</option>'; });
       h+='</select>';
@@ -9843,7 +9843,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-12 13:10:00');
+console.log('Portal build 2026-10-12 13:30:00');
 
 function toggleSharePractice(){
   if(!CU)return;
