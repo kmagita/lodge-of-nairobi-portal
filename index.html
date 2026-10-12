@@ -2844,14 +2844,15 @@ function rPolls(){
     h+='<option value="meeting">Lodge meeting</option>';
     h+='<option value="other">Other</option>';
     h+='</select></div></div>';
-    h+='<div class="fg"><label class="lbl">Meal options <span style="font-size:10px;color:var(--t3)">(comma-separated)</span></label>';
-    h+='<input id="poll-meal-options" value="Chicken, Fish, Vegetarian">';
+    h+='<label style="display:flex;align-items:center;gap:8px;margin:4px 0 8px;font-size:13px;color:var(--t2)"><input type="checkbox" id="poll-is-meal" checked onchange="var r=document.getElementById(\'poll-meal-row\');if(r)r.style.display=this.checked?\'\':\'none\'"> Collect meal preference</label>';
+    h+='<div id="poll-meal-row" class="fg"><label class="lbl">Meal options <span style="font-size:10px;color:var(--t3)">(comma-separated)</span></label>';
+    h+='<input id="poll-meal-options" value="Vegetarian, Non-vegetarian">';
     h+='</div>';
     h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-    h+='<div class="fg" style="margin:0"><label class="lbl">Fee per brother (KShs)</label><input id="poll-member-fee" type="number" inputmode="numeric" value="'+MEAL_COSTS.rehearsal+'" placeholder="0 = waived"></div>';
-    h+='<div class="fg" style="margin:0"><label class="lbl">Fee per guest (KShs)</label><input id="poll-guest-fee" type="number" inputmode="numeric" value="'+MEAL_COSTS.guest_surcharge+'" placeholder="0 = waived"></div>';
+    h+='<div class="fg" style="margin:0"><label class="lbl">Fee per brother (KShs)</label><input id="poll-member-fee" type="number" inputmode="numeric" value="0" placeholder="0 = none"></div>';
+    h+='<div class="fg" style="margin:0"><label class="lbl">Fee per guest (KShs)</label><input id="poll-guest-fee" type="number" inputmode="numeric" value="0" placeholder="0 = none"></div>';
     h+='</div>';
-    h+='<div style="font-size:11px;color:var(--t3);margin:2px 0 8px">Enter 0 to waive a fee (no charge for that line).</div>';
+    h+='<div style="font-size:11px;color:var(--t3);margin:2px 0 8px">Charges apply whether or not it\'s a meal. Enter 0 for no charge on that line.</div>';
     h+='<div style="display:flex;gap:8px;margin-top:4px">';
     h+='<button class="btn btn-navy btn-sm" style="flex:1;justify-content:center" onclick="createPoll()"><svg class="ico" width="16" height="16"><use href="#ico-plus"/></svg> Create poll</button>';
     h+='<button class="btn btn-n btn-sm" onclick="hidePollForm()">Cancel</button>';
@@ -2865,7 +2866,7 @@ function rPolls(){
       h2+='<div class="srow" style="margin-bottom:8px">';
       h2+='<div style="flex:1"><div style="font-weight:700;font-size:14px;color:var(--navy)">'+poll.label+'</div>';
       h2+='<div style="font-size:11px;color:var(--t3)">'+poll.dayLabel+' &middot; '+(poll.active?'<span style="color:var(--ok)">Open</span>':'<span style="color:var(--t3)">Closed</span>')+'</div>';
-      if(poll.type==='rehearsal')h2+='<div style="font-size:10px;color:var(--t3);margin-top:1px">'+pollFeeLine(poll)+'</div>';
+      if(pollHasFees(poll))h2+='<div style="font-size:10px;color:var(--t3);margin-top:1px">'+pollFeeLine(poll)+'</div>';
       h2+='</div>';
       h2+='<span class="badge" style="background:var(--infobg);color:var(--info)">'+total+' response'+(total!==1?'s':'')+'</span>';
       h2+='</div>';
@@ -2910,27 +2911,26 @@ function rPolls(){
               h2+='<div style="font-size:11px;color:var(--t2);margin-top:1px"><span style="color:var(--t3)">'+field.label+':</span> '+dispVal+'</div>';
             });
             if(guestList.length){
-              h2+='<div style="font-size:11px;color:var(--t2);margin-top:2px"><span style="color:var(--t3)">Guests ('+guestList.length+'):</span> '+guestList.map(function(g){return esc(g.name||'?')+(g.phone?' ('+esc(g.phone)+')':'');}).join(', ')+'</div>';
+              h2+='<div style="font-size:11px;color:var(--t2);margin-top:2px"><span style="color:var(--t3)">Guests ('+guestList.length+'):</span> '+guestList.map(function(g){return esc(g.name||'?')+(g.phone?' ('+esc(g.phone)+')':'')+(g.meal?' &middot; '+esc(g.meal):'');}).join(', ')+'</div>';
             }
             h2+='</div>';
             if(isAttending){
               h2+='<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">';
               var _mf=pollMemberFee(poll), _gf=pollGuestFee(poll);
-              if(poll.type==='rehearsal'){
-                if(_mf===0){
-                  h2+='<span class="badge" style="background:var(--bg2);color:var(--t3)">Meal waived</span>';
-                } else {
-                  var mSt=!mealPaid?'due':(mealPaid.status==='declared'?'declared':'confirmed');
-                  var mC=mSt==='confirmed'?'var(--ok)':mSt==='declared'?'var(--warn)':'var(--bad)';
-                  var mBg=mSt==='confirmed'?'var(--okbg)':mSt==='declared'?'var(--warnbg)':'var(--badbg)';
-                  var mTxt=mSt==='confirmed'?'&#10003; Meal paid':mSt==='declared'?'&#8987; Declared':'Meal due (KShs '+_mf+')';
-                  h2+='<span class="badge" style="background:'+mBg+';color:'+mC+'">'+mTxt+'</span>';
-                }
+              var _meal=isMealPoll(poll), _flbl=_meal?'Meal':'Fee';
+              if(_mf>0){
+                var mSt=!mealPaid?'due':(mealPaid.status==='declared'?'declared':'confirmed');
+                var mC=mSt==='confirmed'?'var(--ok)':mSt==='declared'?'var(--warn)':'var(--bad)';
+                var mBg=mSt==='confirmed'?'var(--okbg)':mSt==='declared'?'var(--warnbg)':'var(--badbg)';
+                var mTxt=mSt==='confirmed'?'&#10003; '+_flbl+' paid':mSt==='declared'?'&#8987; Declared':_flbl+' due (KShs '+_mf+')';
+                h2+='<span class="badge" style="background:'+mBg+';color:'+mC+'">'+mTxt+'</span>';
+              } else if(_meal){
+                h2+='<span class="badge" style="background:var(--bg2);color:var(--t3)">Meal waived</span>';
               }
               if(hasGuest){
                 var gN=guestCount>1?(' ('+guestCount+')'):'';
                 if(_gf===0){
-                  h2+='<span class="badge" style="background:var(--bg2);color:var(--t3)">Guests waived'+gN+'</span>';
+                  if(_meal)h2+='<span class="badge" style="background:var(--bg2);color:var(--t3)">Guests waived'+gN+'</span>';
                 } else {
                   var gSt=!guestPaid?'due':(guestPaid.status==='declared'?'declared':'confirmed');
                   var gC2=gSt==='confirmed'?'var(--ok)':'var(--warn)';
@@ -2957,10 +2957,10 @@ function rPolls(){
               h2+='</select></div>';
               h2+='<div class="fg" style="margin:0"><label class="lbl">Reference</label><input id="sp-ref-'+spKey+'" placeholder="optional"></div>';
               h2+='</div>';
-              if(poll.type==='rehearsal'&&!mealPaid)h2+='<button class="btn btn-navy btn-sm" style="width:100%;justify-content:center;margin-bottom:6px" data-pid="'+poll.id+'" data-mid="'+m.id+'" onclick="recordMealPayment(this.dataset.pid,this.dataset.mid)"><svg class="ico" width="14" height="14"><use href="#ico-check"/></svg> Mark meal paid ('+MEAL_COSTS.rehearsal+')</button>';
-              if(hasGuest&&!guestPaid){
+              if(pollMemberFee(poll)>0&&!mealPaid)h2+='<button class="btn btn-navy btn-sm" style="width:100%;justify-content:center;margin-bottom:6px" data-pid="'+poll.id+'" data-mid="'+m.id+'" onclick="recordMealPayment(this.dataset.pid,this.dataset.mid)"><svg class="ico" width="14" height="14"><use href="#ico-check"/></svg> Mark '+(isMealPoll(poll)?'meal':'fee')+' paid (KShs '+pollMemberFee(poll)+')</button>';
+              if(hasGuest&&pollGuestFee(poll)>0&&!guestPaid){
                 h2+='<div style="display:flex;gap:8px">';
-                h2+='<button class="btn btn-ok btn-sm" style="flex:1;justify-content:center" data-pid="'+poll.id+'" data-mid="'+m.id+'" onclick="recordGuestPayment(this.dataset.pid,this.dataset.mid,false)"><svg class="ico" width="14" height="14"><use href="#ico-check"/></svg> Guest paid ('+MEAL_COSTS.guest_surcharge+')</button>';
+                h2+='<button class="btn btn-ok btn-sm" style="flex:1;justify-content:center" data-pid="'+poll.id+'" data-mid="'+m.id+'" onclick="recordGuestPayment(this.dataset.pid,this.dataset.mid,false)"><svg class="ico" width="14" height="14"><use href="#ico-check"/></svg> Guest paid (KShs '+(guestCount*pollGuestFee(poll))+')</button>';
                 h2+='<button class="btn btn-out btn-sm" data-pid="'+poll.id+'" data-mid="'+m.id+'" onclick="recordGuestPayment(this.dataset.pid,this.dataset.mid,true)">Exempt</button>';
                 h2+='</div>';
               }
@@ -2985,7 +2985,7 @@ function rPolls(){
       var myV=poll.votes[CU.id]||{};
       h+='<div class="card" style="margin-bottom:10px'+(isClosed?';opacity:.7':'')+'"><div style="font-weight:700;font-size:15px;color:var(--navy);margin-bottom:4px">'+poll.label+'</div>';
       h+='<div style="font-size:12px;color:var(--t3);margin-bottom:4px">'+poll.dayLabel+(isClosed?' &middot; <span style="color:var(--bad)">Closed</span>':'')+'</div>';
-      if(poll.type==='rehearsal')h+='<div style="font-size:11px;color:var(--t3);margin-bottom:10px">'+pollFeeLine(poll)+'</div>';
+      if(pollHasFees(poll))h+='<div style="font-size:11px;color:var(--t3);margin-bottom:10px">'+pollFeeLine(poll)+'</div>';
       h+=renderPollVoter(poll,myV,isClosed);
       h+='</div>';
     });
@@ -3062,16 +3062,17 @@ function createPoll(){
   var d=new Date(date.value+'T12:00:00');
   var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   var dayLabel=days[d.getDay()]+' '+d.getDate()+' '+date.value.split('-')[1]+' '+date.value.split('-')[0];
-  // Build meal options from input (default to Chicken/Fish/Vegetarian if blank)
-  var mealOptsList=['Chicken','Fish','Vegetarian'];
+  // Meal preference is optional — a poll may be for another purpose entirely.
+  var isMeal=(document.getElementById('poll-is-meal')||{}).checked!==false;
+  var mealOptsList=['Vegetarian','Non-vegetarian'];
   if(mealOpts&&mealOpts.value.trim()){
     mealOptsList=mealOpts.value.split(',').map(function(o){return o.trim();}).filter(Boolean);
   }
-  var fields=[
-    {id:'f1',type:'yesno',label:'Attending?'},
-    {id:'f2',type:'choice',label:'Meal preference',options:mealOptsList,showIf:{fid:'f1',val:true}}
-    // Guests are captured as a name + phone list (see the voter), not single fields
-  ];
+  var fields=[{id:'f1',type:'yesno',label:'Attending?'}];
+  if(isMeal){
+    fields.push({id:'f2',type:'choice',label:'Meal preference',options:mealOptsList,showIf:{fid:'f1',val:true}});
+  }
+  // Guests are captured as a name + phone (+ meal) list in the voter, not single fields
   var mfEl=document.getElementById('poll-member-fee'), gfEl=document.getElementById('poll-guest-fee');
   var memberFee=mfEl&&mfEl.value!==''?Math.max(0,parseInt(mfEl.value,10)||0):MEAL_COSTS.rehearsal;
   var guestFee=gfEl&&gfEl.value!==''?Math.max(0,parseInt(gfEl.value,10)||0):MEAL_COSTS.guest_surcharge;
@@ -5836,11 +5837,15 @@ function _stewardRecord(pollId, mid, type, amount, method, reference, exempt){
   .catch(function(e){console.warn('Steward payment save failed:',e);});
 }
 
-// Per-poll fees (CS-set). 0 = waived. Fall back to the legacy constants for old polls.
-function pollMemberFee(poll){ return (poll&&poll.memberFee!=null)?poll.memberFee:MEAL_COSTS.rehearsal; }
-function pollGuestFee(poll){ return (poll&&poll.guestFee!=null)?poll.guestFee:MEAL_COSTS.guest_surcharge; }
+// A poll collects a meal preference only if it carries the f2 choice field.
+function isMealPoll(poll){ return (((poll&&poll.fields)||[]).some(function(f){return f.id==='f2';})); }
+// Per-poll fees (CS-set). 0 = waived. Legacy meal polls fall back to the old
+// constants; a poll that never set a fee (e.g. a plain vote) defaults to 0.
+function pollMemberFee(poll){ return (poll&&poll.memberFee!=null)?poll.memberFee:(isMealPoll(poll)?MEAL_COSTS.rehearsal:0); }
+function pollGuestFee(poll){ return (poll&&poll.guestFee!=null)?poll.guestFee:(isMealPoll(poll)?MEAL_COSTS.guest_surcharge:0); }
+function pollHasFees(poll){ return pollMemberFee(poll)>0 || pollGuestFee(poll)>0; }
 function myGuestCount(poll){ var v=poll.votes[CU.id]||{}; var g=(v.guests||[]).filter(function(x){return x&&(x.name||x.phone);}); return g.length||(v.f3===true?1:0); }
-function pollFeeLine(poll){ var mf=pollMemberFee(poll), gf=pollGuestFee(poll); return 'Brother: '+(mf>0?'KShs '+mf:'waived')+' &middot; Guest: '+(gf>0?'KShs '+gf:'waived'); }
+function pollFeeLine(poll){ var mf=pollMemberFee(poll), gf=pollGuestFee(poll); if(mf<=0&&gf<=0)return isMealPoll(poll)?'No charge':''; return 'Brother: '+(mf>0?'KShs '+mf:'waived')+' &middot; Guest: '+(gf>0?'KShs '+gf:'waived'); }
 
 // ── Brother self-declares a meal payment (M-Pesa) — status 'declared' until the
 //    Chief Steward confirms it against the statement. One code covers self + guests.
@@ -5883,26 +5888,30 @@ function confirmStewardPayment(pollId, memberId){
 }
 // Member-facing meal payment status / self-declare form for a rehearsal poll.
 function renderMealPaymentSelf(poll){
-  if(!poll||poll.type!=='rehearsal') return '';
+  if(!poll) return '';
   var myV=poll.votes[CU.id]||{};
-  if(myV.f1!==true) return '';   // only attendees pay for the meal
+  if(myV.f1!==true) return '';   // only those attending can owe anything
+  var isMeal=isMealPoll(poll);
   var memberFee=pollMemberFee(poll), guestFee=pollGuestFee(poll);
   var gc=myGuestCount(poll);
   var memberDue=memberFee, guestDue=gc*guestFee, total=memberDue+guestDue;
+  // No fee at all on this poll (and not a meal poll) → nothing to show.
+  if(memberFee<=0 && guestFee<=0 && !isMeal) return '';
+  var payTitle=isMeal?'Meal payment':'Payment', selfLbl=isMeal?'Your meal':'Your fee';
   var meal=STEWARD_PAYMENTS.find(function(p){return p.memberId===CU.id&&p.pollId===poll.id&&p.type==='rehearsal_meal';});
   var guest=STEWARD_PAYMENTS.find(function(p){return p.memberId===CU.id&&p.pollId===poll.id&&p.type==='guest_surcharge';});
   var h='<div style="border-top:1px solid var(--bdr);margin-top:8px;padding-top:8px">';
-  h+='<div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:6px">Meal payment</div>';
+  h+='<div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:6px">'+payTitle+'</div>';
   // Amount breakdown
   h+='<div style="font-size:12px;color:var(--t2);margin-bottom:6px">';
-  h+='Your meal: '+(memberFee>0?'KShs '+memberFee:'waived');
+  h+=selfLbl+': '+(memberFee>0?'KShs '+memberFee:'waived');
   if(gc>0) h+=' &middot; '+gc+' guest'+(gc!==1?'s':'')+': '+(guestFee>0?gc+' × KShs '+guestFee+' = KShs '+guestDue:'waived');
   if(total>0) h+=' &middot; <b>Total KShs '+total+'</b>';
   h+='</div>';
-  if(total===0){ h+='<div style="font-size:13px;color:var(--ok)">&#10003; No charge for this meal.</div></div>'; return h; }
+  if(total===0){ h+='<div style="font-size:13px;color:var(--ok)">&#10003; No charge'+(isMeal?' for this meal':'')+'.</div></div>'; return h; }
   if(meal||guest){
     var anyDeclared=(meal&&meal.status==='declared')||(guest&&guest.status==='declared');
-    if(meal){ h+='<div style="font-size:13px;color:'+(meal.status==='confirmed'?'var(--ok)':'var(--warn)')+'">'+(meal.status==='confirmed'?'&#10003; Meal confirmed':'&#8987; Meal declared')+(meal.reference?' (M-Pesa '+esc(meal.reference)+')':'')+'</div>'; }
+    if(meal){ h+='<div style="font-size:13px;color:'+(meal.status==='confirmed'?'var(--ok)':'var(--warn)')+'">'+(meal.status==='confirmed'?'&#10003; '+selfLbl+' confirmed':'&#8987; '+selfLbl+' declared')+(meal.reference?' (M-Pesa '+esc(meal.reference)+')':'')+'</div>'; }
     if(guest){ h+='<div style="font-size:12px;color:'+(guest.status==='confirmed'?'var(--ok)':'var(--warn)')+';margin-top:2px">'+(guest.status==='confirmed'?'&#10003; Guests confirmed':'&#8987; Guests declared')+'</div>'; }
     if(anyDeclared) h+='<button class="btn btn-n btn-sm" style="margin-top:6px;font-size:11px" data-pid="'+poll.id+'" onclick="declareMealPayment(this.dataset.pid)">Update code</button>';
   } else {
@@ -6855,11 +6864,17 @@ function renderPollSummary(poll){
   h+='<span class="badge" style="background:var(--okbg);color:var(--ok)">'+attending.length+' attending</span>';
   h+='<span class="badge" style="background:var(--badbg);color:var(--bad)">'+declining.length+' declining</span>';
   if(guestTotal)h+='<span class="badge" style="background:var(--warnbg);color:var(--warn)">'+guestTotal+' guest'+(guestTotal!==1?'s':'')+'</span>';
-  var choices={};
-  attending.forEach(function(k){var v=votes[k].f2||'';choices[v]=(choices[v]||0)+1;});
+  var isMeal=isMealPoll(poll);
+  var choices={}, guestMeals=0;
+  attending.forEach(function(k){
+    var v=votes[k];
+    if(v.f2)choices[v.f2]=(choices[v.f2]||0)+1;
+    if(isMeal)(v.guests||[]).forEach(function(g){ if(g&&(g.name||g.phone)){ if(g.meal){choices[g.meal]=(choices[g.meal]||0)+1;} else {guestMeals++;} } });
+  });
   Object.keys(choices).sort().forEach(function(ch){
     if(ch)h+='<span class="badge" style="background:var(--infobg);color:var(--info)">'+ch+': '+choices[ch]+'</span>';
   });
+  if(guestMeals)h+='<span class="badge" style="background:var(--infobg);color:var(--info)">Guest meal unset: '+guestMeals+'</span>';
   h+='</div>';
   return h;
 }
@@ -6875,7 +6890,7 @@ function renderPollVoter(poll,myV,isClosed){
     var attend  = myV.f1===true?'Attending':myV.f1===false?'Not attending':'—';
     var meal    = myV.f2||'';
     var _gl=(myV.guests||[]).filter(function(g){return g&&(g.name||g.phone);});
-    var guest   = _gl.length?(_gl.length+' guest'+(_gl.length!==1?'s':'')+': '+_gl.map(function(g){return g.name||'?';}).join(', ')):(myV.f3===true?(myV.f4?'Guest: '+myV.f4:'Bringing a guest'):'');
+    var guest   = _gl.length?(_gl.length+' guest'+(_gl.length!==1?'s':'')+': '+_gl.map(function(g){return (g.name||'?')+(g.meal?' ('+g.meal+')':'');}).join(', ')):(myV.f3===true?(myV.f4?'Guest: '+myV.f4:'Bringing a guest'):'');
     h+='<div style="background:var(--okbg);border-radius:8px;padding:10px 12px;margin-bottom:8px">';
     h+='<div style="font-weight:700;font-size:13px;color:var(--ok);margin-bottom:3px">&#10003; Response submitted</div>';
     h+='<div style="font-size:12px;color:var(--t2)">'+attend;
@@ -6971,15 +6986,25 @@ function isPollLocked(poll){
 
 // ── Meal-poll guests: a brother's own list of guests (name + phone) ────────
 function _myVote(pid){ var p=POLLS.find(function(x){return x.id===pid;}); if(!p)return null; if(!p.votes[CU.id])p.votes[CU.id]={}; if(!Array.isArray(p.votes[CU.id].guests))p.votes[CU.id].guests=[]; return p.votes[CU.id]; }
+function pollMealOptions(poll){ var f=((poll&&poll.fields)||[]).find(function(x){return x.id==='f2';}); return (f&&Array.isArray(f.options))?f.options:[]; }
 function renderPollGuests(poll){
   var myV=poll.votes[CU.id]||{}; var guests=Array.isArray(myV.guests)?myV.guests:[];
+  var opts=pollMealOptions(poll);
   var h='<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:6px">Guests</div>';
-  h+='<div style="font-size:11px;color:var(--t3);margin-bottom:6px">Add anyone you\'re bringing — you cover their meal. Name and phone each.</div>';
+  h+='<div style="font-size:11px;color:var(--t3);margin-bottom:6px">Add anyone you\'re bringing'+(opts.length?' — you cover their meal. Name, phone and meal preference each.':' — name and phone each. You cover any guest fee.')+'</div>';
   guests.forEach(function(g,i){
-    h+='<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">';
+    h+='<div style="border:1px solid var(--bdr);border-radius:8px;padding:8px;margin-bottom:6px">';
+    h+='<div style="display:flex;gap:6px;align-items:center">';
     h+='<input value="'+esc(g.name||'')+'" placeholder="Guest name" style="flex:1" data-pid="'+poll.id+'" data-i="'+i+'" onchange="updatePollGuest(this.dataset.pid,+this.dataset.i,\'name\',this.value)">';
     h+='<input value="'+esc(g.phone||'')+'" placeholder="Phone" inputmode="tel" style="flex:1" data-pid="'+poll.id+'" data-i="'+i+'" onchange="updatePollGuest(this.dataset.pid,+this.dataset.i,\'phone\',this.value)">';
     h+='<button data-pid="'+poll.id+'" data-i="'+i+'" onclick="removePollGuest(this.dataset.pid,+this.dataset.i)" title="Remove" style="background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer;padding:0 4px">&times;</button>';
+    h+='</div>';
+    if(opts.length){
+      h+='<select style="width:100%;margin-top:6px" data-pid="'+poll.id+'" data-i="'+i+'" onchange="updatePollGuest(this.dataset.pid,+this.dataset.i,\'meal\',this.value)">';
+      h+='<option value="">Meal preference…</option>';
+      opts.forEach(function(o){ h+='<option value="'+esc(o)+'"'+(g.meal===o?' selected':'')+'>'+esc(o)+'</option>'; });
+      h+='</select>';
+    }
     h+='</div>';
   });
   h+='<button class="btn btn-n btn-sm" style="font-size:12px" data-pid="'+poll.id+'" onclick="addPollGuest(this.dataset.pid)"><svg class="ico" width="12" height="12"><use href="#ico-plus"/></svg> Add guest</button>';
@@ -9787,7 +9812,7 @@ function syncProgressDown(){
 window.addEventListener('online', function(){ syncProgressUp(); });
 setInterval(function(){ if(navigator.onLine) syncProgressUp(); }, 120000); // every 2 min
 
-console.log('Portal build 2026-10-12 11:40:00');
+console.log('Portal build 2026-10-12 12:05:00');
 
 function toggleSharePractice(){
   if(!CU)return;
